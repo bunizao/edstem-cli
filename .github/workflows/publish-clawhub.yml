@@ -1,0 +1,51 @@
+name: Publish to ClawHub
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CLAWHUB_SLUG: twitter-cli
+      CLAWHUB_NAME: twitter-cli
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install ClawHub CLI
+        run: npm install -g clawhub@0.7.0
+
+      - name: Publish to ClawHub
+        env:
+          CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+        run: |
+          if [ -z "${CLAWHUB_TOKEN:-}" ]; then
+            echo "Missing required secret: CLAWHUB_TOKEN"
+            exit 1
+          fi
+
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Publishing ${CLAWHUB_SLUG}@${VERSION}"
+
+          if clawhub --no-input inspect "${CLAWHUB_SLUG}" --version "${VERSION}" >/dev/null 2>&1; then
+            echo "Version ${VERSION} already exists on ClawHub, skipping publish."
+            exit 0
+          fi
+
+          clawhub --no-input login --token "${CLAWHUB_TOKEN}" --no-browser
+          clawhub --no-input publish . \
+            --slug "${CLAWHUB_SLUG}" \
+            --name "${CLAWHUB_NAME}" \
+            --version "${VERSION}" \
+            --changelog "Release ${VERSION}" \
+            --tags latest
