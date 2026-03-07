@@ -32,6 +32,7 @@ BEARER_TOKEN = (
 )
 
 FALLBACK_QUERY_IDS = {
+    # Read operations
     "HomeTimeline": "c-CzHF1LboFilMpsx4ZCrQ",
     "HomeLatestTimeline": "BKB7oi212Fi7kQtCBGE4zA",
     "Bookmarks": "VFdMm9iVZxlU6hD86gfW_A",
@@ -39,6 +40,19 @@ FALLBACK_QUERY_IDS = {
     "UserTweets": "E3opETHurmVJflFsUBVuUQ",
     "SearchTimeline": "nWemVnGJ6A5eQAR5-oQeAg",
     "Likes": "lIDpu_NWL7_VhimGGt0o6A",
+    "TweetDetail": "xd_EMdYvB9hfZsZ6Idri0w",
+    "ListLatestTweetsTimeline": "RlZzktZY_9wJynoepm8ZsA",
+    "Followers": "IOh4aS6UdGWGJUYTqliQ7Q",
+    "Following": "zx6e-TLzRkeDO_a7p4b3JQ",
+    # Write operations
+    "CreateTweet": "IID9x6WsdMnTlXnzXGq8ng",
+    "DeleteTweet": "VaenaVgh5q5ih7kvyVjgtg",
+    "FavoriteTweet": "lI07N6Otwv1PhnEgXILM7A",
+    "UnfavoriteTweet": "ZYKSe-w7KEslx3JhSIk5LA",
+    "CreateRetweet": "ojPdsZsimiJrUGLR1sjUtA",
+    "DeleteRetweet": "iQtK4dl5hBmXewYZuEOKVw",
+    "CreateBookmark": "aoDbu3RHznuiSkQ9aNM67Q",
+    "DeleteBookmark": "Wlmlj2-xzyS1GN3a6cj-mQ",
 }
 
 TWITTER_OPENAPI_URL = (
@@ -370,6 +384,119 @@ class TwitterClient:
             override_base_variables=True,
         )
 
+    def fetch_tweet_detail(self, tweet_id, count=20):
+        # type: (str, int) -> List[Tweet]
+        """Fetch a tweet and its conversation thread (replies)."""
+        return self._fetch_timeline(
+            "TweetDetail",
+            count,
+            lambda data: _deep_get(data, "data", "tweetResult", "result", "timeline", "instructions")
+            or _deep_get(data, "data", "threaded_conversation_with_injections_v2", "instructions"),
+            extra_variables={
+                "focalTweetId": tweet_id,
+                "referrer": "tweet",
+                "with_rux_injections": False,
+                "rankingMode": "Relevance",
+                "withCommunity": True,
+                "withQuickPromoteEligibilityTweetFields": True,
+                "withBirdwatchNotes": True,
+                "withVoice": True,
+            },
+            override_base_variables=True,
+        )
+
+    def fetch_list_timeline(self, list_id, count=20):
+        # type: (str, int) -> List[Tweet]
+        """Fetch tweets from a Twitter List."""
+        return self._fetch_timeline(
+            "ListLatestTweetsTimeline",
+            count,
+            lambda data: _deep_get(data, "data", "list", "tweets_timeline", "timeline", "instructions"),
+            extra_variables={"listId": list_id},
+            override_base_variables=True,
+        )
+
+    def fetch_followers(self, user_id, count=20):
+        # type: (str, int) -> List[UserProfile]
+        """Fetch followers of a user."""
+        return self._fetch_user_list(
+            "Followers", user_id, count,
+            lambda data: _deep_get(data, "data", "user", "result", "timeline", "timeline", "instructions"),
+        )
+
+    def fetch_following(self, user_id, count=20):
+        # type: (str, int) -> List[UserProfile]
+        """Fetch users that a user is following."""
+        return self._fetch_user_list(
+            "Following", user_id, count,
+            lambda data: _deep_get(data, "data", "user", "result", "timeline", "timeline", "instructions"),
+        )
+
+    # ── Write operations ────────────────────────────────────────────────
+
+    def create_tweet(self, text, reply_to_id=None):
+        # type: (str, Optional[str]) -> str
+        """Post a new tweet.  Returns the new tweet ID."""
+        variables = {
+            "tweet_text": text,
+            "media": {"media_entities": [], "possibly_sensitive": False},
+            "semantic_annotation_ids": [],
+            "dark_request": False,
+        }  # type: Dict[str, Any]
+        if reply_to_id:
+            variables["reply"] = {
+                "in_reply_to_tweet_id": reply_to_id,
+                "exclude_reply_user_ids": [],
+            }
+        data = self._graphql_post("CreateTweet", variables, FEATURES)
+        result = _deep_get(data, "data", "create_tweet", "tweet_results", "result")
+        if result:
+            return result.get("rest_id", "")
+        raise RuntimeError("Failed to create tweet")
+
+    def delete_tweet(self, tweet_id):
+        # type: (str) -> bool
+        """Delete a tweet.  Returns True on success."""
+        variables = {"tweet_id": tweet_id, "dark_request": False}
+        self._graphql_post("DeleteTweet", variables)
+        return True
+
+    def like_tweet(self, tweet_id):
+        # type: (str) -> bool
+        """Like a tweet.  Returns True on success."""
+        self._graphql_post("FavoriteTweet", {"tweet_id": tweet_id})
+        return True
+
+    def unlike_tweet(self, tweet_id):
+        # type: (str) -> bool
+        """Unlike a tweet.  Returns True on success."""
+        self._graphql_post("UnfavoriteTweet", {"tweet_id": tweet_id, "dark_request": False})
+        return True
+
+    def retweet(self, tweet_id):
+        # type: (str) -> bool
+        """Retweet a tweet.  Returns True on success."""
+        self._graphql_post("CreateRetweet", {"tweet_id": tweet_id, "dark_request": False})
+        return True
+
+    def unretweet(self, tweet_id):
+        # type: (str) -> bool
+        """Undo a retweet.  Returns True on success."""
+        self._graphql_post("DeleteRetweet", {"source_tweet_id": tweet_id, "dark_request": False})
+        return True
+
+    def bookmark_tweet(self, tweet_id):
+        # type: (str) -> bool
+        """Bookmark a tweet.  Returns True on success."""
+        self._graphql_post("CreateBookmark", {"tweet_id": tweet_id})
+        return True
+
+    def unbookmark_tweet(self, tweet_id):
+        # type: (str) -> bool
+        """Remove a tweet from bookmarks.  Returns True on success."""
+        self._graphql_post("DeleteBookmark", {"tweet_id": tweet_id})
+        return True
+
     def _fetch_timeline(self, operation_name, count, get_instructions, extra_variables=None, override_base_variables=False):
         # type: (str, int, Callable[[Any], Any], Optional[Dict[str, Any]], bool) -> List[Tweet]
         """Generic timeline fetcher with pagination and deduplication.
@@ -466,8 +593,8 @@ class TwitterClient:
         except Exception as exc:
             logger.warning("Failed to init ClientTransaction: %s", exc)
 
-    def _build_headers(self, url=""):
-        # type: (str) -> Dict[str, str]
+    def _build_headers(self, url="", method="GET"):
+        # type: (str, str) -> Dict[str, str]
         """Build shared headers for authenticated API calls."""
         headers = {
             "Authorization": "Bearer %s" % BEARER_TOKEN,
@@ -487,7 +614,7 @@ class TwitterClient:
             try:
                 path = urllib.parse.urlparse(url).path
                 tid = self._client_transaction.generate_transaction_id(
-                    method="GET", path=path,
+                    method=method, path=path,
                 )
                 headers["X-Client-Transaction-Id"] = tid
             except Exception as exc:
@@ -545,6 +672,144 @@ class TwitterClient:
 
         # Should not be reached, but just in case
         raise TwitterAPIError(429, "Rate limited after %d retries" % self._max_retries)
+
+    def _graphql_post(self, operation_name, variables, features=None):
+        # type: (str, Dict[str, Any], Optional[Dict[str, Any]]) -> Dict[str, Any]
+        """Issue GraphQL POST request."""
+        query_id = _resolve_query_id(operation_name, prefer_fallback=True)
+        url = "https://x.com/i/api/graphql/%s/%s" % (query_id, operation_name)
+        body = {"variables": variables, "queryId": query_id}
+        if features:
+            body["features"] = features
+        return self._api_post(url, body)
+
+    def _api_post(self, url, body):
+        # type: (str, Dict[str, Any]) -> Dict[str, Any]
+        """Make authenticated POST request to Twitter API."""
+        self._ensure_client_transaction()
+        headers = self._build_headers(url=url, method="POST")
+        data = json.dumps(body).encode("utf-8")
+
+        for attempt in range(self._max_retries + 1):
+            request = urllib.request.Request(url, data=data, method="POST")
+            for key, value in headers.items():
+                request.add_header(key, value)
+
+            try:
+                with urllib.request.urlopen(request, context=_create_ssl_context(), timeout=30) as response:
+                    payload = response.read().decode("utf-8")
+            except urllib.error.HTTPError as exc:
+                if exc.code == 429 and attempt < self._max_retries:
+                    wait = self._retry_base_delay * (2 ** attempt)
+                    logger.warning(
+                        "Rate limited (429), retrying in %.1fs (attempt %d/%d)",
+                        wait, attempt + 1, self._max_retries,
+                    )
+                    time.sleep(wait)
+                    continue
+                body_text = exc.read().decode("utf-8", errors="replace")
+                message = "Twitter API error %d: %s" % (exc.code, body_text[:500])
+                raise TwitterAPIError(exc.code, message)
+            except urllib.error.URLError as exc:
+                raise TwitterAPIError(0, "Twitter API network error: %s" % exc.reason)
+
+            try:
+                parsed = json.loads(payload)
+            except json.JSONDecodeError:
+                raise TwitterAPIError(0, "Twitter API returned invalid JSON")
+
+            if isinstance(parsed, dict) and parsed.get("errors"):
+                err_msg = parsed["errors"][0].get("message", "Unknown error")
+                raise TwitterAPIError(0, "Twitter API returned errors: %s" % err_msg)
+            return parsed
+
+        raise TwitterAPIError(429, "Rate limited after %d retries" % self._max_retries)
+
+    def _fetch_user_list(self, operation_name, user_id, count, get_instructions):
+        # type: (str, str, int, Callable[[Any], Any]) -> List[UserProfile]
+        """Generic user list fetcher (for followers/following) with pagination."""
+        if count <= 0:
+            return []
+        count = min(count, self._max_count)
+        users = []  # type: List[UserProfile]
+        seen_ids = set()  # type: Set[str]
+        cursor = None  # type: Optional[str]
+        attempts = 0
+        max_attempts = int(math.ceil(count / 20.0)) + 2
+
+        while len(users) < count and attempts < max_attempts:
+            attempts += 1
+            variables = {
+                "userId": user_id,
+                "count": min(count - len(users) + 5, 40),
+                "includePromotedContent": False,
+            }  # type: Dict[str, Any]
+            if cursor:
+                variables["cursor"] = cursor
+
+            data = self._graphql_get(operation_name, variables, FEATURES)
+            instructions = get_instructions(data)
+            if not instructions:
+                logger.warning("No user list instructions found")
+                break
+
+            new_users = []  # type: List[UserProfile]
+            next_cursor = None  # type: Optional[str]
+            for instruction in instructions:
+                entries = instruction.get("entries", [])
+                for entry in entries:
+                    content = entry.get("content", {})
+                    entry_type = content.get("entryType", "")
+
+                    if entry_type == "TimelineTimelineItem":
+                        item = content.get("itemContent", {})
+                        user_results = _deep_get(item, "user_results", "result")
+                        if user_results:
+                            user = self._parse_user_result(user_results)
+                            if user:
+                                new_users.append(user)
+                    elif entry_type == "TimelineTimelineCursor":
+                        if content.get("cursorType") == "Bottom":
+                            next_cursor = content.get("value")
+
+            for user in new_users:
+                if user.id and user.id not in seen_ids:
+                    seen_ids.add(user.id)
+                    users.append(user)
+
+            if not next_cursor or not new_users:
+                break
+            cursor = next_cursor
+
+            if len(users) < count and self._request_delay > 0:
+                time.sleep(self._request_delay)
+
+        return users[:count]
+
+    @staticmethod
+    def _parse_user_result(user_data):
+        # type: (Dict[str, Any]) -> Optional[UserProfile]
+        """Parse a user result object into UserProfile."""
+        if user_data.get("__typename") == "UserUnavailable":
+            return None
+        legacy = user_data.get("legacy", {})
+        if not legacy:
+            return None
+        return UserProfile(
+            id=user_data.get("rest_id", ""),
+            name=legacy.get("name", ""),
+            screen_name=legacy.get("screen_name", ""),
+            bio=legacy.get("description", ""),
+            location=legacy.get("location", ""),
+            url=_deep_get(legacy, "entities", "url", "urls", 0, "expanded_url") or "",
+            followers_count=legacy.get("followers_count", 0),
+            following_count=legacy.get("friends_count", 0),
+            tweets_count=legacy.get("statuses_count", 0),
+            likes_count=legacy.get("favourites_count", 0),
+            verified=user_data.get("is_blue_verified", False) or legacy.get("verified", False),
+            profile_image_url=legacy.get("profile_image_url_https", ""),
+            created_at=legacy.get("created_at", ""),
+        )
 
     def _parse_timeline_response(self, data, get_instructions):
         # type: (Any, Callable[[Any], Any]) -> Tuple[List[Tweet], Optional[str]]
@@ -695,13 +960,19 @@ class TwitterClient:
 
 
 def _deep_get(data, *keys):
-    # type: (Any, *str) -> Any
-    """Safely get nested dict values."""
+    # type: (Any, *Any) -> Any
+    """Safely get nested dict/list values.  Supports int keys for list access."""
     current = data
     for key in keys:
-        if not isinstance(current, dict):
+        if isinstance(key, int):
+            if isinstance(current, list) and 0 <= key < len(current):
+                current = current[key]
+            else:
+                return None
+        elif isinstance(current, dict):
+            current = current.get(key)
+        else:
             return None
-        current = current.get(key)
     return current
 
 

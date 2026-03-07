@@ -28,7 +28,13 @@ from .auth import get_cookies
 from .client import TwitterClient
 from .config import load_config
 from .filter import filter_tweets
-from .formatter import print_filter_stats, print_tweet_table, print_user_profile
+from .formatter import (
+    print_filter_stats,
+    print_tweet_detail,
+    print_tweet_table,
+    print_user_profile,
+    print_user_table,
+)
 from .serialization import tweets_from_json, tweets_to_json
 
 
@@ -318,6 +324,270 @@ def likes(screen_name, max_count, as_json, do_filter):
 
     print_tweet_table(filtered, console, title="❤️ @%s likes — %d tweets" % (screen_name, len(filtered)))
     console.print()
+
+
+@cli.command()
+@click.argument("tweet_id")
+@click.option("--max", "-n", "max_count", type=int, default=20, help="Max replies to fetch.")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+def tweet(tweet_id, max_count, as_json):
+    # type: (str, int, bool) -> None
+    """View a tweet and its replies. TWEET_ID is the numeric tweet ID or full URL."""
+    # Extract tweet ID from URL if given
+    tweet_id = tweet_id.strip().rstrip("/").split("/")[-1]
+    config = load_config()
+    try:
+        client = _get_client(config)
+        console.print("🐦 Fetching tweet %s...\n" % tweet_id)
+        start = time.time()
+        tweets = client.fetch_tweet_detail(tweet_id, max_count)
+        elapsed = time.time() - start
+        console.print("✅ Fetched %d tweets in %.1fs\n" % (len(tweets), elapsed))
+    except RuntimeError as exc:
+        console.print("[red]❌ %s[/red]" % exc)
+        sys.exit(1)
+
+    if as_json:
+        click.echo(tweets_to_json(tweets))
+        return
+
+    if tweets:
+        print_tweet_detail(tweets[0], console)
+        if len(tweets) > 1:
+            console.print("\n💬 Replies:")
+            print_tweet_table(tweets[1:], console, title="💬 Replies — %d" % (len(tweets) - 1))
+    console.print()
+
+
+@cli.command(name="list")
+@click.argument("list_id")
+@click.option("--max", "-n", "max_count", type=int, default=20, help="Max tweets to fetch.")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+@click.option("--filter", "do_filter", is_flag=True, help="Enable score-based filtering.")
+def list_timeline(list_id, max_count, as_json, do_filter):
+    # type: (str, int, bool, bool) -> None
+    """Fetch tweets from a Twitter List. LIST_ID is the numeric list ID."""
+    config = load_config()
+    try:
+        fetch_count = _resolve_fetch_count(max_count, 20)
+        client = _get_client(config)
+        console.print("📋 Fetching list %s (%d tweets)...\n" % (list_id, fetch_count))
+        start = time.time()
+        tweets = client.fetch_list_timeline(list_id, fetch_count)
+        elapsed = time.time() - start
+        console.print("✅ Fetched %d tweets in %.1fs\n" % (len(tweets), elapsed))
+    except RuntimeError as exc:
+        console.print("[red]❌ %s[/red]" % exc)
+        sys.exit(1)
+
+    filtered = _apply_filter(tweets, do_filter, config)
+
+    if as_json:
+        click.echo(tweets_to_json(filtered))
+        return
+
+    print_tweet_table(filtered, console, title="📋 List — %d tweets" % len(filtered))
+    console.print()
+
+
+@cli.command()
+@click.argument("screen_name")
+@click.option("--max", "-n", "max_count", type=int, default=20, help="Max users to fetch.")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+def followers(screen_name, max_count, as_json):
+    # type: (str, int, bool) -> None
+    """List followers of a user. SCREEN_NAME is the @handle (without @)."""
+    screen_name = screen_name.lstrip("@")
+    config = load_config()
+    try:
+        client = _get_client(config)
+        console.print("👤 Fetching @%s's profile..." % screen_name)
+        profile = client.fetch_user(screen_name)
+        console.print("👥 Fetching followers (%d)...\n" % max_count)
+        start = time.time()
+        users = client.fetch_followers(profile.id, max_count)
+        elapsed = time.time() - start
+        console.print("✅ Fetched %d followers in %.1fs\n" % (len(users), elapsed))
+    except RuntimeError as exc:
+        console.print("[red]❌ %s[/red]" % exc)
+        sys.exit(1)
+
+    if as_json:
+        import json
+        click.echo(json.dumps([{"id": u.id, "name": u.name, "screen_name": u.screen_name,
+                                "bio": u.bio, "followers": u.followers_count,
+                                "following": u.following_count} for u in users], indent=2, ensure_ascii=False))
+        return
+
+    print_user_table(users, console, title="👥 @%s followers — %d" % (screen_name, len(users)))
+    console.print()
+
+
+@cli.command()
+@click.argument("screen_name")
+@click.option("--max", "-n", "max_count", type=int, default=20, help="Max users to fetch.")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+def following(screen_name, max_count, as_json):
+    # type: (str, int, bool) -> None
+    """List accounts a user is following. SCREEN_NAME is the @handle (without @)."""
+    screen_name = screen_name.lstrip("@")
+    config = load_config()
+    try:
+        client = _get_client(config)
+        console.print("👤 Fetching @%s's profile..." % screen_name)
+        profile = client.fetch_user(screen_name)
+        console.print("👥 Fetching following (%d)...\n" % max_count)
+        start = time.time()
+        users = client.fetch_following(profile.id, max_count)
+        elapsed = time.time() - start
+        console.print("✅ Fetched %d following in %.1fs\n" % (len(users), elapsed))
+    except RuntimeError as exc:
+        console.print("[red]❌ %s[/red]" % exc)
+        sys.exit(1)
+
+    if as_json:
+        import json
+        click.echo(json.dumps([{"id": u.id, "name": u.name, "screen_name": u.screen_name,
+                                "bio": u.bio, "followers": u.followers_count,
+                                "following": u.following_count} for u in users], indent=2, ensure_ascii=False))
+        return
+
+    print_user_table(users, console, title="👥 @%s following — %d" % (screen_name, len(users)))
+    console.print()
+
+
+# ── Write commands ──────────────────────────────────────────────────────
+
+@cli.command()
+@click.argument("text")
+@click.option("--reply-to", "-r", default=None, help="Reply to this tweet ID.")
+def post(text, reply_to):
+    # type: (str, Optional[str]) -> None
+    """Post a new tweet. TEXT is the tweet content."""
+    config = load_config()
+    try:
+        client = _get_client(config)
+        action = "Replying to %s" % reply_to if reply_to else "Posting tweet"
+        console.print("✏️  %s..." % action)
+        tweet_id = client.create_tweet(text, reply_to_id=reply_to)
+        console.print("[green]✅ Tweet posted![/green]")
+        console.print("🔗 https://x.com/i/status/%s" % tweet_id)
+    except RuntimeError as exc:
+        console.print("[red]❌ %s[/red]" % exc)
+        sys.exit(1)
+
+
+@cli.command(name="delete")
+@click.argument("tweet_id")
+@click.confirmation_option(prompt="Are you sure you want to delete this tweet?")
+def delete_tweet(tweet_id):
+    # type: (str,) -> None
+    """Delete a tweet. TWEET_ID is the numeric tweet ID."""
+    config = load_config()
+    try:
+        client = _get_client(config)
+        console.print("🗑️  Deleting tweet %s..." % tweet_id)
+        client.delete_tweet(tweet_id)
+        console.print("[green]✅ Tweet deleted.[/green]")
+    except RuntimeError as exc:
+        console.print("[red]❌ %s[/red]" % exc)
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("tweet_id")
+def like(tweet_id):
+    # type: (str,) -> None
+    """Like a tweet. TWEET_ID is the numeric tweet ID."""
+    config = load_config()
+    try:
+        client = _get_client(config)
+        console.print("❤️  Liking tweet %s..." % tweet_id)
+        client.like_tweet(tweet_id)
+        console.print("[green]✅ Liked![/green]")
+    except RuntimeError as exc:
+        console.print("[red]❌ %s[/red]" % exc)
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("tweet_id")
+def unlike(tweet_id):
+    # type: (str,) -> None
+    """Unlike a tweet. TWEET_ID is the numeric tweet ID."""
+    config = load_config()
+    try:
+        client = _get_client(config)
+        console.print("💔 Unliking tweet %s..." % tweet_id)
+        client.unlike_tweet(tweet_id)
+        console.print("[green]✅ Unliked.[/green]")
+    except RuntimeError as exc:
+        console.print("[red]❌ %s[/red]" % exc)
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("tweet_id")
+def rt(tweet_id):
+    # type: (str,) -> None
+    """Retweet a tweet. TWEET_ID is the numeric tweet ID."""
+    config = load_config()
+    try:
+        client = _get_client(config)
+        console.print("🔄 Retweeting %s..." % tweet_id)
+        client.retweet(tweet_id)
+        console.print("[green]✅ Retweeted![/green]")
+    except RuntimeError as exc:
+        console.print("[red]❌ %s[/red]" % exc)
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("tweet_id")
+def unrt(tweet_id):
+    # type: (str,) -> None
+    """Undo a retweet. TWEET_ID is the numeric tweet ID."""
+    config = load_config()
+    try:
+        client = _get_client(config)
+        console.print("🔄 Undoing retweet %s..." % tweet_id)
+        client.unretweet(tweet_id)
+        console.print("[green]✅ Retweet undone.[/green]")
+    except RuntimeError as exc:
+        console.print("[red]❌ %s[/red]" % exc)
+        sys.exit(1)
+
+
+@cli.command(name="bookmark-add")
+@click.argument("tweet_id")
+def bookmark_add(tweet_id):
+    # type: (str,) -> None
+    """Bookmark a tweet. TWEET_ID is the numeric tweet ID."""
+    config = load_config()
+    try:
+        client = _get_client(config)
+        console.print("🔖 Bookmarking tweet %s..." % tweet_id)
+        client.bookmark_tweet(tweet_id)
+        console.print("[green]✅ Bookmarked![/green]")
+    except RuntimeError as exc:
+        console.print("[red]❌ %s[/red]" % exc)
+        sys.exit(1)
+
+
+@cli.command(name="bookmark-rm")
+@click.argument("tweet_id")
+def bookmark_rm(tweet_id):
+    # type: (str,) -> None
+    """Remove a tweet from bookmarks. TWEET_ID is the numeric tweet ID."""
+    config = load_config()
+    try:
+        client = _get_client(config)
+        console.print("🔖 Removing bookmark %s..." % tweet_id)
+        client.unbookmark_tweet(tweet_id)
+        console.print("[green]✅ Bookmark removed.[/green]")
+    except RuntimeError as exc:
+        console.print("[red]❌ %s[/red]" % exc)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

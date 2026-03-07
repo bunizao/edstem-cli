@@ -17,12 +17,24 @@ A terminal-first CLI for Twitter/X: read timelines, bookmarks, and user profiles
 
 ### Features
 
+**Read:**
 - Timeline: fetch `for-you` and `following` feeds
 - Bookmarks: list saved tweets from your account
 - Search: find tweets by keyword with Top/Latest/Photos/Videos tabs
-- User lookup: fetch user profile, tweets, and likes
-- JSON output: export feed/bookmarks/user tweets for scripting
+- Tweet detail: view a tweet and its replies
+- List timeline: fetch tweets from a Twitter List
+- User lookup: fetch user profile, tweets, likes, followers, and following
+- JSON output: export any data for scripting
 - Optional scoring filter: rank tweets by engagement weights
+
+**Write:**
+- Post: create new tweets and replies
+- Delete: remove your own tweets
+- Like / Unlike: manage tweet likes
+- Retweet / Unretweet: manage retweets
+- Bookmark: add/remove bookmarks
+
+**Auth:**
 - Cookie auth: use browser cookies or environment variables
 
 ### Installation
@@ -73,10 +85,30 @@ twitter search "Claude Code"
 twitter search "AI agent" -t Latest --max 50
 twitter search "机器学习" --json
 
+# Tweet detail (view tweet + replies)
+twitter tweet 1234567890
+twitter tweet https://x.com/user/status/1234567890
+
+# List timeline
+twitter list 1539453138322673664
+
 # User
 twitter user elonmusk
 twitter user-posts elonmusk --max 20
 twitter likes elonmusk --max 30
+twitter followers elonmusk --max 50
+twitter following elonmusk --max 50
+
+# Write operations
+twitter post "Hello from twitter-cli!"
+twitter post "reply text" --reply-to 1234567890
+twitter delete 1234567890
+twitter like 1234567890
+twitter unlike 1234567890
+twitter rt 1234567890
+twitter unrt 1234567890
+twitter bookmark-add 1234567890
+twitter bookmark-rm 1234567890
 ```
 
 ### Authentication
@@ -203,11 +235,22 @@ After installation, OpenClaw can call `twitter-cli` commands directly.
 
 ### 功能概览
 
+**读取:**
 - 时间线读取：支持 `for-you` 和 `following`
 - 收藏读取：查看账号书签推文
 - 搜索：按关键词搜索推文，支持 Top/Latest/Photos/Videos
-- 用户查询：查看用户资料、推文和点赞
+- 推文详情：查看推文及其回复
+- 列表时间线：获取 Twitter List 的推文
+- 用户查询：查看用户资料、推文、点赞、粉丝和关注
 - JSON 输出：便于脚本处理
+
+**写入:**
+- 发推：发布新推文和回复
+- 删除：删除自己的推文
+- 点赞 / 取消点赞
+- 转推 / 取消转推
+- 书签管理：添加/移除书签
+
 - 可选筛选：按 engagement score 排序
 - Cookie 认证：支持环境变量和浏览器自动提取
 
@@ -216,21 +259,14 @@ After installation, OpenClaw can call `twitter-cli` commands directly.
 ```bash
 # 推荐：uv tool
 uv tool install twitter-cli
-
-# 其次：pipx
-pipx install twitter-cli
 ```
 
-### 常用命令
+### 使用指南
 
 ```bash
-# 首页推荐流
+# 时间线
 twitter feed
-
-# Following 流
 twitter feed -t following
-
-# 开启筛选（默认不开启）
 twitter feed --filter
 
 # 收藏
@@ -240,10 +276,29 @@ twitter favorite
 twitter search "Claude Code"
 twitter search "AI agent" -t Latest --max 50
 
+# 推文详情
+twitter tweet 1234567890
+
+# 列表时间线
+twitter list 1539453138322673664
+
 # 用户
 twitter user elonmusk
 twitter user-posts elonmusk --max 20
 twitter likes elonmusk --max 30
+twitter followers elonmusk
+twitter following elonmusk
+
+# 写操作
+twitter post "你好，世界！"
+twitter post "回复内容" --reply-to 1234567890
+twitter delete 1234567890
+twitter like 1234567890
+twitter unlike 1234567890
+twitter rt 1234567890
+twitter unrt 1234567890
+twitter bookmark-add 1234567890
+twitter bookmark-rm 1234567890
 ```
 
 ### 认证说明
