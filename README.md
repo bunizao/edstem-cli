@@ -33,6 +33,8 @@ uv sync
 
 ## Quick Start
 
+Get your API token from: https://edstem.org/settings/api-tokens
+
 ```bash
 # View your profile and courses
 edstem user
@@ -77,16 +79,6 @@ edstem activity --filter answer --json
 edstem user
 edstem user --json
 ```
-
-## Authentication
-
-edstem-cli uses this auth priority:
-
-1. **Environment variable**: `ED_API_TOKEN`
-2. **Token file**: `~/.config/edstem-cli/token`
-3. **Interactive prompt**: asks for token and saves to file
-
-Get your API token from: https://edstem.org/us/settings/api-tokens
 
 ```bash
 # Option 1: Environment variable
