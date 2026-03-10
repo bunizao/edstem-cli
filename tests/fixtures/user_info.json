@@ -1,0 +1,44 @@
+{
+  "user": {
+    "id": 12345,
+    "name": "Alice Student",
+    "email": "alice@university.edu",
+    "role": "student",
+    "course_role": null,
+    "avatar": "https://static.us.edusercontent.com/avatars/123.png"
+  },
+  "courses": [
+    {
+      "course": {
+        "id": 100,
+        "code": "CS101",
+        "name": "Intro to Computer Science",
+        "year": "2026",
+        "session": "Spring",
+        "status": "active"
+      },
+      "role": {
+        "user_id": 12345,
+        "course_id": 100,
+        "role": "student"
+      },
+      "lab": null
+    },
+    {
+      "course": {
+        "id": 200,
+        "code": "MATH201",
+        "name": "Linear Algebra",
+        "year": "2025",
+        "session": "Fall",
+        "status": "archived"
+      },
+      "role": {
+        "user_id": 12345,
+        "course_id": 200,
+        "role": "student"
+      },
+      "lab": null
+    }
+  ]
+}

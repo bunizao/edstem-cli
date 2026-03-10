@@ -1,0 +1,8 @@
+fetch:
+  count: 30
+
+rateLimit:
+  requestDelay: 1.0    # seconds between paginated requests
+  maxRetries: 3        # retry count on rate-limit errors
+  retryBaseDelay: 3.0  # base delay for exponential backoff (seconds)
+  maxCount: 100        # hard cap for single fetch

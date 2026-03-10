@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "edstem-cli"
+version = "0.1.0"
+description = "A CLI for Ed Discussion — browse courses, threads, and comments in terminal"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.8"
+authors = [{ name = "jackwener", email = "jakevingoo@gmail.com" }]
+keywords = ["edstem", "ed", "discussion", "cli", "education"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "click>=8.0",
+    "rich>=13.0",
+    "PyYAML>=6.0",
+    "requests>=2.28",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.8",
+]
+
+[project.urls]
+Homepage = "https://github.com/bunizao/edstem-cli"
+Repository = "https://github.com/bunizao/edstem-cli"
+Issues = "https://github.com/bunizao/edstem-cli/issues"
+
+[project.scripts]
+edstem = "edstem_cli.cli:cli"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.hatch.build.targets.wheel]
+packages = ["edstem_cli"]
