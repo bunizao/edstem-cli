@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Publish GitHub Release
 
 on:
   push:
@@ -12,15 +12,11 @@ jobs:
   verify:
     uses: ./.github/workflows/ci.yml
 
-  publish:
+  release:
     needs: verify
     runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/project/edstem-cli/
     permissions:
-      id-token: write
-      contents: read
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -50,8 +46,10 @@ jobs:
       - name: Build package
         run: uv build
 
-      - name: Check distribution metadata
-        run: uvx twine check dist/*
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            dist/*.whl
