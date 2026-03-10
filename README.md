@@ -52,6 +52,7 @@ edstem thread 67890
 ```bash
 # Courses
 edstem courses
+edstem courses --archived
 edstem courses --json
 
 # Threads
