@@ -23,6 +23,16 @@ def test_get_token_falls_back_to_file(monkeypatch) -> None:
     assert token == "file-token"
 
 
+def test_get_token_prompts_when_no_saved_token(monkeypatch) -> None:
+    monkeypatch.setattr(auth, "load_from_env", lambda: None)
+    monkeypatch.setattr(auth, "load_from_file", lambda: None)
+    monkeypatch.setattr(auth, "prompt_for_token", lambda: "prompt-token")
+    monkeypatch.setattr(auth, "verify_token", lambda token: {"user": {"id": 1}})
+
+    token = auth.get_token()
+    assert token == "prompt-token"
+
+
 def test_load_from_env_reads_env_var(monkeypatch) -> None:
     monkeypatch.setenv("ED_API_TOKEN", "  my-token  ")
     token = auth.load_from_env()
@@ -78,3 +88,43 @@ def test_verify_token_handles_network_errors(monkeypatch) -> None:
         assert "Failed to reach the Ed API" in str(exc)
     else:
         raise AssertionError("verify_token should wrap request failures")
+
+
+def test_verify_token_handles_redirects(monkeypatch) -> None:
+    class FakeResponse:
+        status_code = 302
+        ok = False
+        headers = {"location": "https://edstem.org"}
+
+        @staticmethod
+        def json():
+            return {}
+
+    monkeypatch.setattr("requests.get", lambda *args, **kwargs: FakeResponse())
+
+    try:
+        auth.verify_token("token")
+    except RuntimeError as exc:
+        assert "redirected to https://edstem.org" in str(exc)
+    else:
+        raise AssertionError("verify_token should reject redirected API endpoints")
+
+
+def test_verify_token_handles_non_json_success(monkeypatch) -> None:
+    class FakeResponse:
+        status_code = 200
+        ok = True
+        headers = {"content-type": "text/html"}
+
+        @staticmethod
+        def json():
+            raise ValueError("not json")
+
+    monkeypatch.setattr("requests.get", lambda *args, **kwargs: FakeResponse())
+
+    try:
+        auth.verify_token("token")
+    except RuntimeError as exc:
+        assert "non-JSON response" in str(exc)
+    else:
+        raise AssertionError("verify_token should reject non-JSON success responses")

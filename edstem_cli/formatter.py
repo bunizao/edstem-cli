@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
@@ -78,13 +79,13 @@ def print_thread_table(threads, console=None, title=None):
     table.add_column("Stats", style="green", width=20, no_wrap=True)
 
     for thread in threads:
-        text = thread.title
+        text = escape(thread.title)
         if thread.is_pinned:
-            text = "[pin] " + text
+            text = escape("[pin] ") + text
         if thread.is_private:
-            text = "[private] " + text
+            text = escape("[private] ") + text
         if thread.is_answered:
-            text += " [answered]"
+            text += escape(" [answered]")
 
         stats = "votes %s  views %s\nreplies %s" % (
             format_number(thread.metrics.vote_count),
@@ -109,7 +110,7 @@ def print_thread_detail(thread, console=None):
     if console is None:
         console = Console()
 
-    header = "#%d %s" % (thread.number, thread.title)
+    header = escape("#%d %s" % (thread.number, thread.title))
     body_parts = []
 
     flags = []
@@ -122,17 +123,20 @@ def print_thread_detail(thread, console=None):
     if thread.is_locked:
         flags.append("locked")
     if flags:
-        body_parts.append("[%s]" % ", ".join(flags))
+        body_parts.append(escape("[%s]" % ", ".join(flags)))
         body_parts.append("")
 
-    body_parts.append("Type: %s  Category: %s" % (thread.type, thread.category or "-"))
+    body_parts.append(
+        "Type: %s  Category: %s"
+        % (escape(thread.type), escape(thread.category or "-"))
+    )
     if thread.author:
-        body_parts.append("Author: %s" % thread.author.name)
+        body_parts.append("Author: %s" % escape(thread.author.name))
     body_parts.append("")
 
     content_text = strip_xml(thread.document or thread.content)
     if content_text:
-        body_parts.append(content_text)
+        body_parts.append(escape(content_text))
         body_parts.append("")
 
     m = thread.metrics
@@ -162,13 +166,13 @@ def _add_comment_to_tree(tree_node, comment, depth=0):
     author_name = comment.author.name if comment.author else "User %d" % comment.user_id
     if comment.is_anonymous:
         author_name = "Anonymous"
-    label = "[bold]%s[/bold]" % author_name
+    label = "[bold]%s[/bold]" % escape(author_name)
     if comment.is_endorsed:
-        label += " [endorsed]"
+        label += escape(" [endorsed]")
 
     text = strip_xml(comment.document or comment.content)
 
-    entry = "%s: %s" % (label, text)
+    entry = "%s: %s" % (label, escape(text))
     if comment.vote_count:
         entry += " [dim](+%d)[/dim]" % comment.vote_count
 
@@ -197,13 +201,13 @@ def print_user_profile(user, courses=None, console=None):
     if console is None:
         console = Console()
 
-    header = user.name
+    header = escape(user.name)
 
     lines = []
     if user.email:
-        lines.append("Email: %s" % user.email)
+        lines.append("Email: %s" % escape(user.email))
     if user.role:
-        lines.append("Role: %s" % user.role)
+        lines.append("Role: %s" % escape(user.role))
 
     if courses:
         lines.append("")
@@ -249,6 +253,11 @@ def print_activity_table(items, console=None, title=None):
             if thread_title:
                 content = "Re: %s — %s" % (thread_title, content)
 
-        table.add_row(item_type, course_code, content, created)
+        table.add_row(
+            escape(item_type),
+            escape(course_code),
+            escape(content),
+            escape(created),
+        )
 
     console.print(table)

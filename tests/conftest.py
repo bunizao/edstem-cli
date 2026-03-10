@@ -30,6 +30,7 @@ def thread_factory():
             is_pinned=overrides.pop("is_pinned", False),
             is_private=overrides.pop("is_private", False),
             is_answered=overrides.pop("is_answered", False),
+            is_locked=overrides.pop("is_locked", False),
             is_anonymous=overrides.pop("is_anonymous", False),
             created_at=overrides.pop("created_at", "2026-01-15T10:00:00.000Z"),
             answers=overrides.pop("answers", []),

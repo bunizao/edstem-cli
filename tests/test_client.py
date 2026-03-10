@@ -160,6 +160,95 @@ class TestEdClientRequests:
         assert captured["path"] == "users/123/profile/activity"
         assert captured["params"]["filter"] == "all"
 
+    def test_get_rejects_redirect_responses(self):
+        class FakeResponse:
+            status_code = 302
+            ok = False
+            headers = {"location": "https://edstem.org"}
+
+            @staticmethod
+            def json():
+                return {}
+
+        client = EdClient("token")
+        client._session.get = lambda *args, **kwargs: FakeResponse()
+
+        try:
+            client._get("user")
+        except EdAPIError as exc:
+            assert exc.status_code == 302
+            assert "redirected to https://edstem.org" in str(exc)
+        else:
+            raise AssertionError("_get should reject redirect responses")
+
+    def test_get_rejects_non_json_success_responses(self):
+        class FakeResponse:
+            status_code = 200
+            ok = True
+            headers = {"content-type": "text/html"}
+
+            @staticmethod
+            def json():
+                raise ValueError("not json")
+
+        client = EdClient("token")
+        client._session.get = lambda *args, **kwargs: FakeResponse()
+
+        try:
+            client._get("user")
+        except EdAPIError as exc:
+            assert "non-JSON response" in str(exc)
+        else:
+            raise AssertionError("_get should reject non-JSON success responses")
+
+    def test_fetch_threads_clamps_limit_and_passes_sort(self):
+        client = EdClient("token")
+        captured = {}
+
+        def fake_get(path, params=None):
+            captured["path"] = path
+            captured["params"] = params
+            return {"threads": []}
+
+        client._get = fake_get
+        result = client.fetch_threads(321, limit=999, sort="top")
+
+        assert result == []
+        assert captured["path"] == "courses/321/threads"
+        assert captured["params"]["limit"] == 100
+        assert captured["params"]["sort"] == "top"
+
+    def test_fetch_user_parses_enrollments(self):
+        client = EdClient("token")
+        client._get = lambda path, params=None: {
+            "user": {"id": 7, "name": "Alice"},
+            "courses": [
+                {
+                    "course": {"id": 101, "code": "CS101", "name": "Intro", "status": "active"},
+                    "role": {"role": "student"},
+                }
+            ],
+        }
+
+        user, courses = client.fetch_user()
+
+        assert user.id == 7
+        assert courses[0].id == 101
+        assert courses[0].role == "student"
+
+    def test_fetch_thread_parses_author_from_users_map(self):
+        client = EdClient("token")
+        client._get = lambda path, params=None: {
+            "thread": {"id": 88, "user_id": 99, "title": "Hello"},
+            "users": [{"id": 99, "name": "Bob"}],
+        }
+
+        thread = client.fetch_thread(88)
+
+        assert thread.id == 88
+        assert thread.author is not None
+        assert thread.author.name == "Bob"
+
 
 class TestClientFixtures:
     def test_parse_user_info_fixture(self, fixture_loader):

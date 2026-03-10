@@ -96,6 +96,14 @@ def _parse_thread_ref(ref):
         raise RuntimeError("Invalid thread ID: %s" % ref)
 
 
+def _filter_courses(course_list, include_archived=False):
+    # type: (list, bool) -> list
+    """Hide archived courses unless explicitly requested."""
+    if include_archived:
+        return list(course_list)
+    return [course for course in course_list if str(course.status).lower() != "archived"]
+
+
 @click.group()
 @click.option("--verbose", "-v", is_flag=True, help="Enable debug logging.")
 @click.version_option(version=__version__)
@@ -106,14 +114,21 @@ def cli(verbose):
 
 
 @cli.command()
+@click.option(
+    "--archived",
+    "include_archived",
+    is_flag=True,
+    help="Include archived courses in the output.",
+)
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
 @click.option("--output", "-o", "output_file", type=str, default=None, help="Save to file.")
-def courses(as_json, output_file):
-    # type: (bool, Optional[str]) -> None
+def courses(include_archived, as_json, output_file):
+    # type: (bool, bool, Optional[str]) -> None
     """List enrolled courses."""
     def _run():
         client = _get_client()
         user, course_list = client.fetch_user()
+        course_list = _filter_courses(course_list, include_archived=include_archived)
 
         if output_file:
             Path(output_file).write_text(courses_to_json(course_list), encoding="utf-8")
