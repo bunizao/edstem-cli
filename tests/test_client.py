@@ -1,493 +1,208 @@
-"""Unit tests for core client.py functions.
-
-Tests the parsing, header building, media extraction, Chrome target detection,
-and feature flag update logic — all without requiring network access.
-"""
+"""Unit tests for client.py parsing functions."""
 
 from __future__ import annotations
 
-import copy
-from unittest.mock import MagicMock, patch
-
-
-from twitter_cli.client import (
-    FEATURES,
-    _best_chrome_target,
-    _build_graphql_url,
-    _deep_get,
-    _extract_cursor,
-    _extract_media,
-    _parse_int,
-    _update_features_from_html,
-    TwitterAPIError,
-    TwitterClient,
+from edstem_cli.client import (
+    EdAPIError,
+    EdClient,
+    _parse_comment,
+    _parse_course,
+    _parse_thread,
+    _parse_user,
 )
 
 
-# ── _deep_get ────────────────────────────────────────────────────────────
+class TestParseUser:
+    def test_basic_user(self):
+        user = _parse_user({"id": 1, "name": "Alice", "email": "a@b.com", "role": "student"})
+        assert user.id == 1
+        assert user.name == "Alice"
+        assert user.email == "a@b.com"
 
-class TestDeepGet:
-    def test_nested_dict(self):
-        data = {"a": {"b": {"c": 42}}}
-        assert _deep_get(data, "a", "b", "c") == 42
-
-    def test_missing_key(self):
-        assert _deep_get({"a": 1}, "b") is None
-
-    def test_deeply_missing(self):
-        assert _deep_get({"a": {"b": 1}}, "a", "c", "d") is None
-
-    def test_list_access(self):
-        data = {"items": [10, 20, 30]}
-        assert _deep_get(data, "items", 1) == 20
-
-    def test_list_out_of_bounds(self):
-        data = {"items": [10]}
-        assert _deep_get(data, "items", 5) is None
-
-    def test_none_input(self):
-        assert _deep_get(None, "a") is None
-
-    def test_empty_keys(self):
-        data = {"x": 1}
-        assert _deep_get(data) == data
+    def test_missing_fields(self):
+        user = _parse_user({})
+        assert user.id == 0
+        assert user.name == ""
 
 
-# ── _parse_int ───────────────────────────────────────────────────────────
-
-class TestParseInt:
-    def test_normal_int(self):
-        assert _parse_int(42, 0) == 42
-
-    def test_string_int(self):
-        assert _parse_int("123", 0) == 123
-
-    def test_float_string(self):
-        assert _parse_int("99.9", 0) == 99
-
-    def test_comma_separated(self):
-        assert _parse_int("1,234", 0) == 1234
-
-    def test_empty_string(self):
-        assert _parse_int("", 0) == 0
-
-    def test_none(self):
-        assert _parse_int(None, -1) == -1
-
-    def test_invalid(self):
-        assert _parse_int("abc", 5) == 5
-
-
-# ── _extract_cursor ──────────────────────────────────────────────────────
-
-class TestExtractCursor:
-    def test_bottom_cursor(self):
-        content = {"cursorType": "Bottom", "value": "cursor_abc"}
-        assert _extract_cursor(content) == "cursor_abc"
-
-    def test_top_cursor_ignored(self):
-        content = {"cursorType": "Top", "value": "cursor_top"}
-        assert _extract_cursor(content) is None
-
-    def test_no_cursor(self):
-        assert _extract_cursor({}) is None
-
-
-# ── _extract_media ───────────────────────────────────────────────────────
-
-class TestExtractMedia:
-    def test_photo(self):
-        legacy = {
-            "extended_entities": {
-                "media": [
-                    {
-                        "type": "photo",
-                        "media_url_https": "https://pbs.twimg.com/img.jpg",
-                        "original_info": {"width": 1200, "height": 800},
-                    }
-                ]
-            }
-        }
-        media = _extract_media(legacy)
-        assert len(media) == 1
-        assert media[0].type == "photo"
-        assert media[0].url == "https://pbs.twimg.com/img.jpg"
-        assert media[0].width == 1200
-
-    def test_video_picks_highest_bitrate(self):
-        legacy = {
-            "extended_entities": {
-                "media": [
-                    {
-                        "type": "video",
-                        "media_url_https": "https://pbs.twimg.com/thumb.jpg",
-                        "original_info": {"width": 1920, "height": 1080},
-                        "video_info": {
-                            "variants": [
-                                {"content_type": "video/mp4", "bitrate": 832000, "url": "https://low.mp4"},
-                                {"content_type": "video/mp4", "bitrate": 2176000, "url": "https://high.mp4"},
-                                {"content_type": "application/x-mpegURL", "url": "https://stream.m3u8"},
-                            ]
-                        },
-                    }
-                ]
-            }
-        }
-        media = _extract_media(legacy)
-        assert len(media) == 1
-        assert media[0].type == "video"
-        assert media[0].url == "https://high.mp4"
-
-    def test_no_media(self):
-        assert _extract_media({}) == []
-
-    def test_animated_gif(self):
-        legacy = {
-            "extended_entities": {
-                "media": [
-                    {
-                        "type": "animated_gif",
-                        "media_url_https": "https://pbs.twimg.com/gif.mp4",
-                        "original_info": {"width": 480, "height": 270},
-                        "video_info": {
-                            "variants": [
-                                {"content_type": "video/mp4", "bitrate": 0, "url": "https://gif.mp4"},
-                            ]
-                        },
-                    }
-                ]
-            }
-        }
-        media = _extract_media(legacy)
-        assert len(media) == 1
-        assert media[0].type == "animated_gif"
-
-
-# ── _build_graphql_url ───────────────────────────────────────────────────
-
-class TestBuildGraphqlUrl:
-    def test_basic_url(self):
-        url = _build_graphql_url("abc123", "HomeTimeline", {"count": 20}, {"f1": True})
-        assert "graphql/abc123/HomeTimeline" in url
-        assert "variables=" in url
-        assert "features=" in url
-
-    def test_field_toggles(self):
-        url = _build_graphql_url("x", "Op", {}, {}, {"toggle": True})
-        assert "fieldToggles=" in url
-
-    def test_false_features_omitted_from_url(self):
-        """False-valued features should be omitted to keep URL short (avoid 414)."""
-        features = {"enabled_flag": True, "disabled_flag": False, "another_enabled": True}
-        url = _build_graphql_url("q", "Op", {}, features)
-        assert "enabled_flag" in url
-        assert "another_enabled" in url
-        assert "disabled_flag" not in url
-
-    def test_url_length_with_full_features(self):
-        """URL with full FEATURES dict should stay under 8000 chars (server limit)."""
-        url = _build_graphql_url(
-            "abc123", "SearchTimeline",
-            {"rawQuery": "AI agent", "querySource": "typed_query", "product": "Latest", "count": 50},
-            FEATURES,
+class TestParseCourse:
+    def test_basic_course(self):
+        course = _parse_course(
+            {"id": 100, "code": "CS101", "name": "Intro", "year": "2026", "status": "active"},
+            role="student",
         )
-        assert len(url) < 8000, f"URL too long: {len(url)} chars"
+        assert course.id == 100
+        assert course.code == "CS101"
+        assert course.role == "student"
 
 
-# ── _best_chrome_target ──────────────────────────────────────────────────
-
-class TestBestChromeTarget:
-    def test_returns_string(self):
-        target = _best_chrome_target()
-        assert isinstance(target, str)
-        assert "chrome" in target
-
-    def test_fallback_when_no_browser_type(self):
-        with patch.dict("sys.modules", {"curl_cffi.requests": MagicMock(BrowserType=MagicMock(side_effect=TypeError))}):
-            # Force re-evaluation by clearing cached result
-            # When BrowserType iteration fails, should still return a fallback
-            target = _best_chrome_target()
-            assert isinstance(target, str)
-
-
-# ── _update_features_from_html ───────────────────────────────────────────
-
-class TestUpdateFeaturesFromHtml:
-    def test_updates_existing_feature_flags(self):
-        """Should update existing FEATURES keys, not add new ones."""
-        original = dict(FEATURES)
-        try:
-            # Use a key that exists in FEATURES
-            existing_key = list(FEATURES.keys())[0]
-            original_value = FEATURES[existing_key]
-            opposite = "false" if original_value else "true"
-            html = '"%s":{"value":%s}' % (existing_key, opposite)
-            _update_features_from_html(html)
-            assert FEATURES[existing_key] != original_value
-        finally:
-            FEATURES.clear()
-            FEATURES.update(original)
-
-    def test_does_not_add_new_keys(self):
-        """Should never add keys not already in FEATURES (prevents URL bloat)."""
-        original = dict(FEATURES)
-        try:
-            html = '"responsive_web_brand_new_feature":{"value":true}'
-            _update_features_from_html(html)
-            assert "responsive_web_brand_new_feature" not in FEATURES
-        finally:
-            FEATURES.clear()
-            FEATURES.update(original)
-
-    def test_handles_empty_html(self):
-        _update_features_from_html("")
-
-    def test_handles_malformed_html(self):
-        _update_features_from_html("not json at all {{{")
-
-
-# ── TwitterClient._build_headers ─────────────────────────────────────────
-
-class TestBuildHeaders:
-    @patch("twitter_cli.client._get_cffi_session")
-    @patch("twitter_cli.client._gen_ct_headers", return_value={})
-    def test_required_headers_present(self, mock_ct_headers, mock_session):
-        mock_session.return_value = MagicMock()
-        mock_session.return_value.get = MagicMock(side_effect=Exception("skip init"))
-
-        client = TwitterClient.__new__(TwitterClient)
-        client._auth_token = "test_token"
-        client._ct0 = "test_ct0"
-        client._cookie_string = None
-        client._request_delay = 2.5
-        client._max_retries = 3
-        client._retry_base_delay = 5.0
-        client._max_count = 200
-        client._client_transaction = None
-        client._ct_init_attempted = True
-
-        headers = client._build_headers("https://x.com/i/api/graphql/test", "GET")
-
-        assert "Authorization" in headers
-        assert "Bearer" in headers["Authorization"]
-        assert headers["X-Csrf-Token"] == "test_ct0"
-        assert headers["X-Twitter-Auth-Type"] == "OAuth2Session"
-        assert "User-Agent" in headers
-        assert "sec-ch-ua" in headers
-
-    @patch("twitter_cli.client.get_sec_ch_ua_platform", return_value='"Linux"')
-    @patch("twitter_cli.client.get_accept_language", return_value="zh-CN,zh;q=0.9,en;q=0.8")
-    @patch("twitter_cli.client.get_twitter_client_language", return_value="zh")
-    @patch("twitter_cli.client._get_cffi_session")
-    @patch("twitter_cli.client._gen_ct_headers", return_value={})
-    def test_cookie_string_used_when_available(
-        self,
-        mock_ct_headers,
-        mock_session,
-        mock_client_language,
-        mock_accept_language,
-        mock_platform,
-    ):
-        mock_session.return_value = MagicMock()
-        mock_session.return_value.get = MagicMock(side_effect=Exception("skip"))
-
-        client = TwitterClient.__new__(TwitterClient)
-        client._auth_token = "token"
-        client._ct0 = "ct0"
-        client._cookie_string = "auth_token=x; ct0=y; other=z"
-        client._request_delay = 2.5
-        client._max_retries = 3
-        client._retry_base_delay = 5.0
-        client._max_count = 200
-        client._client_transaction = None
-        client._ct_init_attempted = True
-
-        headers = client._build_headers()
-        assert headers["Cookie"] == "auth_token=x; ct0=y; other=z"
-        assert headers["X-Twitter-Client-Language"] == "zh"
-        assert headers["Accept-Language"] == "zh-CN,zh;q=0.9,en;q=0.8"
-        assert headers["sec-ch-ua-platform"] == '"Linux"'
-
-
-class TestPaginationBehavior:
-    def test_continues_when_cursor_advances_without_new_tweets(self):
-        client = TwitterClient.__new__(TwitterClient)
-        client._request_delay = 0.0
-        client._max_count = 200
-
-        responses = iter(
-            [
-                {"page": 1},
-                {"page": 2},
-            ]
-        )
-
-        def _graphql_get(operation_name, variables, features, field_toggles=None):
-            return next(responses)
-
-        def _parse_timeline_response(data, get_instructions):
-            if data["page"] == 1:
-                return [], "cursor-2"
-            return [MagicMock(id="tweet-1")], None
-
-        client._graphql_get = _graphql_get
-        client._parse_timeline_response = _parse_timeline_response
-
-        tweets = client._fetch_timeline("HomeTimeline", 1, lambda data: data)
-
-        assert [tweet.id for tweet in tweets] == ["tweet-1"]
-
-    def test_stops_when_cursor_does_not_advance(self):
-        client = TwitterClient.__new__(TwitterClient)
-        client._request_delay = 0.0
-        client._max_count = 200
-
-        calls = []
-
-        def _graphql_get(operation_name, variables, features, field_toggles=None):
-            calls.append(variables.get("cursor"))
-            return {"page": len(calls)}
-
-        client._graphql_get = _graphql_get
-        client._parse_timeline_response = lambda data, get_instructions: ([], "cursor-same")
-
-        tweets = client._fetch_timeline("HomeTimeline", 1, lambda data: data)
-
-        assert tweets == []
-        assert calls == [None, "cursor-same"]
-
-
-# ── TwitterClient._parse_tweet_result ─────────────────────────────────────
-
-class TestParseTweetResult:
-    SAMPLE_TWEET_RESULT = {
-        "__typename": "Tweet",
-        "rest_id": "1234567890",
-        "core": {
-            "user_results": {
-                "result": {
-                    "rest_id": "user123",
-                    "core": {"name": "Test User", "screen_name": "testuser"},
-                    "legacy": {
-                        "name": "Test User",
-                        "screen_name": "testuser",
-                        "verified": False,
-                        "profile_image_url_https": "https://img.com/avatar.jpg",
-                    },
-                    "is_blue_verified": True,
-                }
-            }
-        },
-        "legacy": {
-            "full_text": "Hello world! This is a test tweet.",
-            "created_at": "Sat Mar 08 12:00:00 +0000 2026",
-            "favorite_count": 100,
-            "retweet_count": 25,
+class TestParseThread:
+    def test_basic_thread(self):
+        thread = _parse_thread({
+            "id": 5001,
+            "number": 1,
+            "title": "Test",
+            "type": "question",
+            "vote_count": 10,
+            "view_count": 200,
             "reply_count": 5,
-            "quote_count": 3,
-            "bookmark_count": 10,
-            "lang": "en",
-            "entities": {"urls": []},
-        },
-        "views": {"count": "5000"},
-    }
+            "is_pinned": True,
+            "is_answered": True,
+        })
+        assert thread.id == 5001
+        assert thread.number == 1
+        assert thread.is_pinned is True
+        assert thread.metrics.vote_count == 10
+        assert thread.metrics.view_count == 200
 
-    @patch("twitter_cli.client._get_cffi_session")
-    @patch("twitter_cli.client._gen_ct_headers", return_value={})
-    def test_parses_basic_tweet(self, mock_ct_headers, mock_session):
-        mock_session.return_value = MagicMock()
-        mock_session.return_value.get = MagicMock(side_effect=Exception("skip"))
+    def test_thread_with_users_map(self):
+        from edstem_cli.models import User
+        users_map = {12345: User(id=12345, name="Alice")}
+        thread = _parse_thread({"id": 1, "user_id": 12345}, users_map)
+        assert thread.author is not None
+        assert thread.author.name == "Alice"
 
-        client = TwitterClient.__new__(TwitterClient)
-        client._ct_init_attempted = True
-        client._client_transaction = None
-
-        tweet = client._parse_tweet_result(copy.deepcopy(self.SAMPLE_TWEET_RESULT))
-        assert tweet is not None
-        assert tweet.id == "1234567890"
-        assert tweet.text == "Hello world! This is a test tweet."
-        assert tweet.author.screen_name == "testuser"
-        assert tweet.author.verified is True  # is_blue_verified
-        assert tweet.metrics.likes == 100
-        assert tweet.metrics.views == 5000
-        assert tweet.lang == "en"
-        assert tweet.is_retweet is False
-
-    @patch("twitter_cli.client._get_cffi_session")
-    @patch("twitter_cli.client._gen_ct_headers", return_value={})
-    def test_parses_tombstone_returns_none(self, mock_ct_headers, mock_session):
-        mock_session.return_value = MagicMock()
-        mock_session.return_value.get = MagicMock(side_effect=Exception("skip"))
-
-        client = TwitterClient.__new__(TwitterClient)
-        client._ct_init_attempted = True
-        client._client_transaction = None
-
-        result = {"__typename": "TweetTombstone"}
-        assert client._parse_tweet_result(result) is None
-
-    @patch("twitter_cli.client._get_cffi_session")
-    @patch("twitter_cli.client._gen_ct_headers", return_value={})
-    def test_parses_visibility_wrapper(self, mock_ct_headers, mock_session):
-        mock_session.return_value = MagicMock()
-        mock_session.return_value.get = MagicMock(side_effect=Exception("skip"))
-
-        client = TwitterClient.__new__(TwitterClient)
-        client._ct_init_attempted = True
-        client._client_transaction = None
-
-        wrapped = {
-            "__typename": "TweetWithVisibilityResults",
-            "tweet": copy.deepcopy(self.SAMPLE_TWEET_RESULT),
-        }
-        tweet = client._parse_tweet_result(wrapped)
-        assert tweet is not None
-        assert tweet.id == "1234567890"
-
-    @patch("twitter_cli.client._get_cffi_session")
-    @patch("twitter_cli.client._gen_ct_headers", return_value={})
-    def test_depth_limit(self, mock_ct_headers, mock_session):
-        mock_session.return_value = MagicMock()
-        mock_session.return_value.get = MagicMock(side_effect=Exception("skip"))
-
-        client = TwitterClient.__new__(TwitterClient)
-        client._ct_init_attempted = True
-        client._client_transaction = None
-
-        assert client._parse_tweet_result(self.SAMPLE_TWEET_RESULT, depth=3) is None
+    def test_thread_with_comments(self):
+        thread = _parse_thread({
+            "id": 1,
+            "answers": [{"id": 100, "type": "answer", "vote_count": 3}],
+            "comments": [{"id": 200, "type": "comment"}],
+        })
+        assert len(thread.answers) == 1
+        assert thread.answers[0].vote_count == 3
+        assert len(thread.comments) == 1
 
 
-# ── TwitterAPIError ──────────────────────────────────────────────────────
+class TestParseComment:
+    def test_nested_comments(self):
+        comment = _parse_comment({
+            "id": 100,
+            "type": "answer",
+            "vote_count": 5,
+            "is_endorsed": True,
+            "comments": [
+                {"id": 101, "type": "comment", "vote_count": 1, "comments": []},
+            ],
+        })
+        assert comment.id == 100
+        assert comment.is_endorsed is True
+        assert len(comment.comments) == 1
+        assert comment.comments[0].id == 101
 
-class TestTwitterAPIError:
+
+class TestEdAPIError:
     def test_stores_status_code(self):
-        err = TwitterAPIError(429, "Rate limited")
+        err = EdAPIError(429, "Rate limited")
         assert err.status_code == 429
         assert str(err) == "Rate limited"
 
     def test_is_runtime_error(self):
-        err = TwitterAPIError(500, "Server error")
+        err = EdAPIError(500, "Server error")
         assert isinstance(err, RuntimeError)
 
 
-class TestParseUserResult:
-    def test_coerces_count_fields_to_int(self):
-        user = TwitterClient._parse_user_result(
-            {
-                "rest_id": "user-1",
-                "legacy": {
-                    "name": "Alice",
-                    "screen_name": "alice",
-                    "followers_count": "1,234",
-                    "friends_count": "56",
-                    "statuses_count": "78.9",
-                    "favourites_count": None,
-                },
-            }
-        )
+class TestEdClientRequests:
+    def test_get_rejects_bad_token_400(self):
+        class FakeResponse:
+            status_code = 400
+            ok = False
+            headers = {"content-type": "application/json"}
 
-        assert user is not None
-        assert user.followers_count == 1234
-        assert user.following_count == 56
-        assert user.tweets_count == 78
-        assert user.likes_count == 0
+            @staticmethod
+            def json():
+                return {"code": "bad_token", "message": "Invalid token"}
+
+        client = EdClient("token")
+        client._session.get = lambda *args, **kwargs: FakeResponse()
+
+        try:
+            client._get("user")
+        except EdAPIError as exc:
+            assert exc.status_code == 400
+            assert "Authentication failed" in str(exc)
+        else:
+            raise AssertionError("_get should reject bad_token responses")
+
+    def test_get_preserves_forbidden_403_message(self):
+        class FakeResponse:
+            status_code = 403
+            ok = False
+            headers = {"content-type": "application/json"}
+
+            @staticmethod
+            def json():
+                return {"code": "unknown", "message": "Forbidden"}
+
+        client = EdClient("token")
+        client._session.get = lambda *args, **kwargs: FakeResponse()
+
+        try:
+            client._get("threads/30595")
+        except EdAPIError as exc:
+            assert exc.status_code == 403
+            assert str(exc) == "Ed API error (HTTP 403): Forbidden"
+        else:
+            raise AssertionError("_get should preserve forbidden responses")
+
+    def test_fetch_user_activity_sends_all_filter(self):
+        client = EdClient("token")
+        captured = {}
+
+        def fake_get(path, params=None):
+            captured["path"] = path
+            captured["params"] = params
+            return {"items": []}
+
+        client._get = fake_get
+        result = client.fetch_user_activity(123)
+
+        assert result == []
+        assert captured["path"] == "users/123/profile/activity"
+        assert captured["params"]["filter"] == "all"
+
+
+class TestClientFixtures:
+    def test_parse_user_info_fixture(self, fixture_loader):
+        data = fixture_loader("user_info.json")
+        user = _parse_user(data["user"])
+        assert user.id == 12345
+        assert user.name == "Alice Student"
+
+        courses = []
+        for enrollment in data["courses"]:
+            course = _parse_course(enrollment["course"], enrollment["role"]["role"])
+            courses.append(course)
+        assert len(courses) == 2
+        assert courses[0].code == "CS101"
+        assert courses[0].role == "student"
+        assert courses[1].status == "archived"
+
+    def test_parse_thread_detail_fixture(self, fixture_loader):
+        data = fixture_loader("thread_detail.json")
+        users_data = data.get("users") or []
+        users_map = {u["id"]: _parse_user(u) for u in users_data}
+        thread = _parse_thread(data["thread"], users_map)
+
+        assert thread.id == 5001
+        assert thread.title == "How do I install Python?"
+        assert thread.is_pinned is True
+        assert thread.is_answered is True
+        assert thread.metrics.vote_count == 5
+
+        assert len(thread.answers) == 1
+        assert thread.answers[0].is_endorsed is True
+        assert thread.answers[0].author.name == "Bob TA"
+        assert len(thread.answers[0].comments) == 1
+
+        assert len(thread.comments) == 1
+        assert thread.comments[0].is_anonymous is True
+
+    def test_parse_course_threads_fixture(self, fixture_loader):
+        data = fixture_loader("course_threads.json")
+        threads = [_parse_thread(t) for t in data["threads"]]
+
+        assert len(threads) == 2
+        assert threads[0].number == 1
+        assert threads[0].is_pinned is True
+        assert threads[1].category == "HW1"
+        assert threads[1].metrics.vote_count == 20

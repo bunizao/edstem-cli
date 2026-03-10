@@ -1,0 +1,39 @@
+{
+  "items": [
+    {
+      "type": "thread",
+      "value": {
+        "id": 5001,
+        "type": "question",
+        "course_id": 100,
+        "course_name": "Intro to Computer Science",
+        "course_code": "CS101",
+        "title": "How do I install Python?",
+        "document": "I need help installing Python on macOS.",
+        "category": "General",
+        "subcategory": "",
+        "subsubcategory": "",
+        "is_private": false,
+        "approved_status": "approved",
+        "created_at": "2026-01-15T10:00:00.000Z"
+      }
+    },
+    {
+      "type": "comment",
+      "value": {
+        "id": 9001,
+        "type": "answer",
+        "document": "Use brew install python3",
+        "course_id": 100,
+        "course_name": "Intro to Computer Science",
+        "course_code": "CS101",
+        "thread_id": 5001,
+        "thread_title": "How do I install Python?",
+        "thread_category": "General",
+        "thread_subcategory": "",
+        "thread_subsubcategory": "",
+        "created_at": "2026-01-15T11:00:00.000Z"
+      }
+    }
+  ]
+}

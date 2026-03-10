@@ -1,31 +1,47 @@
 from __future__ import annotations
 
-from twitter_cli.filter import filter_tweets
+from edstem_cli.filter import filter_threads
 
 
-def test_filter_tweets_does_not_mutate_input(tweet_factory) -> None:
-    tweet = tweet_factory("1", score=0.0)
-    output = filter_tweets([tweet], {"mode": "all", "weights": {}})
-
-    assert tweet.score == 0.0
-    assert output[0].score > 0.0
-    assert output[0] is not tweet
-
-
-def test_filter_tweets_applies_language_and_retweet_filters(tweet_factory) -> None:
-    tweets = [
-        tweet_factory("1", lang="en", is_retweet=False),
-        tweet_factory("2", lang="zh", is_retweet=False),
-        tweet_factory("3", lang="en", is_retweet=True),
+def test_filter_by_category(thread_factory) -> None:
+    threads = [
+        thread_factory(1, category="General"),
+        thread_factory(2, category="HW1"),
+        thread_factory(3, category="General"),
     ]
-    output = filter_tweets(
-        tweets,
-        {
-            "mode": "all",
-            "lang": ["en"],
-            "excludeRetweets": True,
-            "weights": {},
-        },
-    )
+    result = filter_threads(threads, category="General")
+    assert [t.id for t in result] == [1, 3]
 
-    assert [tweet.id for tweet in output] == ["1"]
+
+def test_filter_by_type(thread_factory) -> None:
+    threads = [
+        thread_factory(1, type="question"),
+        thread_factory(2, type="post"),
+        thread_factory(3, type="question"),
+    ]
+    result = filter_threads(threads, thread_type="question")
+    assert [t.id for t in result] == [1, 3]
+
+
+def test_filter_by_answered(thread_factory) -> None:
+    threads = [
+        thread_factory(1, is_answered=True),
+        thread_factory(2, is_answered=False),
+    ]
+    result = filter_threads(threads, answered=True)
+    assert [t.id for t in result] == [1]
+
+
+def test_filter_unanswered(thread_factory) -> None:
+    threads = [
+        thread_factory(1, is_answered=True),
+        thread_factory(2, is_answered=False),
+    ]
+    result = filter_threads(threads, answered=False)
+    assert [t.id for t in result] == [2]
+
+
+def test_filter_no_criteria_returns_all(thread_factory) -> None:
+    threads = [thread_factory(1), thread_factory(2)]
+    result = filter_threads(threads)
+    assert len(result) == 2

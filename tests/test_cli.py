@@ -1,90 +1,88 @@
 from __future__ import annotations
 
 from click.testing import CliRunner
-import pytest
 
-from twitter_cli.cli import cli
-from twitter_cli.models import UserProfile
-from twitter_cli.serialization import tweets_to_json
+from edstem_cli.cli import cli
+from edstem_cli.models import Course, User
 
 
-def test_cli_user_command_works_with_client_factory(monkeypatch) -> None:
+def test_cli_user_command_works(monkeypatch) -> None:
     class FakeClient:
-        def fetch_user(self, screen_name: str) -> UserProfile:
-            return UserProfile(id="1", name="Alice", screen_name=screen_name)
+        def fetch_user(self):
+            return (
+                User(id=1, name="Alice", email="alice@test.com"),
+                [Course(id=100, code="CS101", name="Intro")],
+            )
 
-    monkeypatch.setattr("twitter_cli.cli._get_client", lambda config=None: FakeClient())
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
     runner = CliRunner()
-    result = runner.invoke(cli, ["user", "alice"])
+    result = runner.invoke(cli, ["user"])
     assert result.exit_code == 0
+    assert "Alice" in result.output
 
 
-def test_cli_feed_json_input_path(tmp_path, tweet_factory) -> None:
-    json_path = tmp_path / "tweets.json"
-    json_path.write_text(tweets_to_json([tweet_factory("1")]), encoding="utf-8")
+def test_cli_courses_json(monkeypatch) -> None:
+    class FakeClient:
+        def fetch_user(self):
+            return (
+                User(id=1, name="Alice"),
+                [Course(id=100, code="CS101", name="Intro", year="2026", session="Spring")],
+            )
 
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
     runner = CliRunner()
-    result = runner.invoke(cli, ["feed", "--input", str(json_path), "--json"])
+    result = runner.invoke(cli, ["courses", "--json"])
     assert result.exit_code == 0
-    assert '"id": "1"' in result.output
+    assert '"code": "CS101"' in result.output
 
 
-@pytest.mark.parametrize(
-    "args",
-    [
-        ["favorites"],
-        ["bookmarks"],
-        ["search", "x"],
-        ["user-posts", "alice"],
-        ["likes", "alice"],
-        ["list", "123"],
-    ],
-)
-def test_cli_commands_wrap_client_creation_errors(monkeypatch, args) -> None:
+def test_cli_threads_wraps_client_errors(monkeypatch) -> None:
     monkeypatch.setattr(
-        "twitter_cli.cli._get_client",
-        lambda config=None: (_ for _ in ()).throw(RuntimeError("boom")),
+        "edstem_cli.cli._get_client",
+        lambda: (_ for _ in ()).throw(RuntimeError("auth failed")),
     )
     runner = CliRunner()
-
-    result = runner.invoke(cli, args)
-
+    result = runner.invoke(cli, ["threads", "100"])
     assert result.exit_code == 1
-    assert "boom" in result.output
-    assert type(result.exception).__name__ == "SystemExit"
+    assert "auth failed" in result.output
 
 
-def test_cli_tweet_accepts_shared_url_with_query(monkeypatch) -> None:
+def test_cli_thread_by_id(monkeypatch, thread_factory) -> None:
     class FakeClient:
-        def fetch_tweet_detail(self, tweet_id: str, max_count: int):
-            assert tweet_id == "12345"
-            assert max_count == 50
-            return []
+        def fetch_thread(self, thread_id):
+            assert thread_id == 5001
+            return thread_factory(5001, title="Test thread")
 
-    monkeypatch.setattr("twitter_cli.cli._get_client", lambda config=None: FakeClient())
-    monkeypatch.setattr(
-        "twitter_cli.cli.load_config",
-        lambda: {"fetch": {"count": 50}, "filter": {}, "rateLimit": {}},
-    )
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
     runner = CliRunner()
-
-    result = runner.invoke(cli, ["tweet", "https://x.com/user/status/12345?s=20"])
-
+    result = runner.invoke(cli, ["thread", "5001"])
     assert result.exit_code == 0
 
 
-def test_cli_bookmark_alias_works(monkeypatch) -> None:
-    calls = []
-
+def test_cli_thread_by_course_number(monkeypatch, thread_factory) -> None:
     class FakeClient:
-        def bookmark_tweet(self, tweet_id: str) -> bool:
-            calls.append(tweet_id)
-            return True
+        def fetch_course_thread(self, course_id, number):
+            assert course_id == 100
+            assert number == 42
+            return thread_factory(5001, number=42)
 
-    monkeypatch.setattr("twitter_cli.cli._get_client", lambda config=None: FakeClient())
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
     runner = CliRunner()
-
-    result = runner.invoke(cli, ["bookmark", "123"])
-
+    result = runner.invoke(cli, ["thread", "100#42"])
     assert result.exit_code == 0
-    assert calls == ["123"]
+
+
+def test_cli_activity_command(monkeypatch) -> None:
+    class FakeClient:
+        def fetch_user(self):
+            return (User(id=1, name="Alice"), [])
+
+        def fetch_user_activity(self, user_id, course_id=None, limit=30, offset=0,
+                                filter_type="all"):
+            return [{"type": "thread", "value": {"title": "Hello", "course_code": "CS101",
+                                                  "created_at": "2026-01-15"}}]
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+    runner = CliRunner()
+    result = runner.invoke(cli, ["activity"])
+    assert result.exit_code == 0

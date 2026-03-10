@@ -1,19 +1,19 @@
 ---
-name: twitter-cli
-description: CLI skill for Twitter/X with JSON output for AI agents — read timelines, bookmarks, user posts, and profiles from the terminal without API keys
-author: jackwener
+name: edstem-cli
+description: CLI skill for Ed Discussion with JSON output for AI agents — browse courses, threads, and comments from the terminal
+author: bunizao
 version: "1.0.0"
 tags:
-  - twitter
-  - x
-  - social-media
-  - terminal
+  - edstem
+  - ed
+  - discussion
+  - education
   - cli
 ---
 
-# twitter-cli Skill
+# edstem-cli Skill
 
-Use this skill when the user wants to read or interact with Twitter/X content from terminal without API keys.
+Use this skill when the user wants to browse Ed Discussion courses, threads, and comments from terminal.
 
 ## Agent Defaults
 
@@ -22,154 +22,103 @@ When you need machine-readable output:
 1. **Always use `--json`** for structured output. Do not parse the default rich-text table output.
 2. Use `--max` to keep result sets small and token-efficient.
 3. Use `-o <file>` to save large results to a file instead of printing to stdout.
-4. Prefer specific commands over broad ones. Example: use `twitter user-posts elonmusk --max 5 --json` instead of fetching full timelines.
 
 ## Prerequisites
 
 ```bash
 # Install (requires Python 3.8+)
-uv tool install twitter-cli
-# Or: pipx install twitter-cli
+uv tool install edstem-cli
+# Or: pipx install edstem-cli
 ```
 
 ## Authentication
 
-- Auto-extracts browser cookies from Arc/Chrome/Edge/Firefox/Brave.
-- Or set environment variables: `TWITTER_AUTH_TOKEN` + `TWITTER_CT0`.
+- Set environment variable: `ED_API_TOKEN`
+- Or save token to `~/.config/edstem-cli/token`
+- Get token from: https://edstem.org/us/settings/api-tokens
 
 ## Command Reference
 
-### Feed
+### Courses
 
 ```bash
-twitter feed                           # Home timeline (For You)
-twitter feed -t following              # Following timeline
-twitter feed --max 50                  # Limit count
-twitter feed --filter                  # Enable ranking filter
-twitter feed --json > tweets.json      # Export as JSON
-twitter feed --input tweets.json       # Read from local JSON file
+edstem courses                         # List enrolled courses
+edstem courses --json                  # JSON output
 ```
 
-### Bookmarks
+### Threads
 
 ```bash
-twitter bookmarks                      # List bookmarked tweets
-twitter bookmarks --max 30 --json
-twitter bookmarks --filter             # Apply ranking filter
+edstem threads <course_id>             # List threads
+edstem threads <course_id> --sort top  # Sort by votes
+edstem threads <course_id> --category "HW1"  # Filter by category
+edstem threads <course_id> --type question   # Filter by type
+edstem threads <course_id> --unanswered      # Only unanswered
+edstem threads <course_id> --max 50 --json   # Limit + JSON
+edstem threads <course_id> -o threads.json   # Save to file
 ```
 
-### Search
+### Thread Detail
 
 ```bash
-twitter search "keyword"
-twitter search "AI agent" -t Latest --max 50
-twitter search "机器学习" --json
-twitter search "topic" -o results.json         # Save to file
-twitter search "trending" --filter              # Apply ranking filter
+edstem thread <thread_id>              # View thread + comments
+edstem thread <course_id>#<number>     # By course thread number
+edstem thread <thread_id> --json       # JSON output
 ```
 
-### Tweet Detail
+### Activity
 
 ```bash
-twitter tweet 1234567890                          # View tweet + replies
-twitter tweet https://x.com/user/status/12345     # Accepts URL too
-```
-
-### List Timeline
-
-```bash
-twitter list 1539453138322673664       # Fetch tweets from a Twitter List
+edstem activity                        # Your activity (all courses)
+edstem activity <course_id>            # Activity in a course
+edstem activity --filter answer --json # Filter + JSON
 ```
 
 ### User
 
 ```bash
-twitter user elonmusk                  # User profile
-twitter user-posts elonmusk --max 20   # User's tweets
-twitter user-posts elonmusk -o tweets.json  # Save to file
-twitter likes elonmusk --max 30        # User's likes
-twitter likes elonmusk -o likes.json   # Save to file
-twitter followers elonmusk --max 50    # User's followers
-twitter following elonmusk --max 50    # User's following
-```
-
-### Write Operations
-
-```bash
-twitter post "Hello from twitter-cli!"              # Post tweet
-twitter post "reply text" --reply-to 1234567890      # Reply
-twitter delete 1234567890                            # Delete tweet
-twitter like 1234567890                              # Like
-twitter unlike 1234567890                            # Unlike
-twitter retweet 1234567890                           # Retweet
-twitter unretweet 1234567890                         # Unretweet
-twitter bookmark 1234567890                          # Bookmark
-twitter unbookmark 1234567890                        # Unbookmark
+edstem user                            # Current user profile
+edstem user --json                     # JSON output
 ```
 
 ## Structured Output
 
-All major query commands support `--json` for machine-readable output.
-AI agents should **always use `--json`** instead of parsing the default rich-text display:
+All commands support `--json` for machine-readable output.
+AI agents should **always use `--json`**:
 
 ```bash
-twitter feed --json > tweets.json
-twitter feed --input tweets.json
-twitter user-posts elonmusk --json | jq '.[0].text'
-twitter search "keyword" --json | jq 'length'
-twitter search "topic" -o results.json
-twitter likes elonmusk -o likes.json
+edstem courses --json
+edstem threads 12345 --json | jq '.[0].title'
+edstem thread 67890 --json | jq '.answers'
 ```
-
-## Ranking Filter
-
-Filtering is opt-in (disabled by default). Enable with `--filter`.
-
-```bash
-twitter feed --filter
-twitter bookmarks --filter
-```
-
-The scoring formula:
-
-```text
-score = likes_w * likes
-      + retweets_w * retweets
-      + replies_w * replies
-      + bookmarks_w * bookmarks
-      + views_log_w * log10(max(views, 1))
-```
-
-Configure weights and mode in `config.yaml`.
 
 ## Common Patterns for AI Agents
 
 ```bash
-# Get latest tweets from a user
-twitter user-posts elonmusk --max 5 --json
+# Get all courses
+edstem courses --json
 
-# Search and export for analysis
-twitter search "topic" --max 20 --json
-twitter search "topic" -o results.json
+# Get recent threads in a course
+edstem threads 12345 --max 10 --json
 
-# Check user profile
-twitter user elonmusk --json
+# View a specific thread with answers
+edstem thread 67890 --json
 
-# Daily reading workflow (structured output)
-twitter feed -t following --max 30 --json
-twitter bookmarks --max 20 --json
+# Check unanswered questions
+edstem threads 12345 --unanswered --json
+
+# Get your recent activity
+edstem activity --max 10 --json
 ```
 
 ## Error Handling
 
-- `No Twitter cookies found` — login to `x.com` in Arc/Chrome/Edge/Firefox/Brave, or set env vars.
-- `Cookie expired or invalid (HTTP 401/403)` — re-login to `x.com` and retry.
-- `Twitter API error 404` — queryId rotation, retry the command (client has live fallback).
+- `Invalid or expired Ed API token` — regenerate at https://edstem.org/us/settings/api-tokens
+- `Not found` — check that the course/thread ID is correct
+- Auth errors (401/403) — token may have expired, regenerate it
 
 ## Safety Notes
 
-- Write operations have built-in random delays (1.5–4s) to avoid rate limits.
-- TLS fingerprint and User-Agent are automatically matched to the Chrome version used.
-- Do not ask users to share raw cookie values in chat logs.
-- Prefer local browser cookie extraction over manual secret copy/paste.
-- If auth fails with 401/403, ask the user to re-login to `x.com`.
+- API tokens are stored locally at `~/.config/edstem-cli/token` with 600 permissions.
+- Do not ask users to share API tokens in chat logs.
+- This is a read-only CLI — no write operations are supported.

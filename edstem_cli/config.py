@@ -13,27 +13,13 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG = {
     "fetch": {
-        "count": 50,
-    },
-    "filter": {
-        "mode": "topN",
-        "topN": 20,
-        "minScore": 50,
-        "lang": [],
-        "excludeRetweets": False,
-        "weights": {
-            "likes": 1.0,
-            "retweets": 3.0,
-            "replies": 2.0,
-            "bookmarks": 5.0,
-            "views_log": 0.5,
-        },
+        "count": 30,
     },
     "rateLimit": {
-        "requestDelay": 2.5,
+        "requestDelay": 1.0,
         "maxRetries": 3,
-        "retryBaseDelay": 5.0,
-        "maxCount": 200,
+        "retryBaseDelay": 3.0,
+        "maxCount": 100,
     },
 }  # type: Dict[str, Any]
 
@@ -108,32 +94,6 @@ def _normalize_config(config):
     fetch["count"] = max(fetch_count, 1)
     merged["fetch"] = fetch
 
-    filter_config = merged.get("filter")
-    if not isinstance(filter_config, dict):
-        filter_config = {}
-    mode = str(filter_config.get("mode", "topN"))
-    if mode not in {"topN", "score", "all"}:
-        mode = "topN"
-    filter_config["mode"] = mode
-    filter_config["topN"] = max(_as_int(filter_config.get("topN"), 20), 1)
-    filter_config["minScore"] = _as_float(filter_config.get("minScore"), 50.0)
-    filter_config["excludeRetweets"] = bool(filter_config.get("excludeRetweets", False))
-
-    langs = filter_config.get("lang", [])
-    if not isinstance(langs, list):
-        langs = []
-    filter_config["lang"] = [str(lang) for lang in langs if str(lang)]
-
-    weights = filter_config.get("weights", {})
-    if not isinstance(weights, dict):
-        weights = {}
-    normalized_weights = {}
-    default_weights = DEFAULT_CONFIG["filter"]["weights"]
-    for key, default_value in default_weights.items():
-        normalized_weights[key] = _as_float(weights.get(key), float(default_value))
-    filter_config["weights"] = normalized_weights
-    merged["filter"] = filter_config
-
     # Normalize rateLimit section
     rl = merged.get("rateLimit")
     if not isinstance(rl, dict):
@@ -141,7 +101,9 @@ def _normalize_config(config):
     default_rl = DEFAULT_CONFIG["rateLimit"]
     rl["requestDelay"] = max(_as_float(rl.get("requestDelay"), default_rl["requestDelay"]), 0.0)
     rl["maxRetries"] = max(_as_int(rl.get("maxRetries"), default_rl["maxRetries"]), 0)
-    rl["retryBaseDelay"] = max(_as_float(rl.get("retryBaseDelay"), default_rl["retryBaseDelay"]), 1.0)
+    rl["retryBaseDelay"] = max(
+        _as_float(rl.get("retryBaseDelay"), default_rl["retryBaseDelay"]), 1.0
+    )
     rl["maxCount"] = max(_as_int(rl.get("maxCount"), default_rl["maxCount"]), 1)
     merged["rateLimit"] = rl
 

@@ -3,14 +3,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "twitter-cli"
-version = "0.4.6"
-description = "A CLI for Twitter/X — feed, bookmarks, and user timeline in terminal"
+name = "edstem-cli"
+version = "0.1.0"
+description = "A CLI for Ed Discussion — browse courses, threads, and comments in terminal"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.8"
 authors = [{ name = "jackwener", email = "jakevingoo@gmail.com" }]
-keywords = ["twitter", "x", "cli", "feed", "timeline"]
+keywords = ["edstem", "ed", "discussion", "cli", "education"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -20,13 +20,10 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
-    "browser-cookie3>=0.19",
     "click>=8.0",
     "rich>=13.0",
     "PyYAML>=6.0",
-    "curl_cffi>=0.7",
-    "xclienttransaction>=1.0.1",
-    "beautifulsoup4>=4.12",
+    "requests>=2.28",
 ]
 
 [project.optional-dependencies]
@@ -36,12 +33,12 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/jackwener/twitter-cli"
-Repository = "https://github.com/jackwener/twitter-cli"
-Issues = "https://github.com/jackwener/twitter-cli/issues"
+Homepage = "https://github.com/bunizao/edstem-cli"
+Repository = "https://github.com/bunizao/edstem-cli"
+Issues = "https://github.com/bunizao/edstem-cli/issues"
 
 [project.scripts]
-twitter = "twitter_cli.cli:cli"
+edstem = "edstem_cli.cli:cli"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -51,4 +48,4 @@ python_files = ["test_*.py"]
 line-length = 100
 
 [tool.hatch.build.targets.wheel]
-packages = ["twitter_cli"]
+packages = ["edstem_cli"]
