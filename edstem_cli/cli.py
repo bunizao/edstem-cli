@@ -71,6 +71,13 @@ def _run_guarded(action):
         _exit_with_error(exc)
 
 
+def _save_output(path, content):
+    # type: (str, str) -> None
+    """Write command output to disk and report the destination on stderr."""
+    Path(path).write_text(content, encoding="utf-8")
+    click.echo("Saved to %s" % path, err=True)
+
+
 def _resolve_fetch_count(max_count, configured):
     # type: (Optional[int], int) -> int
     """Resolve fetch count with bounds checks."""
@@ -129,13 +136,13 @@ def courses(include_archived, as_json, output_file):
         client = _get_client()
         user, course_list = client.fetch_user()
         course_list = _filter_courses(course_list, include_archived=include_archived)
+        payload = courses_to_json(course_list)
 
         if output_file:
-            Path(output_file).write_text(courses_to_json(course_list), encoding="utf-8")
-            console.print("Saved to %s" % output_file)
+            _save_output(output_file, payload)
 
         if as_json:
-            click.echo(courses_to_json(course_list))
+            click.echo(payload)
             return
 
         print_course_table(course_list, console)
@@ -179,13 +186,13 @@ def threads(course_id, max_count, sort, category, thread_type, answered, unanswe
         thread_list = filter_threads(
             thread_list, category=category, thread_type=thread_type, answered=answered_flag
         )
+        payload = threads_to_json(thread_list)
 
         if output_file:
-            Path(output_file).write_text(threads_to_json(thread_list), encoding="utf-8")
-            console.print("Saved to %s" % output_file)
+            _save_output(output_file, payload)
 
         if as_json:
-            click.echo(threads_to_json(thread_list))
+            click.echo(payload)
             return
 
         print_thread_table(thread_list, console)
