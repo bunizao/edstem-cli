@@ -33,7 +33,7 @@ uv sync
 
 ## Quick Start
 
-Get your API token from: https://edstem.org/settings/api-tokens
+Get your API token from: [https://edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens)
 
 ```bash
 # View your profile and courses
@@ -116,32 +116,9 @@ uv run ruff check .
 uv run pytest -q
 ```
 
-## Release
-
-Push a version tag such as `v0.1.0` to trigger the release workflows.
-
-- `CI` runs lint, tests, and package validation
-- `Publish GitHub Release` creates a GitHub release and uploads the wheel and sdist
-- `Publish to PyPI` uploads the package to PyPI through trusted publishing
-
 ## Acknowledgements
 
-This project builds on ideas and structure from
-[`twitter-cli`](https://github.com/jackwener/twitter-cli).
+This project builds on ideas and structure from  
+`[twitter-cli](https://github.com/jackwener/twitter-cli)`.  
 Thanks to the original project for the foundation and inspiration.
 
-## Project Structure
-
-```text
-edstem_cli/
-├── __init__.py
-├── cli.py
-├── client.py
-├── auth.py
-├── config.py
-├── constants.py
-├── filter.py
-├── formatter.py
-├── serialization.py
-└── models.py
-```
