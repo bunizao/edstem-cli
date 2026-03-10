@@ -1,124 +1,66 @@
 ---
 name: edstem-cli
-description: CLI skill for Ed Discussion with JSON output for AI agents — browse courses, threads, and comments from the terminal
-author: bunizao
-version: "1.0.0"
-tags:
-  - edstem
-  - ed
-  - discussion
-  - education
-  - cli
+description: Inspect Ed Discussion from the terminal with the `edstem` CLI. Use when Codex needs to list courses, browse or filter threads in a course, open a thread by ID or `course_id#number`, inspect recent activity, or fetch the current user profile. Prefer JSON output for agent workflows.
 ---
 
-# edstem-cli Skill
+# edstem-cli
 
-Use this skill when the user wants to browse Ed Discussion courses, threads, and comments from terminal.
+Use `edstem` for read-only Ed Discussion access.
 
-## Agent Defaults
+## Defaults
 
-When you need machine-readable output:
+- Use `--json` on every command. Do not parse the rich-text table output.
+- Add `--max` to list commands to keep results small.
+- Use `-o <file>` when the JSON payload is too large for stdout.
+- Omit `--json` only when a human explicitly wants the formatted terminal view.
 
-1. **Always use `--json`** for structured output. Do not parse the default rich-text table output.
-2. Use `--max` to keep result sets small and token-efficient.
-3. Use `-o <file>` to save large results to a file instead of printing to stdout.
-
-## Prerequisites
+## Setup
 
 ```bash
-# Install (requires Python 3.8+)
 uv tool install edstem-cli
-# Or: pipx install edstem-cli
+# or
+pipx install edstem-cli
 ```
 
-## Authentication
+Authenticate by setting `ED_API_TOKEN` or saving the token to `~/.config/edstem-cli/token`.
+Get a token from [https://edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens).
 
-- Set environment variable: `ED_API_TOKEN`
-- Or save token to `~/.config/edstem-cli/token`
-- Get token from: https://edstem.org/us/settings/api-tokens
-
-## Command Reference
-
-### Courses
+## Common Commands
 
 ```bash
-edstem courses                         # List enrolled courses
-edstem courses --json                  # JSON output
-```
-
-### Threads
-
-```bash
-edstem threads <course_id>             # List threads
-edstem threads <course_id> --sort top  # Sort by votes
-edstem threads <course_id> --category "HW1"  # Filter by category
-edstem threads <course_id> --type question   # Filter by type
-edstem threads <course_id> --unanswered      # Only unanswered
-edstem threads <course_id> --max 50 --json   # Limit + JSON
-edstem threads <course_id> -o threads.json   # Save to file
-```
-
-### Thread Detail
-
-```bash
-edstem thread <thread_id>              # View thread + comments
-edstem thread <course_id>#<number>     # By course thread number
-edstem thread <thread_id> --json       # JSON output
-```
-
-### Activity
-
-```bash
-edstem activity                        # Your activity (all courses)
-edstem activity <course_id>            # Activity in a course
-edstem activity --filter answer --json # Filter + JSON
-```
-
-### User
-
-```bash
-edstem user                            # Current user profile
-edstem user --json                     # JSON output
-```
-
-## Structured Output
-
-All commands support `--json` for machine-readable output.
-AI agents should **always use `--json`**:
-
-```bash
+# Courses
 edstem courses --json
-edstem threads 12345 --json | jq '.[0].title'
-edstem thread 67890 --json | jq '.answers'
-```
+edstem courses --archived --json
 
-## Common Patterns for AI Agents
+# Threads
+edstem threads <course_id> --max 20 --json
+edstem threads <course_id> --sort top --json
+edstem threads <course_id> --category "HW1" --json
+edstem threads <course_id> --type question --json
+edstem threads <course_id> --unanswered --json
+edstem threads <course_id> --max 100 -o threads.json
 
-```bash
-# Get all courses
-edstem courses --json
+# Thread detail
+edstem thread <thread_id> --json
+edstem thread <course_id>#<number> --json
 
-# Get recent threads in a course
-edstem threads 12345 --max 10 --json
-
-# View a specific thread with answers
-edstem thread 67890 --json
-
-# Check unanswered questions
-edstem threads 12345 --unanswered --json
-
-# Get your recent activity
+# Activity
 edstem activity --max 10 --json
+edstem activity <course_id> --filter answer --max 10 --json
+
+# User
+edstem user --json
 ```
 
-## Error Handling
+For less common flags, check `edstem --help` and the relevant subcommand help.
 
-- `Invalid or expired Ed API token` — regenerate at https://edstem.org/us/settings/api-tokens
-- `Not found` — check that the course/thread ID is correct
-- Auth errors (401/403) — token may have expired, regenerate it
+## Failure Modes
 
-## Safety Notes
+- `Invalid or expired Ed API token`: regenerate the token and update the environment variable or token file.
+- `Not found`: verify the course ID, thread ID, or `course_id#number` reference.
+- `--max must be greater than 0`: pass a positive integer.
 
-- API tokens are stored locally at `~/.config/edstem-cli/token` with 600 permissions.
-- Do not ask users to share API tokens in chat logs.
-- This is a read-only CLI — no write operations are supported.
+## Safety
+
+- Treat the API token as a secret and never paste it into chat or logs.
+- The CLI is read-only and does not create or modify Ed Discussion content.
