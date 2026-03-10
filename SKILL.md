@@ -1,6 +1,6 @@
 ---
 name: twitter-cli
-description: CLI skill for Twitter/X to read timelines, bookmarks, user posts, and profiles from the terminal without API keys
+description: CLI skill for Twitter/X with JSON output for AI agents — read timelines, bookmarks, user posts, and profiles from the terminal without API keys
 author: jackwener
 version: "1.0.0"
 tags:
@@ -14,6 +14,15 @@ tags:
 # twitter-cli Skill
 
 Use this skill when the user wants to read or interact with Twitter/X content from terminal without API keys.
+
+## Agent Defaults
+
+When you need machine-readable output:
+
+1. **Always use `--json`** for structured output. Do not parse the default rich-text table output.
+2. Use `--max` to keep result sets small and token-efficient.
+3. Use `-o <file>` to save large results to a file instead of printing to stdout.
+4. Prefer specific commands over broad ones. Example: use `twitter user-posts elonmusk --max 5 --json` instead of fetching full timelines.
 
 ## Prerequisites
 
@@ -98,7 +107,10 @@ twitter bookmark 1234567890                          # Bookmark
 twitter unbookmark 1234567890                        # Unbookmark
 ```
 
-## JSON / Scripting
+## Structured Output
+
+All major query commands support `--json` for machine-readable output.
+AI agents should **always use `--json`** instead of parsing the default rich-text display:
 
 ```bash
 twitter feed --json > tweets.json
@@ -137,14 +149,15 @@ Configure weights and mode in `config.yaml`.
 twitter user-posts elonmusk --max 5 --json
 
 # Search and export for analysis
-twitter search "topic" --json > results.json
+twitter search "topic" --max 20 --json
+twitter search "topic" -o results.json
 
 # Check user profile
 twitter user elonmusk --json
 
-# Daily reading workflow
-twitter feed -t following --filter
-twitter bookmarks --filter
+# Daily reading workflow (structured output)
+twitter feed -t following --max 30 --json
+twitter bookmarks --max 20 --json
 ```
 
 ## Error Handling
