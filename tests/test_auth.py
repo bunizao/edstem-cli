@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import click
 import requests
 
 from edstem_cli import auth
@@ -31,6 +32,24 @@ def test_get_token_prompts_when_no_saved_token(monkeypatch) -> None:
 
     token = auth.get_token()
     assert token == "prompt-token"
+
+
+def test_prompt_for_token_shows_help_url_and_saves(monkeypatch) -> None:
+    messages = []
+    saved = []
+
+    monkeypatch.setattr(click, "echo", messages.append)
+    monkeypatch.setattr(click, "prompt", lambda *args, **kwargs: "  prompt-token  ")
+    monkeypatch.setattr(auth, "save_token", saved.append)
+
+    token = auth.prompt_for_token()
+
+    assert token == "prompt-token"
+    assert saved == ["prompt-token"]
+    assert messages == [
+        "\nNo Ed API token found.\n"
+        "Get your API token from: https://edstem.org/settings/api-tokens\n"
+    ]
 
 
 def test_load_from_env_reads_env_var(monkeypatch) -> None:

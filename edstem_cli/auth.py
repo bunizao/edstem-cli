@@ -20,8 +20,9 @@ logger = logging.getLogger(__name__)
 
 _TOKEN_DIR = Path.home() / ".config" / "edstem-cli"
 _TOKEN_FILE = _TOKEN_DIR / "token"
+_TOKEN_HELP_URL = "https://edstem.org/settings/api-tokens"
 _INVALID_TOKEN_ERROR = (
-    "Invalid or expired Ed API token. Regenerate it from your Ed settings page."
+    "Invalid or expired Ed API token. Regenerate it at %s." % _TOKEN_HELP_URL
 )
 
 
@@ -62,7 +63,7 @@ def prompt_for_token() -> str:
 
     click.echo(
         "\nNo Ed API token found.\n"
-        "Get your token from your Ed settings page.\n"
+        "Get your API token from: %s\n" % _TOKEN_HELP_URL
     )
     token = click.prompt("Paste your Ed API token", hide_input=True).strip()
     if not token:
