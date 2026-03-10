@@ -8,6 +8,15 @@ from edstem_cli.cli import _filter_courses, _parse_thread_ref, _resolve_fetch_co
 from edstem_cli.models import Course, User
 
 
+def _json_from_result_output(result) -> object:
+    # type: (object) -> object
+    """Extract JSON payload from Click test output across Click versions."""
+    output = result.output
+    if output.startswith("Saved to "):
+        output = output.split("\n", 1)[1]
+    return json.loads(output)
+
+
 def test_resolve_fetch_count_uses_max_when_provided() -> None:
     assert _resolve_fetch_count(5, 30) == 5
 
@@ -216,10 +225,10 @@ def test_cli_threads_applies_filters_and_writes_json(monkeypatch, thread_factory
     )
 
     assert result.exit_code == 0
-    payload = json.loads(result.stdout)
+    payload = _json_from_result_output(result)
     assert [item["title"] for item in payload] == ["Keep me"]
     assert json.loads(output_file.read_text(encoding="utf-8"))[0]["title"] == "Keep me"
-    assert "Saved to" in result.stderr
+    assert "Saved to" in result.output
     assert captured == {"course_id": 100, "limit": 5, "sort": "top"}
 
 
