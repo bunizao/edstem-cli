@@ -9,7 +9,7 @@ description = "A CLI for Ed Discussion — browse courses, threads, and comments
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.8"
-authors = [{ name = "jackwener", email = "jakevingoo@gmail.com" }]
+authors = [{ name = "bunizao", email = "102936102+bunizao@users.noreply.github.com" }]
 keywords = ["edstem", "ed", "discussion", "cli", "education"]
 classifiers = [
     "Development Status :: 3 - Alpha",

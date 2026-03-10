@@ -119,5 +119,5 @@ uv run pytest -q
 ## Acknowledgements
 
 This project builds on ideas and structure from  
-earlier `edstem-cli` iterations.  
-Thanks to the original project foundation and subsequent refactors.
+[twitter-cli](https://github.com/jackwener/twitter-cli).  
+Thanks to the original project for the foundation and inspiration.
