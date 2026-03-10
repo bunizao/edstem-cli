@@ -16,8 +16,14 @@ from x_client_transaction import ClientTransaction
 from x_client_transaction.utils import generate_headers as _gen_ct_headers, get_ondemand_file_url
 
 from .constants import (
-    BEARER_TOKEN, SEC_CH_UA_MOBILE, SEC_CH_UA_PLATFORM,
-    get_sec_ch_ua, get_user_agent, sync_chrome_version,
+    BEARER_TOKEN,
+    SEC_CH_UA_MOBILE,
+    get_accept_language,
+    get_sec_ch_ua,
+    get_sec_ch_ua_platform,
+    get_twitter_client_language,
+    get_user_agent,
+    sync_chrome_version,
 )
 from .models import Author, Metrics, Tweet, TweetMedia, UserProfile
 
@@ -614,9 +620,15 @@ class TwitterClient:
                     seen_ids.add(tweet.id)
                     tweets.append(tweet)
 
-            if not next_cursor or not new_tweets:
+            if not next_cursor:
+                break
+            if next_cursor == cursor:
+                logger.debug("Timeline pagination stopped because cursor did not advance: %s", next_cursor)
                 break
             cursor = next_cursor
+
+            if not new_tweets:
+                logger.debug("Timeline page returned no tweets but exposed next cursor; continuing pagination")
 
             # Rate-limit: sleep between paginated requests with jitter
             if len(tweets) < count and self._request_delay > 0:
@@ -688,15 +700,15 @@ class TwitterClient:
             "X-Csrf-Token": self._ct0,
             "X-Twitter-Active-User": "yes",
             "X-Twitter-Auth-Type": "OAuth2Session",
-            "X-Twitter-Client-Language": "en",
+            "X-Twitter-Client-Language": get_twitter_client_language(),
             "User-Agent": get_user_agent(),
             "Origin": "https://x.com",
             "Referer": "https://x.com",
             "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Language": get_accept_language(),
             "sec-ch-ua": get_sec_ch_ua(),
             "sec-ch-ua-mobile": SEC_CH_UA_MOBILE,
-            "sec-ch-ua-platform": SEC_CH_UA_PLATFORM,
+            "sec-ch-ua-platform": get_sec_ch_ua_platform(),
             "Sec-Fetch-Dest": "empty",
             "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Site": "same-origin",
@@ -902,10 +914,10 @@ class TwitterClient:
             bio=legacy.get("description", ""),
             location=legacy.get("location", ""),
             url=_deep_get(legacy, "entities", "url", "urls", 0, "expanded_url") or "",
-            followers_count=legacy.get("followers_count", 0),
-            following_count=legacy.get("friends_count", 0),
-            tweets_count=legacy.get("statuses_count", 0),
-            likes_count=legacy.get("favourites_count", 0),
+            followers_count=_parse_int(legacy.get("followers_count"), 0),
+            following_count=_parse_int(legacy.get("friends_count"), 0),
+            tweets_count=_parse_int(legacy.get("statuses_count"), 0),
+            likes_count=_parse_int(legacy.get("favourites_count"), 0),
             verified=user_data.get("is_blue_verified", False) or legacy.get("verified", False),
             profile_image_url=legacy.get("profile_image_url_https", ""),
             created_at=legacy.get("created_at", ""),

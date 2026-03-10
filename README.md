@@ -1,8 +1,8 @@
 # twitter-cli
 
 [![CI](https://github.com/jackwener/twitter-cli/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jackwener/twitter-cli/actions/workflows/ci.yml)
-[![PyPI version](https://img.shields.io/pypi/v/twitter-cli.svg)](https://pypi.org/project/twitter-cli/)
-[![Python versions](https://img.shields.io/pypi/pyversions/twitter-cli.svg)](https://pypi.org/project/twitter-cli/)
+[![PyPI version](https://badge.fury.io/py/twitter-cli.svg)](https://pypi.org/project/twitter-cli/)
+[![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue.svg)](https://pypi.org/project/twitter-cli/)
 
 A terminal-first CLI for Twitter/X: read timelines, bookmarks, and user profiles without API keys.
 
@@ -36,7 +36,7 @@ A terminal-first CLI for Twitter/X: read timelines, bookmarks, and user profiles
 
 **Auth & Anti-Detection:**
 - Cookie auth: use browser cookies or environment variables
-- Full cookie forwarding: extracts ALL browser cookies for true browser fingerprint
+- Full cookie forwarding: extracts ALL browser cookies for richer browser context
 - TLS fingerprint impersonation: `curl_cffi` with dynamic Chrome version matching
 - `x-client-transaction-id` header generation
 - Request timing jitter to avoid pattern detection
@@ -128,7 +128,7 @@ twitter-cli uses this auth priority:
 1. **Environment variables**: `TWITTER_AUTH_TOKEN` + `TWITTER_CT0`
 2. **Browser cookies** (recommended): auto-extract from Arc/Chrome/Edge/Firefox/Brave
 
-Browser extraction is recommended — it forwards ALL Twitter cookies (not just `auth_token` + `ct0`), making requests indistinguishable from real browser traffic.
+Browser extraction is recommended — it forwards ALL Twitter cookies (not just `auth_token` + `ct0`) and aligns request headers with your local runtime, which is closer to normal browser traffic than minimal cookie auth.
 
 After loading cookies, the CLI performs lightweight verification. Commands that require account access fail fast on clear auth errors (`401/403`).
 
@@ -235,6 +235,8 @@ uv run ruff check .
 uv run pytest -q
 ```
 
+Current CI validates the project on Python 3.12.
+
 ### Project Structure
 
 ```text
@@ -299,7 +301,7 @@ After installation, OpenClaw can call `twitter-cli` commands directly.
 
 **认证与反风控:**
 - Cookie 认证：支持环境变量和浏览器自动提取
-- 完整 Cookie 转发：提取浏览器中所有 Twitter Cookie
+- 完整 Cookie 转发：提取浏览器中所有 Twitter Cookie，保留更多浏览器上下文
 - TLS 指纹伪装：`curl_cffi` 动态匹配 Chrome 版本
 - `x-client-transaction-id` 请求头生成
 - 请求时序随机化（jitter）
@@ -364,7 +366,7 @@ twitter unbookmark 1234567890
 1. **环境变量**：`TWITTER_AUTH_TOKEN` + `TWITTER_CT0`
 2. **浏览器提取**（推荐）：Arc/Chrome/Edge/Firefox/Brave 全量 Cookie 提取
 
-推荐使用浏览器提取方式，会转发所有 Twitter Cookie，让请求和真实浏览器完全一致。
+推荐使用浏览器提取方式，会转发所有 Twitter Cookie，并按本机运行环境生成语言和平台请求头；它比仅发送 `auth_token` + `ct0` 更接近普通浏览器流量，但不等于完整浏览器自动化。
 
 ### 代理支持
 

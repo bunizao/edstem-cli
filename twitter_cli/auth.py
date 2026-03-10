@@ -237,35 +237,59 @@ print(json.dumps({
 sys.exit(1)
 '''
 
-    try:
-        result = subprocess.run(
-            [sys.executable, "-c", extract_script],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-        output = result.stdout.strip()
-        if not output:
-            stderr = result.stderr.strip()
-            if stderr:
-                logger.debug("Cookie extraction stderr from current env: %s", stderr[:300])
-                # Maybe browser-cookie3 not installed, try with uv.
-                result2 = subprocess.run(
-                    ["uv", "run", "--with", "browser-cookie3", "python3", "-c", extract_script],
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
-                output = result2.stdout.strip()
-                if not output:
-                    logger.debug("Cookie extraction stderr from uv fallback: %s", result2.stderr.strip()[:300])
-                    return None
+    def _run_extract_command(cmd, timeout, label):
+        # type: (list[str], int, str) -> tuple[Optional[dict], bool]
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            logger.debug("Cookie extraction %s timed out", label)
+            return None, False
+        except FileNotFoundError as exc:
+            logger.debug("Cookie extraction %s launcher missing: %s", label, exc)
+            return None, False
 
-        data = json.loads(output)
+        output = result.stdout.strip()
+        stderr = result.stderr.strip()
+        if stderr:
+            logger.debug("Cookie extraction stderr from %s: %s", label, stderr[:300])
+        if not output:
+            logger.debug("Cookie extraction from %s produced no stdout", label)
+            return None, True
+
+        try:
+            data = json.loads(output)
+        except json.JSONDecodeError as exc:
+            logger.debug("Cookie extraction %s returned invalid JSON: %s", label, exc)
+            return None, True
+
         if "error" in data:
             attempts = data.get("attempts") or []
             if attempts:
-                logger.debug("Subprocess extraction attempts: %s", ", ".join(str(item) for item in attempts))
+                logger.debug("Subprocess extraction attempts (%s): %s", label, ", ".join(str(item) for item in attempts))
+            retryable = data.get("error") == "browser-cookie3 not installed"
+            return None, retryable
+
+        return data, False
+
+    try:
+        data, retry_with_uv = _run_extract_command(
+            [sys.executable, "-c", extract_script],
+            timeout=15,
+            label="current env",
+        )
+        if data is None and retry_with_uv:
+            data, _ = _run_extract_command(
+                ["uv", "run", "--with", "browser-cookie3", "python", "-c", extract_script],
+                timeout=30,
+                label="uv fallback",
+            )
+
+        if data is None:
             return None
         logger.info("Found cookies in %s (subprocess)", data.get("browser", "unknown"))
 
@@ -277,17 +301,8 @@ sys.exit(1)
             cookies["cookie_string"] = cookie_str
             logger.info("Extracted %d total cookies for full browser fingerprint", len(all_cookies))
         return cookies
-    except subprocess.TimeoutExpired:
-        logger.debug("Cookie extraction subprocess timed out")
-        return None
-    except json.JSONDecodeError as exc:
-        logger.debug("Cookie extraction subprocess returned invalid JSON: %s", exc)
-        return None
     except KeyError as exc:
         logger.debug("Cookie extraction subprocess returned incomplete payload: %s", exc)
-        return None
-    except FileNotFoundError as exc:
-        logger.debug("Cookie extraction subprocess launcher missing: %s", exc)
         return None
 
 

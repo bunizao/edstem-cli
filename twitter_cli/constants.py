@@ -1,6 +1,8 @@
 """Shared constants for twitter-cli."""
 
+import os
 import re
+import sys
 
 BEARER_TOKEN = (
     "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs"
@@ -26,10 +28,16 @@ def sync_chrome_version(impersonate_target):
 
 def get_user_agent():
     # type: () -> str
+    if sys.platform == "darwin":
+        platform = "Macintosh; Intel Mac OS X 10_15_7"
+    elif sys.platform.startswith("win"):
+        platform = "Windows NT 10.0; Win64; x64"
+    else:
+        platform = "X11; Linux x86_64"
     return (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "Mozilla/5.0 (%s) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/%s.0.0.0 Safari/537.36" % _chrome_version
+        "Chrome/%s.0.0.0 Safari/537.36" % (platform, _chrome_version)
     )
 
 
@@ -40,9 +48,44 @@ def get_sec_ch_ua():
     )
 
 
+def _get_locale_tag():
+    # type: () -> str
+    raw = (
+        os.environ.get("LC_ALL")
+        or os.environ.get("LC_MESSAGES")
+        or os.environ.get("LANG")
+        or "en_US.UTF-8"
+    )
+    tag = raw.split(".", 1)[0].replace("_", "-")
+    return tag or "en-US"
+
+
+def get_accept_language():
+    # type: () -> str
+    tag = _get_locale_tag()
+    language = tag.split("-", 1)[0] or "en"
+    if tag == language:
+        return "%s,%s;q=0.9,en;q=0.8" % (tag, language)
+    return "%s,%s;q=0.9,en;q=0.8" % (tag, language)
+
+
+def get_twitter_client_language():
+    # type: () -> str
+    return _get_locale_tag().split("-", 1)[0] or "en"
+
+
+def get_sec_ch_ua_platform():
+    # type: () -> str
+    if sys.platform == "darwin":
+        return '"macOS"'
+    if sys.platform.startswith("win"):
+        return '"Windows"'
+    return '"Linux"'
+
+
 # Static Client Hints
 SEC_CH_UA_MOBILE = "?0"
-SEC_CH_UA_PLATFORM = '"macOS"'
+SEC_CH_UA_PLATFORM = get_sec_ch_ua_platform()
 
 # Legacy aliases — modules that import these get the default value.
 # _build_headers() should use get_user_agent() / get_sec_ch_ua() instead.

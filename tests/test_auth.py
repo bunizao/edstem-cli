@@ -125,7 +125,7 @@ def test_extract_via_subprocess_script_includes_arc(monkeypatch) -> None:
     seen = {}
 
     def _run(cmd, capture_output=True, text=True, timeout=15):
-        script = cmd[2]
+        script = cmd[-1]
         seen["script"] = script
         return Completed(json.dumps({"error": "No Twitter cookies found", "attempts": []}))
 
@@ -135,6 +135,29 @@ def test_extract_via_subprocess_script_includes_arc(monkeypatch) -> None:
 
     assert cookies is None
     assert '("arc", browser_cookie3.arc)' in seen["script"]
+
+
+def test_extract_via_subprocess_retries_uv_when_current_env_has_no_output(monkeypatch) -> None:
+    class Completed:
+        def __init__(self, stdout: str, stderr: str = "") -> None:
+            self.stdout = stdout
+            self.stderr = stderr
+
+    calls = []
+
+    def _run(cmd, capture_output=True, text=True, timeout=15):
+        calls.append(cmd)
+        if cmd[0] == sys.executable:
+            return Completed("", "")
+        return Completed(json.dumps({"auth_token": "token", "ct0": "csrf", "browser": "arc"}))
+
+    monkeypatch.setattr(auth.subprocess, "run", _run)
+
+    cookies = auth._extract_via_subprocess()
+
+    assert cookies == {"auth_token": "token", "ct0": "csrf"}
+    assert len(calls) == 2
+    assert calls[1][:5] == ["uv", "run", "--with", "browser-cookie3", "python"]
 
 
 def test_verify_cookies_logs_attempt_summary_on_non_auth_failures(monkeypatch, caplog) -> None:

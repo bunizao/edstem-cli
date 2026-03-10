@@ -196,6 +196,26 @@ def _fetch_and_display(fetch_fn, label, emoji, max_count, as_json, output_file, 
     console.print()
 
 
+def _run_bookmarks_command(max_count, as_json, output_file, do_filter):
+    # type: (Optional[int], bool, Optional[str], bool) -> None
+    config = load_config()
+
+    def _run():
+        client = _get_client(config)
+        _fetch_and_display(
+            lambda count: client.fetch_bookmarks(count),
+            "bookmarks",
+            "🔖",
+            max_count,
+            as_json,
+            output_file,
+            do_filter,
+            config,
+        )
+
+    _run_guarded(_run)
+
+
 @cli.command()
 @click.option(
     "--type",
@@ -258,14 +278,7 @@ def feed(feed_type, max_count, as_json, input_file, output_file, do_filter):
 def favorites(max_count, as_json, output_file, do_filter):
     # type: (Optional[int], bool, Optional[str], bool) -> None
     """Fetch bookmarked (favorite) tweets."""
-    config = load_config()
-    def _run():
-        client = _get_client(config)
-        _fetch_and_display(
-            lambda count: client.fetch_bookmarks(count),
-            "bookmarks", "🔖", max_count, as_json, output_file, do_filter, config,
-        )
-    _run_guarded(_run)
+    _run_bookmarks_command(max_count, as_json, output_file, do_filter)
 
 
 @cli.command(name="bookmarks")
@@ -276,7 +289,7 @@ def favorites(max_count, as_json, output_file, do_filter):
 def bookmarks(max_count, as_json, output_file, do_filter):
     # type: (Optional[int], bool, Optional[str], bool) -> None
     """Fetch bookmarked tweets."""
-    favorites.callback(max_count=max_count, as_json=as_json, output_file=output_file, do_filter=do_filter)
+    _run_bookmarks_command(max_count, as_json, output_file, do_filter)
 
 
 @cli.command()

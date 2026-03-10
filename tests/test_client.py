@@ -275,9 +275,19 @@ class TestBuildHeaders:
         assert "User-Agent" in headers
         assert "sec-ch-ua" in headers
 
+    @patch("twitter_cli.client.get_sec_ch_ua_platform", return_value='"Linux"')
+    @patch("twitter_cli.client.get_accept_language", return_value="zh-CN,zh;q=0.9,en;q=0.8")
+    @patch("twitter_cli.client.get_twitter_client_language", return_value="zh")
     @patch("twitter_cli.client._get_cffi_session")
     @patch("twitter_cli.client._gen_ct_headers", return_value={})
-    def test_cookie_string_used_when_available(self, mock_ct_headers, mock_session):
+    def test_cookie_string_used_when_available(
+        self,
+        mock_ct_headers,
+        mock_session,
+        mock_client_language,
+        mock_accept_language,
+        mock_platform,
+    ):
         mock_session.return_value = MagicMock()
         mock_session.return_value.get = MagicMock(side_effect=Exception("skip"))
 
@@ -294,6 +304,57 @@ class TestBuildHeaders:
 
         headers = client._build_headers()
         assert headers["Cookie"] == "auth_token=x; ct0=y; other=z"
+        assert headers["X-Twitter-Client-Language"] == "zh"
+        assert headers["Accept-Language"] == "zh-CN,zh;q=0.9,en;q=0.8"
+        assert headers["sec-ch-ua-platform"] == '"Linux"'
+
+
+class TestPaginationBehavior:
+    def test_continues_when_cursor_advances_without_new_tweets(self):
+        client = TwitterClient.__new__(TwitterClient)
+        client._request_delay = 0.0
+        client._max_count = 200
+
+        responses = iter(
+            [
+                {"page": 1},
+                {"page": 2},
+            ]
+        )
+
+        def _graphql_get(operation_name, variables, features, field_toggles=None):
+            return next(responses)
+
+        def _parse_timeline_response(data, get_instructions):
+            if data["page"] == 1:
+                return [], "cursor-2"
+            return [MagicMock(id="tweet-1")], None
+
+        client._graphql_get = _graphql_get
+        client._parse_timeline_response = _parse_timeline_response
+
+        tweets = client._fetch_timeline("HomeTimeline", 1, lambda data: data)
+
+        assert [tweet.id for tweet in tweets] == ["tweet-1"]
+
+    def test_stops_when_cursor_does_not_advance(self):
+        client = TwitterClient.__new__(TwitterClient)
+        client._request_delay = 0.0
+        client._max_count = 200
+
+        calls = []
+
+        def _graphql_get(operation_name, variables, features, field_toggles=None):
+            calls.append(variables.get("cursor"))
+            return {"page": len(calls)}
+
+        client._graphql_get = _graphql_get
+        client._parse_timeline_response = lambda data, get_instructions: ([], "cursor-same")
+
+        tweets = client._fetch_timeline("HomeTimeline", 1, lambda data: data)
+
+        assert tweets == []
+        assert calls == [None, "cursor-same"]
 
 
 # ── TwitterClient._parse_tweet_result ─────────────────────────────────────
@@ -407,3 +468,26 @@ class TestTwitterAPIError:
     def test_is_runtime_error(self):
         err = TwitterAPIError(500, "Server error")
         assert isinstance(err, RuntimeError)
+
+
+class TestParseUserResult:
+    def test_coerces_count_fields_to_int(self):
+        user = TwitterClient._parse_user_result(
+            {
+                "rest_id": "user-1",
+                "legacy": {
+                    "name": "Alice",
+                    "screen_name": "alice",
+                    "followers_count": "1,234",
+                    "friends_count": "56",
+                    "statuses_count": "78.9",
+                    "favourites_count": None,
+                },
+            }
+        )
+
+        assert user is not None
+        assert user.followers_count == 1234
+        assert user.following_count == 56
+        assert user.tweets_count == 78
+        assert user.likes_count == 0
