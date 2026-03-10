@@ -35,12 +35,16 @@ jobs:
           import pathlib
           import tomllib
 
-          version = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"]
+          project = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]
+          name = project["name"]
+          version = project["version"]
           tag = os.environ["GITHUB_REF_NAME"]
           expected = f"v{version}"
+          if name != "edstem-cli":
+              raise SystemExit(f"Refusing to release unexpected package name: {name}")
           if tag != expected:
               raise SystemExit(f"Tag {tag} does not match package version {expected}")
-          print(f"Validated release tag {tag}")
+          print(f"Validated release tag {tag} for {name}")
           PY
 
       - name: Build package
