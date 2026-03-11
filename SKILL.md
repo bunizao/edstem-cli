@@ -1,6 +1,6 @@
 ---
 name: edstem-cli
-description: Inspect Ed Discussion from the terminal with the `edstem` CLI. Use when Codex needs to list courses, browse or filter threads in a course, open a thread by ID or `course_id#number`, inspect recent activity, or fetch the current user profile. Prefer JSON output for agent workflows.
+description: Inspect Ed Discussion from the terminal with the `edstem` CLI. Use when Codex needs to list courses, browse or filter lessons or threads in a course, open a lesson or thread by ID, inspect recent activity, or fetch the current user profile. Prefer JSON output for agent workflows.
 ---
 
 # edstem-cli
@@ -40,6 +40,15 @@ edstem threads <course_id> --type question --json
 edstem threads <course_id> --unanswered --json
 edstem threads <course_id> --max 100 -o threads.json
 
+# Lessons
+edstem lessons <course_id> --json
+edstem lessons <course_id> --module "Week 1" --json
+edstem lessons <course_id> --type python --status attempted --json
+edstem lessons <course_id> -o lessons.json
+
+# Lesson detail
+edstem lesson <lesson_id> --json
+
 # Thread detail
 edstem thread <thread_id> --json
 edstem thread <course_id>#<number> --json
@@ -53,6 +62,13 @@ edstem user --json
 ```
 
 For less common flags, check `edstem --help` and the relevant subcommand help.
+
+## Agent Workflow
+
+- If the user asks for lessons in a specific course and the `course_id` is already known, run `edstem lessons <course_id> --json`.
+- If the user names a course but does not provide the `course_id`, run `edstem courses --json` first, resolve the course, then run `edstem lessons <course_id> --json`.
+- If the user asks for one lesson's full content or slides, run `edstem lesson <lesson_id> --json`.
+- Prefer filtering at the CLI, for example `edstem lessons <course_id> --module "Week 2" --json`, instead of fetching everything and filtering in prompt context.
 
 ## Failure Modes
 
