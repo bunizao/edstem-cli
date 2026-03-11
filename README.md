@@ -31,6 +31,27 @@ cd edstem-cli
 uv sync
 ```
 
+## Update
+
+Update the CLI using the same method you used to install it:
+
+```bash
+# If installed with uv tool
+uv tool upgrade edstem-cli
+
+# If installed with pipx
+pipx upgrade edstem-cli
+```
+
+If you installed from source:
+
+```bash
+git pull
+uv sync
+```
+
+> Running an older version? Check with `edstem --version` first. If a command in this README does not exist locally, update the CLI before trying again.
+
 ## Quick Start
 
 Get your API token from: [https://edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens)
