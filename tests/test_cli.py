@@ -4,7 +4,7 @@ import json
 
 from click.testing import CliRunner
 
-from edstem_cli.cli import _filter_courses, _parse_thread_ref, _resolve_fetch_count, cli
+from edstem_cli.cli import _filter_courses, _filter_lessons, _parse_thread_ref, _resolve_fetch_count, cli
 from edstem_cli.models import Course, User
 
 
@@ -67,6 +67,25 @@ def test_filter_courses_includes_archived_with_flag(course_factory) -> None:
     filtered = _filter_courses(course_list, include_archived=True)
 
     assert [course.id for course in filtered] == [100, 200]
+
+
+def test_filter_lessons_matches_module_type_state_and_status(lesson_factory) -> None:
+    lesson_list = [
+        lesson_factory(1, module_id=7, module_name="Week 1", type="general", state="active",
+                       status="attempted"),
+        lesson_factory(2, module_id=8, module_name="Week 2", type="python", state="scheduled",
+                       status="unattempted"),
+    ]
+
+    filtered = _filter_lessons(
+        lesson_list,
+        module="week 2",
+        lesson_type="python",
+        state="scheduled",
+        status="unattempted",
+    )
+
+    assert [lesson.id for lesson in filtered] == [2]
 
 
 def test_cli_user_command_works(monkeypatch) -> None:
@@ -183,6 +202,91 @@ def test_cli_threads_wraps_client_errors(monkeypatch) -> None:
     result = runner.invoke(cli, ["threads", "100"])
     assert result.exit_code == 1
     assert "auth failed" in result.output
+
+
+def test_cli_lessons_applies_filters_and_writes_json(monkeypatch, lesson_factory, tmp_path) -> None:
+    captured = {}
+
+    class FakeClient:
+        def fetch_lessons(self, course_id):
+            captured["course_id"] = course_id
+            return (
+                [],
+                [
+                    lesson_factory(
+                        11,
+                        title="Keep me",
+                        module_name="Week 1",
+                        type="general",
+                        state="active",
+                        status="attempted",
+                    ),
+                    lesson_factory(
+                        12,
+                        title="Drop me",
+                        module_name="Week 2",
+                        type="python",
+                        state="scheduled",
+                        status="unattempted",
+                    ),
+                ],
+            )
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+    output_file = tmp_path / "lessons.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "lessons",
+            "100",
+            "--module",
+            "Week 1",
+            "--type",
+            "general",
+            "--state",
+            "active",
+            "--status",
+            "attempted",
+            "--json",
+            "--output",
+            str(output_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = _json_from_result_output(result)
+    assert [item["title"] for item in payload] == ["Keep me"]
+    assert json.loads(output_file.read_text(encoding="utf-8"))[0]["title"] == "Keep me"
+    assert "Saved to" in result.output
+    assert captured == {"course_id": 100}
+
+
+def test_cli_lesson_by_id(monkeypatch, lesson_factory) -> None:
+    class FakeClient:
+        def fetch_lesson(self, lesson_id):
+            assert lesson_id == 7001
+            return lesson_factory(7001, title="Lesson detail")
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+    runner = CliRunner()
+    result = runner.invoke(cli, ["lesson", "7001"])
+    assert result.exit_code == 0
+    assert "Lesson detail" in result.output
+
+
+def test_cli_lesson_json(monkeypatch, lesson_factory) -> None:
+    class FakeClient:
+        def fetch_lesson(self, lesson_id):
+            return lesson_factory(lesson_id, title="JSON lesson")
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+    runner = CliRunner()
+    result = runner.invoke(cli, ["lesson", "7001", "--json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["title"] == "JSON lesson"
+    assert payload["slides"][0]["title"] == "Slide 1"
 
 
 def test_cli_threads_applies_filters_and_writes_json(monkeypatch, thread_factory, tmp_path) -> None:

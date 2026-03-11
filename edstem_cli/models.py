@@ -31,6 +31,57 @@ class Course:
 
 
 @dataclass
+class LessonModule:
+    id: int
+    course_id: int = 0
+    name: str = ""
+    user_id: int = 0
+    created_at: str = ""
+    updated_at: str = ""
+
+
+@dataclass
+class LessonSlide:
+    id: int
+    lesson_id: int = 0
+    course_id: int = 0
+    title: str = ""
+    type: str = ""
+    content: str = ""
+    index: int = 0
+    status: str = ""
+    is_hidden: bool = False
+
+
+@dataclass
+class Lesson:
+    id: int
+    course_id: int = 0
+    module_id: int = 0
+    module_name: str = ""
+    number: int = 0
+    title: str = ""
+    type: str = ""
+    kind: str = ""
+    state: str = ""
+    status: str = ""
+    outline: str = ""
+    slide_count: int = 0
+    slides: List[LessonSlide] = field(default_factory=list)
+    openable: bool = False
+    openable_without_attempt: bool = False
+    is_hidden: bool = False
+    is_unlisted: bool = False
+    is_timed: bool = False
+    available_at: str = ""
+    due_at: str = ""
+    locked_at: str = ""
+    solutions_at: str = ""
+    created_at: str = ""
+    updated_at: str = ""
+
+
+@dataclass
 class ThreadMetrics:
     vote_count: int = 0
     view_count: int = 0

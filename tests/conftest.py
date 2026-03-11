@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from edstem_cli.models import Course, Thread, ThreadMetrics
+from edstem_cli.models import Course, Lesson, LessonSlide, Thread, ThreadMetrics
 
 
 @pytest.fixture()
@@ -55,6 +55,54 @@ def course_factory():
         )
 
     return _make_course
+
+
+@pytest.fixture()
+def lesson_factory():
+    def _make_lesson(lesson_id: int = 1, **overrides: Any) -> Lesson:
+        slides = overrides.pop(
+            "slides",
+            [
+                LessonSlide(
+                    id=11,
+                    lesson_id=lesson_id,
+                    course_id=overrides.get("course_id", 100),
+                    title="Slide 1",
+                    type="document",
+                    content="<document><paragraph>Hello lesson</paragraph></document>",
+                    index=1,
+                    status="completed",
+                )
+            ],
+        )
+        return Lesson(
+            id=lesson_id,
+            course_id=overrides.pop("course_id", 100),
+            module_id=overrides.pop("module_id", 10),
+            module_name=overrides.pop("module_name", "Week 1"),
+            number=overrides.pop("number", lesson_id),
+            title=overrides.pop("title", "Lesson title"),
+            type=overrides.pop("type", "general"),
+            kind=overrides.pop("kind", "content"),
+            state=overrides.pop("state", "active"),
+            status=overrides.pop("status", "attempted"),
+            outline=overrides.pop("outline", "<document><paragraph>Outline</paragraph></document>"),
+            slide_count=overrides.pop("slide_count", len(slides)),
+            slides=slides,
+            openable=overrides.pop("openable", True),
+            openable_without_attempt=overrides.pop("openable_without_attempt", False),
+            is_hidden=overrides.pop("is_hidden", False),
+            is_unlisted=overrides.pop("is_unlisted", False),
+            is_timed=overrides.pop("is_timed", False),
+            available_at=overrides.pop("available_at", "2026-01-10T10:00:00.000Z"),
+            due_at=overrides.pop("due_at", "2026-01-20T10:00:00.000Z"),
+            locked_at=overrides.pop("locked_at", ""),
+            solutions_at=overrides.pop("solutions_at", ""),
+            created_at=overrides.pop("created_at", "2026-01-01T10:00:00.000Z"),
+            updated_at=overrides.pop("updated_at", "2026-01-02T10:00:00.000Z"),
+        )
+
+    return _make_lesson
 
 
 @pytest.fixture()

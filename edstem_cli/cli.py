@@ -2,6 +2,8 @@
 
 Commands:
     edstem courses                          # list enrolled courses
+    edstem lessons <course_id>             # list lessons
+    edstem lesson <lesson_id>              # view lesson + slides
     edstem threads <course_id>              # list threads
     edstem threads <course_id> --sort top   # by votes
     edstem threads <course_id> --category X # filter by category
@@ -31,11 +33,13 @@ from .formatter import (
     print_activity_table,
     print_comment_tree,
     print_course_table,
+    print_lesson_detail,
+    print_lesson_table,
     print_thread_detail,
     print_thread_table,
     print_user_profile,
 )
-from .serialization import courses_to_json, threads_to_json
+from .serialization import courses_to_json, lesson_to_dict, lessons_to_json, threads_to_json
 
 console = Console(stderr=True)
 
@@ -111,6 +115,29 @@ def _filter_courses(course_list, include_archived=False):
     return [course for course in course_list if str(course.status).lower() != "archived"]
 
 
+def _filter_lessons(lesson_list, module=None, lesson_type=None, state=None, status=None):
+    # type: (list, Optional[str], Optional[str], Optional[str], Optional[str]) -> list
+    """Filter lessons using small explicit matching rules."""
+    filtered = list(lesson_list)
+    if module:
+        query = module.strip().lower()
+        filtered = [
+            lesson for lesson in filtered
+            if query == str(lesson.module_id).lower()
+            or query in (lesson.module_name or "").lower()
+        ]
+    if lesson_type:
+        query = lesson_type.strip().lower()
+        filtered = [lesson for lesson in filtered if (lesson.type or "").lower() == query]
+    if state:
+        query = state.strip().lower()
+        filtered = [lesson for lesson in filtered if (lesson.state or "").lower() == query]
+    if status:
+        query = status.strip().lower()
+        filtered = [lesson for lesson in filtered if (lesson.status or "").lower() == query]
+    return filtered
+
+
 @click.group()
 @click.option("--verbose", "-v", is_flag=True, help="Enable debug logging.")
 @click.version_option(version=__version__)
@@ -146,6 +173,63 @@ def courses(include_archived, as_json, output_file):
             return
 
         print_course_table(course_list, console)
+
+    _run_guarded(_run)
+
+
+@cli.command()
+@click.argument("course_id", type=int)
+@click.option("--module", type=str, default=None, help="Filter by module ID or module name.")
+@click.option("--type", "lesson_type", type=str, default=None, help="Filter by lesson type.")
+@click.option("--state", type=str, default=None, help="Filter by lesson state.")
+@click.option("--status", type=str, default=None, help="Filter by lesson status.")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+@click.option("--output", "-o", "output_file", type=str, default=None, help="Save to file.")
+def lessons(course_id, module, lesson_type, state, status, as_json, output_file):
+    # type: (int, Optional[str], Optional[str], Optional[str], Optional[str], bool, Optional[str]) -> None
+    """List lessons in a course."""
+    def _run():
+        client = _get_client()
+        modules, lesson_list = client.fetch_lessons(course_id)
+        lesson_list = _filter_lessons(
+            lesson_list,
+            module=module,
+            lesson_type=lesson_type,
+            state=state,
+            status=status,
+        )
+        payload = lessons_to_json(lesson_list)
+
+        if output_file:
+            _save_output(output_file, payload)
+
+        if as_json:
+            click.echo(payload)
+            return
+
+        title = "Lessons — %d" % len(lesson_list)
+        if modules:
+            title += " across %d module(s)" % len(modules)
+        print_lesson_table(lesson_list, console, title=title)
+
+    _run_guarded(_run)
+
+
+@cli.command()
+@click.argument("lesson_id", type=int)
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+def lesson(lesson_id, as_json):
+    # type: (int, bool) -> None
+    """View a lesson and its slides."""
+    def _run():
+        client = _get_client()
+        current_lesson = client.fetch_lesson(lesson_id)
+
+        if as_json:
+            click.echo(json.dumps(lesson_to_dict(current_lesson), ensure_ascii=False, indent=2))
+            return
+
+        print_lesson_detail(current_lesson, console)
 
     _run_guarded(_run)
 

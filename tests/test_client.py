@@ -7,6 +7,9 @@ from edstem_cli.client import (
     EdClient,
     _parse_comment,
     _parse_course,
+    _parse_lesson,
+    _parse_lesson_module,
+    _parse_lesson_slide,
     _parse_thread,
     _parse_user,
 )
@@ -34,6 +37,50 @@ class TestParseCourse:
         assert course.id == 100
         assert course.code == "CS101"
         assert course.role == "student"
+
+
+class TestParseLessonModule:
+    def test_basic_lesson_module(self):
+        module = _parse_lesson_module({"id": 8, "course_id": 100, "name": "Week 1"})
+        assert module.id == 8
+        assert module.course_id == 100
+        assert module.name == "Week 1"
+
+
+class TestParseLessonSlide:
+    def test_basic_lesson_slide(self):
+        slide = _parse_lesson_slide(
+            {"id": 5, "lesson_id": 9, "index": 2, "type": "document", "title": "Slide A"}
+        )
+        assert slide.id == 5
+        assert slide.lesson_id == 9
+        assert slide.index == 2
+        assert slide.title == "Slide A"
+
+
+class TestParseLesson:
+    def test_basic_lesson(self):
+        lesson = _parse_lesson(
+            {
+                "id": 7001,
+                "course_id": 100,
+                "module_id": 8,
+                "title": "Week 1 workshop",
+                "type": "general",
+                "kind": "content",
+                "state": "active",
+                "status": "attempted",
+                "slide_count": 3,
+                "openable": True,
+                "slides": [{"id": 90, "lesson_id": 7001, "index": 1, "title": "Intro"}],
+            },
+            {8: "Week 1"},
+        )
+        assert lesson.id == 7001
+        assert lesson.module_name == "Week 1"
+        assert lesson.slide_count == 3
+        assert lesson.openable is True
+        assert len(lesson.slides) == 1
 
 
 class TestParseThread:
@@ -217,6 +264,44 @@ class TestEdClientRequests:
         assert captured["path"] == "courses/321/threads"
         assert captured["params"]["limit"] == 100
         assert captured["params"]["sort"] == "top"
+
+    def test_fetch_lessons_returns_modules_and_lessons(self):
+        client = EdClient("token")
+        client._get = lambda path, params=None: {
+            "modules": [{"id": 7, "course_id": 321, "name": "Week 1"}],
+            "lessons": [
+                {
+                    "id": 11,
+                    "course_id": 321,
+                    "module_id": 7,
+                    "title": "Workshop",
+                    "type": "general",
+                    "slide_count": 4,
+                }
+            ],
+        }
+
+        modules, lessons = client.fetch_lessons(321)
+
+        assert modules[0].name == "Week 1"
+        assert lessons[0].id == 11
+        assert lessons[0].module_name == "Week 1"
+
+    def test_fetch_lesson_parses_nested_slides(self):
+        client = EdClient("token")
+        client._get = lambda path, params=None: {
+            "lesson": {
+                "id": 22,
+                "title": "Lesson detail",
+                "slides": [{"id": 1, "lesson_id": 22, "index": 1, "title": "Slide 1"}],
+            }
+        }
+
+        lesson = client.fetch_lesson(22)
+
+        assert lesson.id == 22
+        assert lesson.title == "Lesson detail"
+        assert lesson.slides[0].title == "Slide 1"
 
     def test_fetch_user_parses_enrollments(self):
         client = EdClient("token")

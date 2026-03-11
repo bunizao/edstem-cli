@@ -3,6 +3,8 @@ from __future__ import annotations
 from edstem_cli.serialization import (
     course_to_dict,
     courses_to_json,
+    lesson_to_dict,
+    lessons_to_json,
     thread_from_dict,
     thread_to_dict,
     threads_from_json,
@@ -41,3 +43,19 @@ def test_courses_to_json(course_factory) -> None:
     raw = courses_to_json(courses)
     assert '"CS101"' in raw
     assert '"MATH201"' in raw
+
+
+def test_lesson_to_dict(lesson_factory) -> None:
+    lesson = lesson_factory(42, title="Week 1", module_name="Module A")
+    data = lesson_to_dict(lesson)
+    assert data["id"] == 42
+    assert data["title"] == "Week 1"
+    assert data["moduleName"] == "Module A"
+    assert data["slides"][0]["title"] == "Slide 1"
+
+
+def test_lessons_to_json(lesson_factory) -> None:
+    lessons = [lesson_factory(1, title="First"), lesson_factory(2, title="Second")]
+    raw = lessons_to_json(lessons)
+    assert '"First"' in raw
+    assert '"Second"' in raw
