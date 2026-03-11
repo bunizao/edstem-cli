@@ -4,6 +4,7 @@ import json
 
 from click.testing import CliRunner
 
+from edstem_cli import __version__
 from edstem_cli.cli import _filter_courses, _filter_lessons, _parse_thread_ref, _resolve_fetch_count, cli
 from edstem_cli.models import Course, User
 
@@ -459,4 +460,4 @@ def test_cli_version_option() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert "0.1.2" in result.output
+    assert __version__ in result.output
