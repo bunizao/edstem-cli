@@ -1,11 +1,11 @@
-"""Serialization helpers for Thread, Course, Comment, and User models."""
+"""Serialization helpers for Thread, Course, Lesson, Comment, and User models."""
 
 from __future__ import annotations
 
 import json
 from typing import Any, Dict, Iterable, List
 
-from .models import Comment, Course, Thread, ThreadMetrics, User
+from .models import Comment, Course, Lesson, LessonModule, LessonSlide, Thread, ThreadMetrics, User
 
 
 def thread_to_dict(thread: Thread) -> Dict[str, Any]:
@@ -126,6 +126,63 @@ def course_to_dict(course: Course) -> Dict[str, Any]:
     }
 
 
+def lesson_module_to_dict(module: LessonModule) -> Dict[str, Any]:
+    """Convert a LessonModule dataclass into a JSON-safe dict."""
+    return {
+        "id": module.id,
+        "courseId": module.course_id,
+        "name": module.name,
+        "userId": module.user_id,
+        "createdAt": module.created_at,
+        "updatedAt": module.updated_at,
+    }
+
+
+def lesson_slide_to_dict(slide: LessonSlide) -> Dict[str, Any]:
+    """Convert a LessonSlide dataclass into a JSON-safe dict."""
+    return {
+        "id": slide.id,
+        "lessonId": slide.lesson_id,
+        "courseId": slide.course_id,
+        "title": slide.title,
+        "type": slide.type,
+        "content": slide.content,
+        "index": slide.index,
+        "status": slide.status,
+        "isHidden": slide.is_hidden,
+    }
+
+
+def lesson_to_dict(lesson: Lesson) -> Dict[str, Any]:
+    """Convert a Lesson dataclass into a JSON-safe dict."""
+    return {
+        "id": lesson.id,
+        "courseId": lesson.course_id,
+        "moduleId": lesson.module_id,
+        "moduleName": lesson.module_name,
+        "number": lesson.number,
+        "title": lesson.title,
+        "type": lesson.type,
+        "kind": lesson.kind,
+        "state": lesson.state,
+        "status": lesson.status,
+        "outline": lesson.outline,
+        "slideCount": lesson.slide_count,
+        "slides": [lesson_slide_to_dict(slide) for slide in lesson.slides],
+        "openable": lesson.openable,
+        "openableWithoutAttempt": lesson.openable_without_attempt,
+        "isHidden": lesson.is_hidden,
+        "isUnlisted": lesson.is_unlisted,
+        "isTimed": lesson.is_timed,
+        "availableAt": lesson.available_at,
+        "dueAt": lesson.due_at,
+        "lockedAt": lesson.locked_at,
+        "solutionsAt": lesson.solutions_at,
+        "createdAt": lesson.created_at,
+        "updatedAt": lesson.updated_at,
+    }
+
+
 def user_to_dict(user: User) -> Dict[str, Any]:
     """Convert a User dataclass into a JSON-safe dict."""
     return {
@@ -166,3 +223,8 @@ def threads_from_json(raw: str) -> List[Thread]:
 def courses_to_json(courses: Iterable[Course]) -> str:
     """Serialize Course objects to pretty JSON."""
     return json.dumps([course_to_dict(c) for c in courses], ensure_ascii=False, indent=2)
+
+
+def lessons_to_json(lessons: Iterable[Lesson]) -> str:
+    """Serialize Lesson objects to pretty JSON."""
+    return json.dumps([lesson_to_dict(lesson) for lesson in lessons], ensure_ascii=False, indent=2)

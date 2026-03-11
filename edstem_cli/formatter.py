@@ -1,4 +1,4 @@
-"""Thread formatter for terminal output (rich) and JSON export."""
+"""Formatters for terminal output (rich) and JSON export."""
 
 from __future__ import annotations
 
@@ -258,6 +258,123 @@ def print_activity_table(items, console=None, title=None):
             escape(course_code),
             escape(content),
             escape(created),
+        )
+
+    console.print(table)
+
+
+def print_lesson_table(lessons, console=None, title=None):
+    # type: (list, Optional[Console], Optional[str]) -> None
+    """Print lessons as a rich table."""
+    if console is None:
+        console = Console()
+
+    if not title:
+        title = "Lessons — %d" % len(lessons)
+
+    table = Table(title=title, show_lines=True, expand=True)
+    table.add_column("ID", style="dim", width=8, justify="right")
+    table.add_column("Type", style="cyan", width=10)
+    table.add_column("Title", ratio=3)
+    table.add_column("Module", width=26)
+    table.add_column("State", width=10)
+    table.add_column("Status", width=12)
+    table.add_column("Slides", style="green", width=8, justify="right")
+
+    for lesson in lessons:
+        title_text = escape(lesson.title)
+        markers = []
+        if lesson.openable:
+            markers.append("open")
+        if lesson.is_hidden:
+            markers.append("hidden")
+        if lesson.is_unlisted:
+            markers.append("unlisted")
+        if markers:
+            title_text += " " + escape("[%s]" % ", ".join(markers))
+
+        table.add_row(
+            str(lesson.id),
+            escape(lesson.type or lesson.kind or "-"),
+            title_text,
+            escape(lesson.module_name or "-"),
+            escape(lesson.state or "-"),
+            escape(lesson.status or "-"),
+            str(lesson.slide_count),
+        )
+
+    console.print(table)
+
+
+def print_lesson_detail(lesson, console=None):
+    # type: (Lesson, Optional[Console]) -> None
+    """Print a single lesson and its slides."""
+    if console is None:
+        console = Console()
+
+    header = escape("Lesson %d %s" % (lesson.id, lesson.title))
+    body_parts = [
+        "Type: %s  Kind: %s" % (escape(lesson.type or "-"), escape(lesson.kind or "-")),
+        "State: %s  Status: %s" % (escape(lesson.state or "-"), escape(lesson.status or "-")),
+        "Module: %s" % escape(lesson.module_name or "-"),
+        "Slides: %d" % lesson.slide_count,
+    ]
+
+    flags = []
+    if lesson.openable:
+        flags.append("openable")
+    if lesson.openable_without_attempt:
+        flags.append("open without attempt")
+    if lesson.is_hidden:
+        flags.append("hidden")
+    if lesson.is_unlisted:
+        flags.append("unlisted")
+    if lesson.is_timed:
+        flags.append("timed")
+    if flags:
+        body_parts.append("Flags: %s" % escape(", ".join(flags)))
+
+    if lesson.available_at:
+        body_parts.append("Available: %s" % escape(lesson.available_at))
+    if lesson.due_at:
+        body_parts.append("Due: %s" % escape(lesson.due_at))
+    if lesson.locked_at:
+        body_parts.append("Locked: %s" % escape(lesson.locked_at))
+    if lesson.solutions_at:
+        body_parts.append("Solutions: %s" % escape(lesson.solutions_at))
+
+    outline = strip_xml(lesson.outline)
+    if outline:
+        body_parts.append("")
+        body_parts.append(escape(outline))
+
+    console.print(Panel(
+        "\n".join(body_parts),
+        title=header,
+        border_style="magenta",
+        expand=True,
+    ))
+
+    if not lesson.slides:
+        return
+
+    table = Table(title="Slides — %d" % len(lesson.slides), show_lines=True, expand=True)
+    table.add_column("#", style="dim", width=4, justify="right")
+    table.add_column("Type", style="cyan", width=10)
+    table.add_column("Title", width=26)
+    table.add_column("Status", width=12)
+    table.add_column("Preview", ratio=3)
+
+    for slide in lesson.slides:
+        preview = strip_xml(slide.content)
+        if len(preview) > 120:
+            preview = preview[:117] + "..."
+        table.add_row(
+            str(slide.index),
+            escape(slide.type or "-"),
+            escape(slide.title or "-"),
+            escape(slide.status or "-"),
+            escape(preview),
         )
 
     console.print(table)

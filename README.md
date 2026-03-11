@@ -1,10 +1,11 @@
 # edstem-cli
 
-A terminal-first CLI for Ed Discussion: browse courses, threads, and comments without leaving the terminal.
+A terminal-first CLI for Ed Discussion: browse courses, lessons, threads, and comments without leaving the terminal.
 
 ## Features
 
 - **Courses**: list all enrolled courses
+- **Lessons**: list course lessons and inspect lesson slides
 - **Threads**: list, filter, and sort course threads
 - **Thread detail**: view full thread with answers and comment tree
 - **Activity**: browse your activity across courses
@@ -66,6 +67,9 @@ edstem courses
 # List threads in a course
 edstem threads 12345
 
+# List lessons in a course
+edstem lessons 12345
+
 # View a thread with comments
 edstem thread 67890
 ```
@@ -90,6 +94,13 @@ edstem threads <course_id> --max 50 --json
 edstem thread <thread_id>
 edstem thread <course_id>#<number>      # by course thread number
 edstem thread <thread_id> --json
+
+# Lessons
+edstem lessons <course_id>
+edstem lessons <course_id> --module "Week 1"
+edstem lessons <course_id> --type python --status attempted
+edstem lesson <lesson_id>
+edstem lesson <lesson_id> --json
 
 # Activity
 edstem activity                          # all courses

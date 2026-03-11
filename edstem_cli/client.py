@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 
 from .constants import get_api_base_url
-from .models import Comment, Course, Thread, ThreadMetrics, User
+from .models import Comment, Course, Lesson, LessonModule, LessonSlide, Thread, ThreadMetrics, User
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +96,22 @@ class EdClient:
         threads_data = data.get("threads") or (data if isinstance(data, list) else [])
         return [_parse_thread(t) for t in threads_data]
 
+    def fetch_lessons(self, course_id: int) -> Tuple[List[LessonModule], List[Lesson]]:
+        """Fetch lesson modules and lessons for a course."""
+        data = self._get("courses/%d/lessons" % course_id)
+        modules_data = data.get("modules") or []
+        lessons_data = data.get("lessons") or []
+        modules = [_parse_lesson_module(module) for module in modules_data]
+        module_names = {module.id: module.name for module in modules}
+        lessons = [_parse_lesson(lesson, module_names) for lesson in lessons_data]
+        return modules, lessons
+
+    def fetch_lesson(self, lesson_id: int) -> Lesson:
+        """Fetch a single lesson with slides."""
+        data = self._get("lessons/%d" % lesson_id)
+        lesson_data = data.get("lesson") or data
+        return _parse_lesson(lesson_data)
+
     def fetch_thread(self, thread_id: int) -> Thread:
         """Fetch a single thread with comments."""
         data = self._get("threads/%d" % thread_id)
@@ -170,6 +186,66 @@ def _parse_course(data: Dict[str, Any], role: str = "") -> Course:
         session=str(data.get("session") or ""),
         status=str(data.get("status") or ""),
         role=role,
+    )
+
+
+def _parse_lesson_module(data: Dict[str, Any]) -> LessonModule:
+    return LessonModule(
+        id=int(data.get("id") or 0),
+        course_id=int(data.get("course_id") or 0),
+        name=str(data.get("name") or ""),
+        user_id=int(data.get("user_id") or 0),
+        created_at=str(data.get("created_at") or ""),
+        updated_at=str(data.get("updated_at") or ""),
+    )
+
+
+def _parse_lesson_slide(data: Dict[str, Any]) -> LessonSlide:
+    return LessonSlide(
+        id=int(data.get("id") or 0),
+        lesson_id=int(data.get("lesson_id") or 0),
+        course_id=int(data.get("course_id") or 0),
+        title=str(data.get("title") or ""),
+        type=str(data.get("type") or ""),
+        content=str(data.get("content") or ""),
+        index=int(data.get("index") or 0),
+        status=str(data.get("status") or ""),
+        is_hidden=bool(data.get("is_hidden")),
+    )
+
+
+def _parse_lesson(
+    data: Dict[str, Any],
+    module_names: Optional[Dict[int, str]] = None,
+) -> Lesson:
+    if module_names is None:
+        module_names = {}
+    module_id = int(data.get("module_id") or 0)
+    return Lesson(
+        id=int(data.get("id") or 0),
+        course_id=int(data.get("course_id") or 0),
+        module_id=module_id,
+        module_name=str(data.get("module_name") or module_names.get(module_id) or ""),
+        number=int(data.get("number") or 0),
+        title=str(data.get("title") or ""),
+        type=str(data.get("type") or ""),
+        kind=str(data.get("kind") or ""),
+        state=str(data.get("state") or ""),
+        status=str(data.get("status") or ""),
+        outline=str(data.get("outline") or ""),
+        slide_count=int(data.get("slide_count") or 0),
+        slides=[_parse_lesson_slide(slide) for slide in (data.get("slides") or [])],
+        openable=bool(data.get("openable")),
+        openable_without_attempt=bool(data.get("openable_without_attempt")),
+        is_hidden=bool(data.get("is_hidden")),
+        is_unlisted=bool(data.get("is_unlisted")),
+        is_timed=bool(data.get("is_timed")),
+        available_at=str(data.get("effective_available_at") or data.get("available_at") or ""),
+        due_at=str(data.get("effective_due_at") or data.get("due_at") or ""),
+        locked_at=str(data.get("effective_locked_at") or data.get("locked_at") or ""),
+        solutions_at=str(data.get("effective_solutions_at") or data.get("solutions_at") or ""),
+        created_at=str(data.get("created_at") or ""),
+        updated_at=str(data.get("updated_at") or ""),
     )
 
 

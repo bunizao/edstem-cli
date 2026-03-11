@@ -7,6 +7,8 @@ from edstem_cli.formatter import (
     print_activity_table,
     print_comment_tree,
     print_course_table,
+    print_lesson_detail,
+    print_lesson_table,
     print_thread_detail,
     print_thread_table,
     print_user_profile,
@@ -144,3 +146,41 @@ def test_print_activity_table_formats_thread_and_comment_rows() -> None:
     assert "Activity — 2 items" in output
     assert "Question [1]" in output
     assert "Re: Question [1] — Hello [2]" in output
+
+
+def test_print_lesson_table_shows_module_and_markers(lesson_factory) -> None:
+    console = Console(record=True, width=120)
+    lesson = lesson_factory(
+        55,
+        title="Lesson [A]",
+        module_name="Module [1]",
+        openable=True,
+        is_hidden=True,
+    )
+
+    print_lesson_table([lesson], console)
+
+    output = console.export_text()
+    assert "Lessons — 1" in output
+    assert "Lesson [A]" in output
+    assert "Module [1]" in output
+    assert "open" in output
+    assert "hidden" in output
+
+
+def test_print_lesson_detail_shows_metadata_and_slide_preview(lesson_factory) -> None:
+    console = Console(record=True, width=120)
+    lesson = lesson_factory(
+        77,
+        title="Lesson detail",
+        outline="<document><paragraph>Outline [1]</paragraph></document>",
+    )
+
+    print_lesson_detail(lesson, console)
+
+    output = console.export_text()
+    assert "Lesson 77 Lesson detail" in output
+    assert "Type: general  Kind: content" in output
+    assert "Outline [1]" in output
+    assert "Slides — 1" in output
+    assert "Hello lesson" in output
