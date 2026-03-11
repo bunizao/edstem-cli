@@ -54,6 +54,61 @@ def test_lesson_to_dict(lesson_factory) -> None:
     assert data["slides"][0]["title"] == "Slide 1"
 
 
+def test_lesson_to_dict_omits_empty_and_default_fields(lesson_factory) -> None:
+    lesson = lesson_factory(
+        42,
+        course_id=29579,
+        module_name="",
+        number=-1,
+        outline="",
+        slides=[],
+        openable_without_attempt=False,
+        is_hidden=False,
+        is_unlisted=False,
+        is_timed=False,
+        due_at="",
+        locked_at="",
+        updated_at="",
+    )
+    data = lesson_to_dict(lesson)
+
+    assert "courseId" not in data
+    assert "moduleName" not in data
+    assert "number" not in data
+    assert "outline" not in data
+    assert "slides" not in data
+    assert "openableWithoutAttempt" not in data
+    assert "isHidden" not in data
+    assert "isUnlisted" not in data
+    assert "isTimed" not in data
+    assert "dueAt" not in data
+    assert "lockedAt" not in data
+    assert "updatedAt" not in data
+
+
+def test_lesson_to_dict_keeps_meaningful_optional_fields(lesson_factory) -> None:
+    lesson = lesson_factory(
+        42,
+        number=7,
+        slides=[],
+        openable_without_attempt=True,
+        is_hidden=True,
+        is_unlisted=True,
+        is_timed=True,
+        locked_at="2026-01-21T10:00:00.000Z",
+        updated_at="2026-01-02T10:00:00.000Z",
+    )
+    data = lesson_to_dict(lesson)
+
+    assert data["number"] == 7
+    assert data["openableWithoutAttempt"] is True
+    assert data["isHidden"] is True
+    assert data["isUnlisted"] is True
+    assert data["isTimed"] is True
+    assert data["lockedAt"] == "2026-01-21T10:00:00.000Z"
+    assert data["updatedAt"] == "2026-01-02T10:00:00.000Z"
+
+
 def test_lessons_to_json(lesson_factory) -> None:
     lessons = [lesson_factory(1, title="First"), lesson_factory(2, title="Second")]
     raw = lessons_to_json(lessons)

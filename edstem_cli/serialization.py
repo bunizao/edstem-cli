@@ -8,6 +8,21 @@ from typing import Any, Dict, Iterable, List
 from .models import Comment, Course, Lesson, LessonModule, LessonSlide, Thread, ThreadMetrics, User
 
 
+def _set_if_nonempty(target: Dict[str, Any], key: str, value: Any) -> None:
+    """Set a dict key when the value is not an empty string, list, or None."""
+    if value in ("", None):
+        return
+    if isinstance(value, list) and not value:
+        return
+    target[key] = value
+
+
+def _set_if_true(target: Dict[str, Any], key: str, value: bool) -> None:
+    """Set a dict key when the boolean value is true."""
+    if value:
+        target[key] = value
+
+
 def thread_to_dict(thread: Thread) -> Dict[str, Any]:
     """Convert a Thread dataclass into a JSON-safe dict."""
     return {
@@ -155,32 +170,33 @@ def lesson_slide_to_dict(slide: LessonSlide) -> Dict[str, Any]:
 
 def lesson_to_dict(lesson: Lesson) -> Dict[str, Any]:
     """Convert a Lesson dataclass into a JSON-safe dict."""
-    return {
+    data = {
         "id": lesson.id,
-        "courseId": lesson.course_id,
         "moduleId": lesson.module_id,
-        "moduleName": lesson.module_name,
-        "number": lesson.number,
         "title": lesson.title,
         "type": lesson.type,
         "kind": lesson.kind,
         "state": lesson.state,
         "status": lesson.status,
-        "outline": lesson.outline,
         "slideCount": lesson.slide_count,
-        "slides": [lesson_slide_to_dict(slide) for slide in lesson.slides],
         "openable": lesson.openable,
-        "openableWithoutAttempt": lesson.openable_without_attempt,
-        "isHidden": lesson.is_hidden,
-        "isUnlisted": lesson.is_unlisted,
-        "isTimed": lesson.is_timed,
-        "availableAt": lesson.available_at,
-        "dueAt": lesson.due_at,
-        "lockedAt": lesson.locked_at,
-        "solutionsAt": lesson.solutions_at,
         "createdAt": lesson.created_at,
-        "updatedAt": lesson.updated_at,
     }
+    if lesson.number > 0:
+        data["number"] = lesson.number
+    _set_if_nonempty(data, "moduleName", lesson.module_name)
+    _set_if_nonempty(data, "outline", lesson.outline)
+    _set_if_nonempty(data, "slides", [lesson_slide_to_dict(slide) for slide in lesson.slides])
+    _set_if_true(data, "openableWithoutAttempt", lesson.openable_without_attempt)
+    _set_if_true(data, "isHidden", lesson.is_hidden)
+    _set_if_true(data, "isUnlisted", lesson.is_unlisted)
+    _set_if_true(data, "isTimed", lesson.is_timed)
+    _set_if_nonempty(data, "availableAt", lesson.available_at)
+    _set_if_nonempty(data, "dueAt", lesson.due_at)
+    _set_if_nonempty(data, "lockedAt", lesson.locked_at)
+    _set_if_nonempty(data, "solutionsAt", lesson.solutions_at)
+    _set_if_nonempty(data, "updatedAt", lesson.updated_at)
+    return data
 
 
 def user_to_dict(user: User) -> Dict[str, Any]:
