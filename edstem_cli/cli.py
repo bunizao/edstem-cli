@@ -40,6 +40,12 @@ from .formatter import (
     print_user_profile,
 )
 from .serialization import courses_to_json, lesson_to_dict, lessons_to_json, threads_to_json
+from .skill_bundle import (
+    DEFAULT_SKILL_DEST,
+    SKILL_NAME,
+    format_skill_summary,
+    install_skill,
+)
 
 console = Console(stderr=True)
 
@@ -145,6 +151,56 @@ def cli(verbose):
     # type: (bool) -> None
     """edstem — Ed Discussion CLI tool"""
     _setup_logging(verbose)
+
+
+def _install_skill_command(destination_root, force):
+    # type: (Path, bool) -> None
+    """Install the bundled Codex skill."""
+    installed_dir = install_skill(destination_root, force=force)
+    click.echo("Installed skill %s to %s" % (SKILL_NAME, installed_dir))
+    click.echo("Restart Codex to pick up new skills.")
+
+
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def skills(ctx):
+    # type: (click.Context) -> None
+    """Show or install the bundled Codex skill."""
+    if ctx.invoked_subcommand is not None:
+        return
+    click.echo(format_skill_summary())
+
+
+@skills.command("install")
+@click.option(
+    "--dest",
+    "destination_root",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=DEFAULT_SKILL_DEST,
+    show_default=True,
+    help="Install the skill into this Codex skills directory.",
+)
+@click.option("--force", is_flag=True, help="Overwrite an existing installed skill.")
+def install_skill_command(destination_root, force):
+    # type: (Path, bool) -> None
+    """Install the bundled Codex skill."""
+    _run_guarded(lambda: _install_skill_command(destination_root, force))
+
+
+@skills.command("i", hidden=True)
+@click.option(
+    "--dest",
+    "destination_root",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=DEFAULT_SKILL_DEST,
+    show_default=True,
+    help="Install the skill into this Codex skills directory.",
+)
+@click.option("--force", is_flag=True, help="Overwrite an existing installed skill.")
+def install_skill_alias(destination_root, force):
+    # type: (Path, bool) -> None
+    """Install the bundled Codex skill."""
+    _run_guarded(lambda: _install_skill_command(destination_root, force))
 
 
 @cli.command()

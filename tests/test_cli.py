@@ -194,6 +194,36 @@ def test_cli_courses_output_writes_file(monkeypatch, tmp_path) -> None:
     assert "Saved to" in result.output
 
 
+def test_cli_skills_outputs_name_description_and_install_command() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["skills"])
+
+    assert result.exit_code == 0
+    assert "Name: edstem-cli" in result.output
+    assert "Description: Inspect Ed Discussion from the terminal" in result.output
+    assert "Install: edstem skills install" in result.output
+
+
+def test_cli_skills_install_writes_skill_markdown(tmp_path) -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["skills", "install", "--dest", str(tmp_path)])
+
+    assert result.exit_code == 0
+    skill_file = tmp_path / "edstem-cli" / "SKILL.md"
+    assert skill_file.exists()
+    assert "name: edstem-cli" in skill_file.read_text(encoding="utf-8")
+    assert "Restart Codex to pick up new skills." in result.output
+
+
+def test_cli_skills_install_alias_writes_skill_markdown(tmp_path) -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["skills", "i", "--dest", str(tmp_path)])
+
+    assert result.exit_code == 0
+    skill_file = tmp_path / "edstem-cli" / "SKILL.md"
+    assert skill_file.exists()
+
+
 def test_cli_threads_wraps_client_errors(monkeypatch) -> None:
     monkeypatch.setattr(
         "edstem_cli.cli._get_client",
