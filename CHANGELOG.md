@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.3.0 - 2026-04-16
+
+### Highlights
+
+- Added lesson automation commands for marking matching lessons as read without leaving the terminal.
+- Added quiz-slide workflows for listing questions, checking saved responses, answering questions, and submitting a slide.
+- Switched skill installation to the shared `vercel-labs/skills` flow through `npx skills add`, with an `npm exec` fallback when `npx` is unavailable.
+
+### Added
+
+- `edstem lessons read <course_id> [query...]` to visit matching lessons and advance slide status.
+- `edstem lessons quiz <slide_id>` to inspect quiz questions from the CLI.
+- `edstem lessons quiz <slide_id> --responses` to inspect saved responses.
+- `edstem lessons quiz <slide_id> --answer <question_id> --choice <n>` to submit answers.
+- `edstem lessons quiz <slide_id> --submit` to submit all saved responses for a quiz slide.
+- `edstem skills add` as a thin alias for `npx skills add https://github.com/bunizao/edstem-cli`.
+
+### Changed
+
+- `edstem lessons` now preserves legacy flag ordering such as `edstem lessons --json <course_id>` and `edstem lessons --module Week 1 <course_id>`.
+- `edstem lessons read` now reports partial progress when a later slide fails instead of pretending nothing changed.
+- Skill installation now follows the shared skills spec instead of writing directly into a Codex-only directory.
+- `edstem skills add` now falls back to `npm exec --yes -- skills add ...` when `npx` is missing.
+
+### Release
+
+- GitHub Actions release automation now builds the package, publishes it to PyPI, and creates the GitHub Release from this changelog section.
+
 ## 0.2.0 - 2026-03-12
 
 ### Highlights
