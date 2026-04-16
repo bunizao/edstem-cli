@@ -201,27 +201,38 @@ def test_cli_skills_outputs_name_description_and_install_command() -> None:
     assert result.exit_code == 0
     assert "Name: edstem-cli" in result.output
     assert "Description: Inspect Ed Discussion from the terminal" in result.output
-    assert "Install: edstem skills install" in result.output
+    assert "Install: npx skills add https://github.com/bunizao/edstem-cli" in result.output
+    assert "CLI alias: edstem skills add" in result.output
 
 
-def test_cli_skills_install_writes_skill_markdown(tmp_path) -> None:
+def test_cli_skills_add_delegates_extra_args(monkeypatch) -> None:
+    captured = {}
+
+    def fake_install_skill(extra_args):
+        captured["args"] = list(extra_args)
+
+    monkeypatch.setattr("edstem_cli.cli.install_skill", fake_install_skill)
     runner = CliRunner()
-    result = runner.invoke(cli, ["skills", "install", "--dest", str(tmp_path)])
+    result = runner.invoke(cli, ["skills", "add", "--agent", "codex", "--yes"])
 
     assert result.exit_code == 0
-    skill_file = tmp_path / "edstem-cli" / "SKILL.md"
-    assert skill_file.exists()
-    assert "name: edstem-cli" in skill_file.read_text(encoding="utf-8")
-    assert "Restart Codex to pick up new skills." in result.output
+    assert captured["args"] == ["--agent", "codex", "--yes"]
 
 
-def test_cli_skills_install_alias_writes_skill_markdown(tmp_path) -> None:
+def test_cli_skills_install_alias_delegates_extra_args(monkeypatch) -> None:
+    captured = {"calls": []}
+
+    def fake_install_skill(extra_args):
+        captured["calls"].append(list(extra_args))
+
+    monkeypatch.setattr("edstem_cli.cli.install_skill", fake_install_skill)
     runner = CliRunner()
-    result = runner.invoke(cli, ["skills", "i", "--dest", str(tmp_path)])
+    install_result = runner.invoke(cli, ["skills", "install", "--agent", "claude"])
+    short_result = runner.invoke(cli, ["skills", "i", "--agent", "cursor"])
 
-    assert result.exit_code == 0
-    skill_file = tmp_path / "edstem-cli" / "SKILL.md"
-    assert skill_file.exists()
+    assert install_result.exit_code == 0
+    assert short_result.exit_code == 0
+    assert captured["calls"] == [["--agent", "claude"], ["--agent", "cursor"]]
 
 
 def test_cli_threads_wraps_client_errors(monkeypatch) -> None:
