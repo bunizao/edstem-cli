@@ -202,7 +202,7 @@ def test_cli_skills_outputs_name_description_and_install_command() -> None:
     assert "Name: edstem-cli" in result.output
     assert "Description: Inspect Ed Discussion from the terminal" in result.output
     assert "Install: npx skills add https://github.com/bunizao/edstem-cli" in result.output
-    assert "CLI alias: edstem skills add" in result.output
+    assert "CLI alias: edstem skills add (falls back to npm exec)" in result.output
 
 
 def test_cli_skills_add_delegates_extra_args(monkeypatch) -> None:

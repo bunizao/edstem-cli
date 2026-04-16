@@ -27,27 +27,35 @@ def format_skill_summary() -> str:
             "Source: %s" % SKILL_SOURCE,
             "Spec: %s" % SKILLS_SPEC_URL,
             "Install: npx skills add %s" % SKILL_SOURCE,
-            "CLI alias: edstem skills add",
+            "CLI alias: edstem skills add (falls back to npm exec)",
         ]
     )
 
 
-def build_install_command(extra_args: Iterable[str] = ()) -> List[str]:
-    # type: (Iterable[str]) -> List[str]
-    """Build the delegated `npx skills add` command."""
-    return ["npx", "skills", "add", SKILL_SOURCE, *list(extra_args)]
+def build_install_command(extra_args: Iterable[str] = (), launcher: str = "npx") -> List[str]:
+    # type: (Iterable[str], str) -> List[str]
+    """Build the delegated skills install command."""
+    command_args = list(extra_args)
+    if launcher == "npx":
+        return ["npx", "skills", "add", SKILL_SOURCE, *command_args]
+    if launcher == "npm":
+        return ["npm", "exec", "--yes", "--", "skills", "add", SKILL_SOURCE, *command_args]
+    raise ValueError("Unsupported launcher: %s" % launcher)
 
 
 def install_skill(extra_args: Iterable[str] = ()) -> None:
     # type: (Iterable[str]) -> None
     """Install the skill by delegating to the shared skills CLI."""
-    if shutil.which("npx") is None:
+    if shutil.which("npx") is not None:
+        command = build_install_command(extra_args, launcher="npx")
+    elif shutil.which("npm") is not None:
+        command = build_install_command(extra_args, launcher="npm")
+    else:
         raise RuntimeError(
-            "npx is required to install agent skills. "
+            "npx or npm is required to install agent skills. "
             "Install Node.js, then run `npx skills add %s`." % SKILL_SOURCE
         )
 
-    command = build_install_command(extra_args)
     try:
         completed = subprocess.run(command, check=False)
     except OSError as exc:
