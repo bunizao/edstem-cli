@@ -71,12 +71,13 @@ class _LegacyCompatibleGroup(click.Group):
             with ctx:
                 return click.Command.invoke(self, ctx)
 
-        if not ctx.protected_args:
+        protected_args = _get_ctx_protected_args(ctx)
+        if not protected_args:
             return super().invoke(ctx)
 
-        args = [*ctx.protected_args, *ctx.args]
+        args = [*protected_args, *ctx.args]
         ctx.args = []
-        ctx.protected_args = []
+        _set_ctx_protected_args(ctx, [])
 
         cmd_name = args[0]
         cmd = self.get_command(ctx, cmd_name)
@@ -132,6 +133,23 @@ def _save_output(path, content):
     """Write command output to disk and report the destination on stderr."""
     Path(path).write_text(content, encoding="utf-8")
     click.echo("Saved to %s" % path, err=True)
+
+
+def _get_ctx_protected_args(ctx):
+    # type: (click.Context) -> list[str]
+    """Read protected args across Click versions."""
+    if hasattr(ctx, "_protected_args"):
+        return list(ctx._protected_args)
+    return list(getattr(ctx, "protected_args", []))
+
+
+def _set_ctx_protected_args(ctx, args):
+    # type: (click.Context, list[str]) -> None
+    """Write protected args across Click versions."""
+    if hasattr(ctx, "_protected_args"):
+        ctx._protected_args = list(args)
+        return
+    ctx.protected_args = list(args)
 
 
 def _invoke_subcommand_from_args(ctx, command_name):
