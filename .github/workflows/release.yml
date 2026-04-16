@@ -1,4 +1,4 @@
-name: Publish GitHub Release
+name: Release
 
 on:
   push:
@@ -12,11 +12,11 @@ jobs:
   verify:
     uses: ./.github/workflows/ci.yml
 
-  release:
+  build:
     needs: verify
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -50,10 +50,76 @@ jobs:
       - name: Build package
         run: uv build
 
+      - name: Check distribution metadata
+        run: uvx twine check dist/*
+
+      - name: Prepare release notes
+        run: |
+          python - <<'PY'
+          import pathlib
+          import re
+          import tomllib
+
+          version = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"]
+          changelog = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          pattern = rf"(?ms)^## {re.escape(version)} - [^\n]*\n(.*?)(?=^## |\Z)"
+          match = re.search(pattern, changelog)
+          if match is None:
+              raise SystemExit(f"Could not find release notes for version {version} in CHANGELOG.md")
+          body = match.group(1).strip()
+          if not body:
+              raise SystemExit(f"Release notes for version {version} are empty")
+          pathlib.Path("dist/release-notes.md").write_text(body + "\n", encoding="utf-8")
+          print(f"Prepared release notes for {version}")
+          PY
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dist
+          path: dist
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/edstem-cli/
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dist
+          path: .
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dist
+          path: .
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          body_path: dist/release-notes.md
           files: |
             dist/*.tar.gz
             dist/*.whl
+          fail_on_unmatched_files: true
