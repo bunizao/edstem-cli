@@ -6,7 +6,7 @@ Defines User, Course, Thread, Comment, and ThreadMetrics as simple dataclasses.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any, List, Optional
 
 
 @dataclass
@@ -51,6 +51,31 @@ class LessonSlide:
     index: int = 0
     status: str = ""
     is_hidden: bool = False
+
+
+@dataclass
+class LessonQuestion:
+    id: int
+    slide_id: int = 0
+    index: int = 0
+    type: str = ""
+    content: str = ""
+    explanation: str = ""
+    answers: List[str] = field(default_factory=list)
+    solution: List[int] = field(default_factory=list)
+    multiple_selection: bool = False
+    is_assessed: bool = False
+    is_formatted: bool = False
+    lesson_markable_id: int = 0
+
+
+@dataclass
+class LessonQuestionResponse:
+    question_id: int
+    user_id: int = 0
+    created_at: str = ""
+    correct: Optional[bool] = None
+    data: Any = None
 
 
 @dataclass
