@@ -6,6 +6,7 @@ A terminal-first CLI for Ed Discussion: browse courses, lessons, threads, and co
 
 - **Courses**: list all enrolled courses
 - **Lessons**: list course lessons and inspect lesson slides
+- **Lesson read automation**: read matching lessons and push their slide status forward
 - **Threads**: list, filter, and sort course threads
 - **Thread detail**: view full thread with answers and comment tree
 - **Activity**: browse your activity across courses
@@ -101,6 +102,8 @@ edstem lessons <course_id> --module "Week 1"
 edstem lessons <course_id> --type python --status attempted
 edstem lesson <lesson_id>
 edstem lesson <lesson_id> --json
+edstem lessons read <course_id> Pre-Reading
+edstem lessons read <course_id> Week 3 Workshop
 
 # Activity
 edstem activity                          # all courses
@@ -118,6 +121,27 @@ export ED_API_TOKEN="your-token-here"
 
 # Option 2: Will prompt on first use and save automatically
 edstem user
+```
+
+## Mark Lessons Read
+
+Use `lessons read` when you want the CLI to visit lessons and push their slide status forward.
+Query words are matched case-insensitively against lesson titles and module names.
+For non-quiz slides the CLI calls the lesson completion endpoint. For quiz slides it records a view.
+
+```bash
+# Mark all pre-reading lessons in a course as read
+edstem lessons read 29579 Pre-Reading
+
+# Mark week 1 applied/workshop content as read
+edstem lessons read 29579 Week 1 Workshop
+edstem lessons read 29579 Week 1 Applied
+
+# Add a delay between slide actions
+edstem lessons read 29579 Applied --delay 0.3
+
+# Export a machine-readable summary
+edstem lessons read 29579 Pre-Reading --json
 ```
 
 ## Configuration

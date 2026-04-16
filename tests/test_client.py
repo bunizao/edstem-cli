@@ -8,6 +8,8 @@ from edstem_cli.client import (
     _parse_comment,
     _parse_course,
     _parse_lesson,
+    _parse_lesson_question,
+    _parse_lesson_question_response,
     _parse_lesson_module,
     _parse_lesson_slide,
     _parse_thread,
@@ -81,6 +83,46 @@ class TestParseLesson:
         assert lesson.slide_count == 3
         assert lesson.openable is True
         assert len(lesson.slides) == 1
+
+
+class TestParseLessonQuestion:
+    def test_basic_lesson_question(self):
+        question = _parse_lesson_question({
+            "id": 123,
+            "lesson_slide_id": 77,
+            "index": 0,
+            "lesson_markable_id": 55,
+            "data": {
+                "type": "multiple-choice",
+                "content": "<document><paragraph>Pick one</paragraph></document>",
+                "answers": ["A", "B"],
+                "explanation": "<document><paragraph>Because</paragraph></document>",
+                "solution": [1],
+                "multiple_selection": False,
+                "assessed": True,
+                "formatted": True,
+            },
+        })
+        assert question.id == 123
+        assert question.slide_id == 77
+        assert question.answers == ["A", "B"]
+        assert question.solution == [1]
+        assert question.lesson_markable_id == 55
+
+
+class TestParseLessonQuestionResponse:
+    def test_basic_lesson_question_response(self):
+        response = _parse_lesson_question_response({
+            "question_id": 123,
+            "user_id": 99,
+            "created_at": "2026-01-01T00:00:00Z",
+            "correct": True,
+            "data": [1],
+        })
+        assert response.question_id == 123
+        assert response.user_id == 99
+        assert response.correct is True
+        assert response.data == [1]
 
 
 class TestParseThread:
@@ -302,6 +344,155 @@ class TestEdClientRequests:
         assert lesson.id == 22
         assert lesson.title == "Lesson detail"
         assert lesson.slides[0].title == "Slide 1"
+
+    def test_fetch_lesson_passes_view_flag(self):
+        client = EdClient("token")
+        captured = {}
+
+        def fake_get(path, params=None):
+            captured["path"] = path
+            captured["params"] = params
+            return {"lesson": {"id": 22, "title": "Lesson detail", "slides": []}}
+
+        client._get = fake_get
+        client.fetch_lesson(22, view=True)
+
+        assert captured["path"] == "lessons/22"
+        assert captured["params"] == {"view": "1"}
+
+    def test_fetch_slide_parses_single_slide(self):
+        client = EdClient("token")
+        captured = {}
+
+        def fake_get(path, params=None):
+            captured["path"] = path
+            captured["params"] = params
+            return {"slide": {"id": 3, "lesson_id": 22, "index": 1, "title": "Slide detail"}}
+
+        client._get = fake_get
+        slide = client.fetch_slide(3, view=True)
+
+        assert slide.id == 3
+        assert slide.title == "Slide detail"
+        assert captured["path"] == "lessons/slides/3"
+        assert captured["params"] == {"view": "1"}
+
+    def test_complete_slide_uses_put_without_expecting_json(self):
+        client = EdClient("token")
+        captured = {}
+
+        def fake_put(path, params=None, json_body=None, expect_json=True, allow_empty=False):
+            captured["path"] = path
+            captured["params"] = params
+            captured["json_body"] = json_body
+            captured["expect_json"] = expect_json
+            captured["allow_empty"] = allow_empty
+            return None
+
+        client._put = fake_put
+        client.complete_slide(44)
+
+        assert captured == {
+            "path": "lessons/slides/44/complete",
+            "params": None,
+            "json_body": None,
+            "expect_json": False,
+            "allow_empty": True,
+        }
+
+    def test_fetch_slide_questions_parses_nested_question_data(self):
+        client = EdClient("token")
+        client._get = lambda path, params=None: {
+            "questions": [
+                {
+                    "id": 123,
+                    "lesson_slide_id": 44,
+                    "index": 0,
+                    "data": {
+                        "type": "multiple-choice",
+                        "content": "Question body",
+                        "answers": ["A", "B"],
+                        "solution": [1],
+                    },
+                }
+            ]
+        }
+
+        questions = client.fetch_slide_questions(44)
+
+        assert len(questions) == 1
+        assert questions[0].id == 123
+        assert questions[0].answers == ["A", "B"]
+
+    def test_submit_slide_question_response_posts_raw_list_payload(self):
+        client = EdClient("token")
+        captured = {}
+
+        def fake_post(path, params=None, json_body=None, expect_json=True, allow_empty=False):
+            captured["path"] = path
+            captured["params"] = params
+            captured["json_body"] = json_body
+            captured["expect_json"] = expect_json
+            captured["allow_empty"] = allow_empty
+            return {"slide_completed": True, "correct": True, "solution": [1]}
+
+        client._post = fake_post
+        result = client.submit_slide_question_response(123, [1], amend=True)
+
+        assert captured == {
+            "path": "lessons/slides/questions/123/responses",
+            "params": {"amend": "1"},
+            "json_body": [1],
+            "expect_json": True,
+            "allow_empty": False,
+        }
+        assert result["slideCompleted"] is True
+        assert result["correct"] is True
+        assert result["solution"] == [1]
+
+    def test_fetch_slide_question_responses_parses_saved_answers(self):
+        client = EdClient("token")
+        client._get = lambda path, params=None: {
+            "responses": [
+                {
+                    "question_id": 123,
+                    "user_id": 42,
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "correct": False,
+                    "data": [0],
+                }
+            ]
+        }
+
+        responses = client.fetch_slide_question_responses(44)
+
+        assert len(responses) == 1
+        assert responses[0].question_id == 123
+        assert responses[0].data == [0]
+
+    def test_submit_all_slide_questions_accepts_empty_success_body(self):
+        client = EdClient("token")
+        captured = {}
+
+        def fake_post(path, params=None, json_body=None, expect_json=True, allow_empty=False):
+            captured["path"] = path
+            captured["params"] = params
+            captured["json_body"] = json_body
+            captured["expect_json"] = expect_json
+            captured["allow_empty"] = allow_empty
+            return None
+
+        client._post = fake_post
+        submitted = client.submit_all_slide_questions(44)
+
+        assert submitted is True
+        assert captured == {
+            "path": "lessons/slides/44/questions/submit_all",
+            "params": None,
+            "json_body": {},
+            "expect_json": True,
+            "allow_empty": True,
+        }
 
     def test_fetch_user_parses_enrollments(self):
         client = EdClient("token")

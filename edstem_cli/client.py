@@ -8,7 +8,18 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 
 from .constants import get_api_base_url
-from .models import Comment, Course, Lesson, LessonModule, LessonSlide, Thread, ThreadMetrics, User
+from .models import (
+    Comment,
+    Course,
+    Lesson,
+    LessonModule,
+    LessonQuestion,
+    LessonQuestionResponse,
+    LessonSlide,
+    Thread,
+    ThreadMetrics,
+    User,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +82,124 @@ class EdClient:
                 "Set ED_API_BASE_URL to a valid JSON API endpoint.",
             ) from exc
 
+    def _put(
+        self,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        json_body: Optional[Dict[str, Any]] = None,
+        expect_json: bool = True,
+        allow_empty: bool = False,
+    ) -> Any:
+        url = get_api_base_url() + path.lstrip("/")
+        logger.debug("PUT %s params=%s", url, params)
+        try:
+            resp = self._session.put(
+                url,
+                params=params,
+                json=json_body,
+                timeout=15,
+                allow_redirects=False,
+            )
+        except requests.RequestException as exc:
+            raise EdAPIError(0, "Failed to reach the Ed API: %s" % exc) from exc
+
+        code, message = _extract_error_details(resp)
+        if resp.status_code in (400, 401, 403):
+            if code == "bad_token" or resp.status_code == 401:
+                raise EdAPIError(
+                    resp.status_code,
+                    "Authentication failed (HTTP %d). Check your Ed API token."
+                    % resp.status_code,
+                )
+            raise EdAPIError(resp.status_code, _format_api_error(resp.status_code, message))
+        if 300 <= resp.status_code < 400:
+            location = resp.headers.get("location") or "an unknown location"
+            raise EdAPIError(
+                resp.status_code,
+                "Ed API base URL redirected to %s. "
+                "Set ED_API_BASE_URL to a valid JSON API endpoint." % location,
+            )
+        if resp.status_code == 404:
+            raise EdAPIError(
+                404,
+                message or "Not found: %s" % path,
+            )
+        if not resp.ok:
+            raise EdAPIError(resp.status_code, _format_api_error(resp.status_code, message))
+        if allow_empty and not getattr(resp, "content", b""):
+            return None
+        if not expect_json:
+            return None
+        try:
+            return resp.json()
+        except ValueError as exc:
+            if allow_empty:
+                return None
+            raise EdAPIError(
+                resp.status_code,
+                "Ed API returned a non-JSON response. "
+                "Set ED_API_BASE_URL to a valid JSON API endpoint.",
+            ) from exc
+
+    def _post(
+        self,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        json_body: Optional[Any] = None,
+        expect_json: bool = True,
+        allow_empty: bool = False,
+    ) -> Any:
+        url = get_api_base_url() + path.lstrip("/")
+        logger.debug("POST %s params=%s", url, params)
+        try:
+            resp = self._session.post(
+                url,
+                params=params,
+                json=json_body,
+                timeout=15,
+                allow_redirects=False,
+            )
+        except requests.RequestException as exc:
+            raise EdAPIError(0, "Failed to reach the Ed API: %s" % exc) from exc
+
+        code, message = _extract_error_details(resp)
+        if resp.status_code in (400, 401, 403):
+            if code == "bad_token" or resp.status_code == 401:
+                raise EdAPIError(
+                    resp.status_code,
+                    "Authentication failed (HTTP %d). Check your Ed API token."
+                    % resp.status_code,
+                )
+            raise EdAPIError(resp.status_code, _format_api_error(resp.status_code, message))
+        if 300 <= resp.status_code < 400:
+            location = resp.headers.get("location") or "an unknown location"
+            raise EdAPIError(
+                resp.status_code,
+                "Ed API base URL redirected to %s. "
+                "Set ED_API_BASE_URL to a valid JSON API endpoint." % location,
+            )
+        if resp.status_code == 404:
+            raise EdAPIError(
+                404,
+                message or "Not found: %s" % path,
+            )
+        if not resp.ok:
+            raise EdAPIError(resp.status_code, _format_api_error(resp.status_code, message))
+        if allow_empty and not getattr(resp, "content", b""):
+            return None
+        if not expect_json:
+            return None
+        try:
+            return resp.json()
+        except ValueError as exc:
+            if allow_empty:
+                return None
+            raise EdAPIError(
+                resp.status_code,
+                "Ed API returned a non-JSON response. "
+                "Set ED_API_BASE_URL to a valid JSON API endpoint.",
+            ) from exc
+
     def fetch_user(self) -> Tuple[User, List[Course]]:
         """Fetch current user info and enrolled courses."""
         data = self._get("user")
@@ -106,11 +235,66 @@ class EdClient:
         lessons = [_parse_lesson(lesson, module_names) for lesson in lessons_data]
         return modules, lessons
 
-    def fetch_lesson(self, lesson_id: int) -> Lesson:
+    def fetch_lesson(self, lesson_id: int, view: bool = False) -> Lesson:
         """Fetch a single lesson with slides."""
-        data = self._get("lessons/%d" % lesson_id)
+        params = {"view": "1"} if view else None
+        data = self._get("lessons/%d" % lesson_id, params=params)
         lesson_data = data.get("lesson") or data
         return _parse_lesson(lesson_data)
+
+    def fetch_slide(self, slide_id: int, view: bool = False) -> LessonSlide:
+        """Fetch a single slide, optionally recording a view."""
+        params = {"view": "1"} if view else None
+        data = self._get("lessons/slides/%d" % slide_id, params=params)
+        slide_data = data.get("slide") or data
+        return _parse_lesson_slide(slide_data)
+
+    def complete_slide(self, slide_id: int) -> None:
+        """Mark a slide as completed for the current user."""
+        self._put("lessons/slides/%d/complete" % slide_id, expect_json=False, allow_empty=True)
+
+    def fetch_slide_questions(self, slide_id: int) -> List[LessonQuestion]:
+        """Fetch all questions for a quiz slide."""
+        data = self._get("lessons/slides/%d/questions" % slide_id)
+        questions_data = data.get("questions") or []
+        return [_parse_lesson_question(question) for question in questions_data]
+
+    def submit_slide_question_response(
+        self,
+        question_id: int,
+        response: Any,
+        amend: bool = False,
+    ) -> Dict[str, Any]:
+        """Submit a response for a slide question."""
+        params = {"amend": "1"} if amend else None
+        data = self._post(
+            "lessons/slides/questions/%d/responses" % question_id,
+            params=params,
+            json_body=response,
+        )
+        return {
+            "slideCompleted": bool(data.get("slide_completed")),
+            "solution": data.get("solution"),
+            "explanation": data.get("explanation"),
+            "correct": data.get("correct"),
+        }
+
+    def fetch_slide_question_responses(self, slide_id: int) -> List[LessonQuestionResponse]:
+        """Fetch all saved responses for a quiz slide."""
+        data = self._get("lessons/slides/%d/questions/responses" % slide_id)
+        responses_data = data.get("responses") or []
+        return [_parse_lesson_question_response(response) for response in responses_data]
+
+    def submit_all_slide_questions(self, slide_id: int) -> bool:
+        """Submit all saved question responses for a quiz slide."""
+        data = self._post(
+            "lessons/slides/%d/questions/submit_all" % slide_id,
+            json_body={},
+            allow_empty=True,
+        )
+        if data is None:
+            return True
+        return bool(data.get("submitted"))
 
     def fetch_thread(self, thread_id: int) -> Thread:
         """Fetch a single thread with comments."""
@@ -211,6 +395,34 @@ def _parse_lesson_slide(data: Dict[str, Any]) -> LessonSlide:
         index=int(data.get("index") or 0),
         status=str(data.get("status") or ""),
         is_hidden=bool(data.get("is_hidden")),
+    )
+
+
+def _parse_lesson_question(data: Dict[str, Any]) -> LessonQuestion:
+    question_data = data.get("data") or {}
+    return LessonQuestion(
+        id=int(data.get("id") or 0),
+        slide_id=int(data.get("lesson_slide_id") or 0),
+        index=int(data.get("index") or 0),
+        type=str(question_data.get("type") or ""),
+        content=str(question_data.get("content") or ""),
+        explanation=str(question_data.get("explanation") or ""),
+        answers=[str(answer or "") for answer in (question_data.get("answers") or [])],
+        solution=[int(value) for value in (question_data.get("solution") or [])],
+        multiple_selection=bool(question_data.get("multiple_selection")),
+        is_assessed=bool(question_data.get("assessed")),
+        is_formatted=bool(question_data.get("formatted")),
+        lesson_markable_id=int(data.get("lesson_markable_id") or 0),
+    )
+
+
+def _parse_lesson_question_response(data: Dict[str, Any]) -> LessonQuestionResponse:
+    return LessonQuestionResponse(
+        question_id=int(data.get("question_id") or 0),
+        user_id=int(data.get("user_id") or 0),
+        created_at=str(data.get("created_at") or ""),
+        correct=data.get("correct"),
+        data=data.get("data"),
     )
 
 

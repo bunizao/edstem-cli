@@ -6,7 +6,7 @@ from click.testing import CliRunner
 
 from edstem_cli import __version__
 from edstem_cli.cli import _filter_courses, _filter_lessons, _parse_thread_ref, _resolve_fetch_count, cli
-from edstem_cli.models import Course, User
+from edstem_cli.models import Course, LessonQuestion, LessonQuestionResponse, User
 
 
 def _json_from_result_output(result) -> object:
@@ -318,6 +318,353 @@ def test_cli_lesson_json(monkeypatch, lesson_factory) -> None:
     payload = json.loads(result.output)
     assert payload["title"] == "JSON lesson"
     assert payload["slides"][0]["title"] == "Slide 1"
+
+
+def test_cli_lessons_legacy_invocation_accepts_options_before_course_id(
+    monkeypatch, lesson_factory
+) -> None:
+    class FakeClient:
+        def fetch_lessons(self, course_id):
+            assert course_id == 100
+            return (
+                [],
+                [
+                    lesson_factory(11, title="Week 1 - Pre-Reading", module_name="Week 1"),
+                    lesson_factory(12, title="Week 2 - Applied", module_name="Week 2"),
+                ],
+            )
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+    runner = CliRunner()
+    result = runner.invoke(cli, ["lessons", "--module", "Week 1", "--json", "100"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload == [
+        {
+            "id": 11,
+            "moduleId": 10,
+            "moduleName": "Week 1",
+            "number": 11,
+            "title": "Week 1 - Pre-Reading",
+            "type": "general",
+            "kind": "content",
+            "state": "active",
+            "status": "attempted",
+            "outline": "<document><paragraph>Outline</paragraph></document>",
+            "slideCount": 1,
+            "slides": [
+                {
+                    "id": 11,
+                    "lessonId": 11,
+                    "courseId": 100,
+                    "title": "Slide 1",
+                    "type": "document",
+                    "content": "<document><paragraph>Hello lesson</paragraph></document>",
+                    "index": 1,
+                    "status": "completed",
+                    "isHidden": False,
+                }
+            ],
+            "openable": True,
+            "createdAt": "2026-01-01T10:00:00.000Z",
+            "availableAt": "2026-01-10T10:00:00.000Z",
+            "dueAt": "2026-01-20T10:00:00.000Z",
+            "updatedAt": "2026-01-02T10:00:00.000Z",
+        }
+    ]
+
+
+def test_cli_slide_questions_json(monkeypatch) -> None:
+    class FakeClient:
+        def fetch_slide_questions(self, slide_id):
+            assert slide_id == 654529
+            return [
+                LessonQuestion(
+                    id=256385,
+                    slide_id=slide_id,
+                    index=0,
+                    type="multiple-choice",
+                    content="<document><paragraph>Pick one</paragraph></document>",
+                    answers=[
+                        "<document><paragraph>A</paragraph></document>",
+                        "<document><paragraph>B</paragraph></document>",
+                    ],
+                    solution=[1],
+                )
+            ]
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+    runner = CliRunner()
+    result = runner.invoke(cli, ["lessons", "quiz", "654529", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload[0]["id"] == 256385
+    assert payload[0]["answers"] == [
+        "<document><paragraph>A</paragraph></document>",
+        "<document><paragraph>B</paragraph></document>",
+    ]
+
+
+def test_cli_slide_responses_json(monkeypatch) -> None:
+    class FakeClient:
+        def fetch_slide_question_responses(self, slide_id):
+            assert slide_id == 654529
+            return [
+                LessonQuestionResponse(
+                    question_id=256385,
+                    user_id=1,
+                    created_at="2026-01-01T00:00:00Z",
+                    correct=True,
+                    data=[1],
+                )
+            ]
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+    runner = CliRunner()
+    result = runner.invoke(cli, ["lessons", "quiz", "654529", "--responses", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload == [
+        {
+            "questionId": 256385,
+            "userId": 1,
+            "data": [1],
+            "createdAt": "2026-01-01T00:00:00Z",
+            "correct": True,
+        }
+    ]
+
+
+def test_cli_slide_answer_converts_one_based_choices(monkeypatch) -> None:
+    captured = {}
+
+    class FakeClient:
+        def submit_slide_question_response(self, question_id, response, amend=False):
+            captured["question_id"] = question_id
+            captured["response"] = response
+            captured["amend"] = amend
+            return {"slideCompleted": True, "correct": True, "solution": [1]}
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["lessons", "quiz", "654529", "--answer", "256385", "--choice", "2", "--json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["correct"] is True
+    assert captured == {"question_id": 256385, "response": [1], "amend": False}
+
+
+def test_cli_slide_submit_json(monkeypatch) -> None:
+    class FakeClient:
+        def submit_all_slide_questions(self, slide_id):
+            assert slide_id == 654529
+            return True
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+    runner = CliRunner()
+    result = runner.invoke(cli, ["lessons", "quiz", "654529", "--submit", "--json"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.output) == {"submitted": True}
+
+
+def test_cli_lesson_quiz_rejects_multiple_actions(monkeypatch) -> None:
+    class FakeClient:
+        pass
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["lessons", "quiz", "654529", "--responses", "--submit"],
+    )
+
+    assert result.exit_code == 1
+    assert "Use only one of --responses, --answer, or --submit" in result.output
+
+
+def test_cli_lessons_read_filters_queries_and_marks_matching_lessons(
+    monkeypatch, lesson_factory
+) -> None:
+    applied_slide = lesson_factory(12).slides[0]
+    applied_slide.id = 101
+
+    class FakeClient:
+        def __init__(self):
+            self.viewed_lessons = []
+            self.viewed_slides = []
+            self.completed_slides = []
+
+        def fetch_lessons(self, course_id):
+            assert course_id == 100
+            return (
+                [],
+                [
+                    lesson_factory(
+                        11,
+                        title="Week 1 - Pre-Reading",
+                        slides=[
+                            lesson_factory(11).slides[0],
+                        ],
+                    ),
+                    lesson_factory(
+                        12,
+                        title="Week 1 - Applied",
+                        slides=[applied_slide],
+                    ),
+                ],
+            )
+
+        def fetch_lesson(self, lesson_id, view=False):
+            if view:
+                self.viewed_lessons.append(lesson_id)
+            if lesson_id == 12:
+                return lesson_factory(
+                    12,
+                    title="Week 1 - Applied",
+                    slides=[applied_slide],
+                    status="attempted",
+                )
+            return lesson_factory(lesson_id)
+
+        def fetch_slide(self, slide_id, view=False):
+            if view:
+                self.viewed_slides.append(slide_id)
+            return lesson_factory().slides[0]
+
+        def complete_slide(self, slide_id):
+            self.completed_slides.append(slide_id)
+
+    fake_client = FakeClient()
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: fake_client)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["lessons", "read", "100", "Week 1", "Applied", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload == [
+        {
+            "id": 12,
+            "title": "Week 1 - Applied",
+            "status": "attempted",
+            "completedSlides": 1,
+            "viewedSlides": 0,
+            "slideCount": 1,
+            "success": True,
+        }
+    ]
+    assert fake_client.viewed_lessons == [12]
+    assert fake_client.completed_slides == [101]
+
+
+def test_cli_lessons_read_reports_failures_without_aborting(monkeypatch, lesson_factory) -> None:
+    applied_slide = lesson_factory(22).slides[0]
+    applied_slide.id = 201
+
+    class FakeClient:
+        def fetch_lessons(self, course_id):
+            return (
+                [],
+                [
+                    lesson_factory(21, title="Week 2 - Workshop", status="unattempted"),
+                    lesson_factory(22, title="Week 2 - Applied", status="unattempted"),
+                ],
+            )
+
+        def fetch_lesson(self, lesson_id, view=False):
+            if lesson_id == 21:
+                raise RuntimeError("Ed API error (HTTP 403): Must complete all prereqs")
+            return lesson_factory(
+                lesson_id,
+                title="Week 2 - Applied",
+                slides=[applied_slide],
+                status="attempted",
+            )
+
+        def fetch_slide(self, slide_id, view=False):
+            return lesson_factory().slides[0]
+
+        def complete_slide(self, slide_id):
+            return None
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["lessons", "read", "100"])
+
+    assert result.exit_code == 0
+    assert "Processed 2 lesson(s): 1 succeeded, 1 failed." in result.output
+    assert "FAIL 21 Week 2 - Workshop -> Ed API error (HTTP 403): Must complete all prereqs" in result.output
+    assert "OK 22 Week 2 - Applied -> attempted (completed=1 viewed=0)" in result.output
+
+
+def test_cli_lessons_read_reports_partial_progress_on_failure(monkeypatch, lesson_factory) -> None:
+    first_slide = lesson_factory(31).slides[0]
+    second_slide = lesson_factory(31).slides[0]
+    second_slide.id = 302
+
+    class FakeClient:
+        def __init__(self):
+            self.fetch_lesson_calls = []
+
+        def fetch_lessons(self, course_id):
+            assert course_id == 100
+            return ([], [lesson_factory(31, title="Week 3 - Applied", status="unattempted")])
+
+        def fetch_lesson(self, lesson_id, view=False):
+            self.fetch_lesson_calls.append((lesson_id, view))
+            if view:
+                return lesson_factory(
+                    lesson_id,
+                    title="Week 3 - Applied",
+                    status="unattempted",
+                    slides=[first_slide, second_slide],
+                    slide_count=2,
+                )
+            return lesson_factory(
+                lesson_id,
+                title="Week 3 - Applied",
+                status="attempted",
+                slides=[first_slide, second_slide],
+                slide_count=2,
+            )
+
+        def complete_slide(self, slide_id):
+            if slide_id == second_slide.id:
+                raise RuntimeError("boom")
+            return None
+
+        def fetch_slide(self, slide_id, view=False):
+            return lesson_factory().slides[0]
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["lessons", "read", "100", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload == [
+        {
+            "id": 31,
+            "title": "Week 3 - Applied",
+            "status": "attempted",
+            "completedSlides": 1,
+            "viewedSlides": 0,
+            "slideCount": 2,
+            "success": False,
+            "error": "boom",
+            "partial": True,
+        }
+    ]
 
 
 def test_cli_threads_applies_filters_and_writes_json(monkeypatch, thread_factory, tmp_path) -> None:

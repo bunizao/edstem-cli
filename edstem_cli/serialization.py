@@ -5,7 +5,18 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, Iterable, List
 
-from .models import Comment, Course, Lesson, LessonModule, LessonSlide, Thread, ThreadMetrics, User
+from .models import (
+    Comment,
+    Course,
+    Lesson,
+    LessonModule,
+    LessonQuestion,
+    LessonQuestionResponse,
+    LessonSlide,
+    Thread,
+    ThreadMetrics,
+    User,
+)
 
 
 def _set_if_nonempty(target: Dict[str, Any], key: str, value: Any) -> None:
@@ -199,6 +210,39 @@ def lesson_to_dict(lesson: Lesson) -> Dict[str, Any]:
     return data
 
 
+def lesson_question_to_dict(question: LessonQuestion) -> Dict[str, Any]:
+    """Convert a LessonQuestion dataclass into a JSON-safe dict."""
+    data = {
+        "id": question.id,
+        "slideId": question.slide_id,
+        "index": question.index,
+        "type": question.type,
+        "content": question.content,
+        "answers": question.answers,
+    }
+    _set_if_nonempty(data, "explanation", question.explanation)
+    _set_if_nonempty(data, "solution", question.solution)
+    _set_if_true(data, "multipleSelection", question.multiple_selection)
+    _set_if_true(data, "isAssessed", question.is_assessed)
+    _set_if_true(data, "isFormatted", question.is_formatted)
+    if question.lesson_markable_id > 0:
+        data["lessonMarkableId"] = question.lesson_markable_id
+    return data
+
+
+def lesson_question_response_to_dict(response: LessonQuestionResponse) -> Dict[str, Any]:
+    """Convert a LessonQuestionResponse dataclass into a JSON-safe dict."""
+    data = {
+        "questionId": response.question_id,
+        "userId": response.user_id,
+        "data": response.data,
+        "createdAt": response.created_at,
+    }
+    if response.correct is not None:
+        data["correct"] = response.correct
+    return data
+
+
 def user_to_dict(user: User) -> Dict[str, Any]:
     """Convert a User dataclass into a JSON-safe dict."""
     return {
@@ -244,3 +288,21 @@ def courses_to_json(courses: Iterable[Course]) -> str:
 def lessons_to_json(lessons: Iterable[Lesson]) -> str:
     """Serialize Lesson objects to pretty JSON."""
     return json.dumps([lesson_to_dict(lesson) for lesson in lessons], ensure_ascii=False, indent=2)
+
+
+def lesson_questions_to_json(questions: Iterable[LessonQuestion]) -> str:
+    """Serialize LessonQuestion objects to pretty JSON."""
+    return json.dumps(
+        [lesson_question_to_dict(question) for question in questions],
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
+def lesson_question_responses_to_json(responses: Iterable[LessonQuestionResponse]) -> str:
+    """Serialize LessonQuestionResponse objects to pretty JSON."""
+    return json.dumps(
+        [lesson_question_response_to_dict(response) for response in responses],
+        ensure_ascii=False,
+        indent=2,
+    )
