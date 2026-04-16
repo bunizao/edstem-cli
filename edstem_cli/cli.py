@@ -54,8 +54,6 @@ from .serialization import (
     threads_to_json,
 )
 from .skill_bundle import (
-    DEFAULT_SKILL_DEST,
-    SKILL_NAME,
     format_skill_summary,
     install_skill,
 )
@@ -221,54 +219,55 @@ def cli(verbose):
     _setup_logging(verbose)
 
 
-def _install_skill_command(destination_root, force):
-    # type: (Path, bool) -> None
-    """Install the bundled Codex skill."""
-    installed_dir = install_skill(destination_root, force=force)
-    click.echo("Installed skill %s to %s" % (SKILL_NAME, installed_dir))
-    click.echo("Restart Codex to pick up new skills.")
+def _install_skill_command(extra_args):
+    # type: (list[str]) -> None
+    """Delegate skill installation to the shared skills CLI."""
+    install_skill(extra_args)
 
 
 @cli.group(invoke_without_command=True)
 @click.pass_context
 def skills(ctx):
     # type: (click.Context) -> None
-    """Show or install the bundled Codex skill."""
+    """Show skill metadata or delegate to `npx skills add`."""
     if ctx.invoked_subcommand is not None:
         return
     click.echo(format_skill_summary())
 
 
-@skills.command("install")
-@click.option(
-    "--dest",
-    "destination_root",
-    type=click.Path(file_okay=False, path_type=Path),
-    default=DEFAULT_SKILL_DEST,
-    show_default=True,
-    help="Install the skill into this Codex skills directory.",
+@skills.command(
+    "add",
+    context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
 )
-@click.option("--force", is_flag=True, help="Overwrite an existing installed skill.")
-def install_skill_command(destination_root, force):
-    # type: (Path, bool) -> None
-    """Install the bundled Codex skill."""
-    _run_guarded(lambda: _install_skill_command(destination_root, force))
+@click.pass_context
+def add_skill_command(ctx):
+    # type: (click.Context) -> None
+    """Install the published skill through `npx skills add`."""
+    _run_guarded(lambda: _install_skill_command(list(ctx.args)))
 
 
-@skills.command("i", hidden=True)
-@click.option(
-    "--dest",
-    "destination_root",
-    type=click.Path(file_okay=False, path_type=Path),
-    default=DEFAULT_SKILL_DEST,
-    show_default=True,
-    help="Install the skill into this Codex skills directory.",
+@skills.command(
+    "install",
+    hidden=True,
+    context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
 )
-@click.option("--force", is_flag=True, help="Overwrite an existing installed skill.")
-def install_skill_alias(destination_root, force):
-    # type: (Path, bool) -> None
-    """Install the bundled Codex skill."""
-    _run_guarded(lambda: _install_skill_command(destination_root, force))
+@click.pass_context
+def install_skill_command(ctx):
+    # type: (click.Context) -> None
+    """Backward-compatible alias for `skills add`."""
+    _run_guarded(lambda: _install_skill_command(list(ctx.args)))
+
+
+@skills.command(
+    "i",
+    hidden=True,
+    context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
+)
+@click.pass_context
+def install_skill_alias(ctx):
+    # type: (click.Context) -> None
+    """Backward-compatible alias for `skills add`."""
+    _run_guarded(lambda: _install_skill_command(list(ctx.args)))
 
 
 @cli.command()

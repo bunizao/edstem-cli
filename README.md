@@ -25,6 +25,20 @@ uv tool install edstem-cli
 pipx install edstem-cli
 ```
 
+## Agent Skill
+
+Install the agent skill with the shared `skills` CLI spec:
+
+```bash
+npx skills add https://github.com/bunizao/edstem-cli
+```
+
+If you already installed `edstem`, the CLI exposes the same thing as a thin alias:
+
+```bash
+edstem skills add
+```
+
 Install from source:
 
 ```bash

@@ -1,6 +1,6 @@
 ---
 name: edstem-cli
-description: Inspect Ed Discussion from the terminal with the `edstem` CLI. Use when Codex needs to list courses, browse or filter lessons or threads in a course, open a lesson or thread by ID, inspect recent activity, fetch the current user profile, or mark lessons as read. Prefer JSON output for agent workflows.
+description: Inspect Ed Discussion from the terminal with the `edstem` CLI. Use when an agent needs to list courses, browse or filter lessons or threads in a course, open a lesson or thread by ID, inspect recent activity, fetch the current user profile, or mark lessons as read. Prefer JSON output for agent workflows.
 ---
 
 # edstem-cli
@@ -18,8 +18,13 @@ Use `edstem` for Ed Discussion access from the terminal.
 ## Setup
 
 ```bash
+npx skills add https://github.com/bunizao/edstem-cli
+
+# or install the CLI alias first
 uv tool install edstem-cli
-# or
+edstem skills add
+
+# other Python install options
 pipx install edstem-cli
 ```
 
