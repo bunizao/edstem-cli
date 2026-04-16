@@ -39,6 +39,8 @@ If you already installed `edstem`, the CLI exposes the same thing as a thin alia
 edstem skills add
 ```
 
+If `npx` is not available, the alias falls back to `npm exec`.
+
 Install from source:
 
 ```bash
