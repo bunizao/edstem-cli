@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.1 - 2026-04-18
+
+### Highlights
+
+- Added `edstem update` to upgrade the installed CLI in place.
+
+### Added
+
+- `edstem update` now detects common install methods and runs the updater directly.
+
+### Changed
+
+- `edstem update` no longer prints a shell command for manual execution.
+
+### Safety
+
+- Source installs are refused by the updater so local checkouts stay local.
+
 ## 0.3.0 - 2026-04-16
 
 ### Highlights
