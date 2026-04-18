@@ -51,17 +51,13 @@ uv sync
 
 ## Update
 
-Update the CLI using the same method you used to install it:
+Update the CLI in place:
 
 ```bash
-# If installed with uv tool
-uv tool upgrade edstem-cli
-
-# If installed with pipx
-pipx upgrade edstem-cli
+edstem update
 ```
 
-If you installed from source:
+If you installed from source, update the checkout instead:
 
 ```bash
 git pull

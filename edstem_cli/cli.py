@@ -13,6 +13,7 @@ Commands:
     edstem threads <course_id> --category X # filter by category
     edstem thread <thread_id>               # view thread + comments
     edstem thread <course_id>#<number>      # by course thread number
+    edstem update                           # update the installed CLI
     edstem activity <course_id>             # your activity in course
     edstem user                             # current user profile
 """
@@ -53,6 +54,7 @@ from .serialization import (
     lessons_to_json,
     threads_to_json,
 )
+from .self_update import perform_update
 from .skill_bundle import (
     format_skill_summary,
     install_skill,
@@ -286,6 +288,14 @@ def install_skill_alias(ctx):
     # type: (click.Context) -> None
     """Backward-compatible alias for `skills add`."""
     _run_guarded(lambda: _install_skill_command(list(ctx.args)))
+
+
+@cli.command()
+def update():
+    # type: () -> None
+    """Update the installed CLI in place."""
+    _run_guarded(perform_update)
+    click.echo("Updated edstem-cli.")
 
 
 @cli.command()

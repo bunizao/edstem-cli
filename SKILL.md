@@ -26,6 +26,9 @@ edstem skills add
 
 # other Python install options
 pipx install edstem-cli
+
+# update the installed CLI
+edstem update
 ```
 
 Authenticate by setting `ED_API_TOKEN` or saving the token to `~/.config/edstem-cli/token`.
