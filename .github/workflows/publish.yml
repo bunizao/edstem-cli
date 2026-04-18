@@ -69,7 +69,9 @@ jobs:
           body = match.group(1).strip()
           if not body:
               raise SystemExit(f"Release notes for version {version} are empty")
-          pathlib.Path("dist/release-notes.md").write_text(body + "\n", encoding="utf-8")
+          release_dir = pathlib.Path("release")
+          release_dir.mkdir(exist_ok=True)
+          (release_dir / "release-notes.md").write_text(body + "\n", encoding="utf-8")
           print(f"Prepared release notes for {version}")
           PY
 
@@ -77,7 +79,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-dist
-          path: dist
+          path: |
+            dist/*.tar.gz
+            dist/*.whl
+            release/release-notes.md
           if-no-files-found: error
 
   publish:
@@ -95,12 +100,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: release-dist
-          path: dist
+          path: artifacts
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: dist/
+          packages-dir: artifacts/dist/
 
   release:
     needs: publish
@@ -113,13 +118,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: release-dist
-          path: dist
+          path: artifacts
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          body_path: dist/release-notes.md
+          body_path: artifacts/release/release-notes.md
           files: |
-            dist/*.tar.gz
-            dist/*.whl
+            artifacts/dist/*.tar.gz
+            artifacts/dist/*.whl
           fail_on_unmatched_files: true
