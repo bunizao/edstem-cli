@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Highlights
+
+- Switched `edstem thread <ref> --json` to a compact thread JSON shape that keeps source-grounded reply content while removing redundant structure and surfacing endorsed and staff signals.
+
+### Changed
+
+- Compact thread JSON now hoists users, omits default false/zero/empty fields, trims timestamp fractions, and keeps XML `content` behind `--include-html` instead of carrying it by default.
+- On 39 real FIT2099 thread dumps measured with `tiktoken` `o200k_base`, compact thread JSON reduced total payload from 74,364 tokens to 28,466 tokens, saving 45,898 tokens overall (`-61.72%`).
+- On the same sample set, the mean savings were 1,176.87 tokens per thread (`-55.88%` on average), with a median savings of 397 tokens per thread (`-54.61%`).
+- Representative samples from the FIT2099 dump set:
+  - `265.json`: 8,973 -> 2,852 tokens (`-68.22%`)
+  - `709.json`: 518 -> 254 tokens (`-50.97%`)
+
 ## 0.3.1 - 2026-04-18
 
 ### Highlights
