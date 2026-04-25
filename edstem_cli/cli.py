@@ -52,6 +52,7 @@ from .serialization import (
     lesson_questions_to_json,
     lesson_to_dict,
     lessons_to_json,
+    thread_to_json,
     threads_to_json,
 )
 from .self_update import perform_update
@@ -838,9 +839,17 @@ def threads(course_id, max_count, sort, category, thread_type, answered, unanswe
 
 @cli.command()
 @click.argument("thread_ref")
-@click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
-def thread(thread_ref, as_json):
-    # type: (str, bool) -> None
+@click.option("--json", "as_json", is_flag=True, help="Output as compact JSON.")
+@click.option("--include-html", is_flag=True, default=False, help="Keep XML content in JSON.")
+@click.option("--pretty", is_flag=True, default=False, help="Pretty-print JSON output.")
+@click.option(
+    "--legacy-json",
+    is_flag=True,
+    default=False,
+    help="Use the previous verbose JSON shape.",
+)
+def thread(thread_ref, as_json, include_html, pretty, legacy_json):
+    # type: (str, bool, bool, bool, bool) -> None
     """View a thread and its comments.
 
     THREAD_REF is either a thread ID or course_id#number.
@@ -855,8 +864,14 @@ def thread(thread_ref, as_json):
             t = client.fetch_thread(thread_id)
 
         if as_json:
-            from .serialization import thread_to_dict
-            click.echo(json.dumps(thread_to_dict(t), ensure_ascii=False, indent=2))
+            click.echo(
+                thread_to_json(
+                    t,
+                    include_html=include_html,
+                    legacy=legacy_json,
+                    pretty=pretty,
+                )
+            )
             return
 
         print_thread_detail(t, console)

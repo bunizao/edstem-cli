@@ -9,6 +9,9 @@ from dataclasses import dataclass, field
 from typing import Any, List, Optional
 
 
+STAFF_COURSE_ROLES = frozenset({"admin", "ta", "tutor"})
+
+
 @dataclass
 class User:
     id: int
@@ -17,6 +20,10 @@ class User:
     role: str = ""
     course_role: str = ""
     avatar: str = ""
+
+    @property
+    def is_staff(self) -> bool:
+        return self.course_role in STAFF_COURSE_ROLES
 
 
 @dataclass

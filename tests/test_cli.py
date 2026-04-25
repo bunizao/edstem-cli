@@ -6,7 +6,7 @@ from click.testing import CliRunner
 
 from edstem_cli import __version__
 from edstem_cli.cli import _filter_courses, _filter_lessons, _parse_thread_ref, _resolve_fetch_count, cli
-from edstem_cli.models import Course, LessonQuestion, LessonQuestionResponse, User
+from edstem_cli.models import Comment, Course, LessonQuestion, LessonQuestionResponse, User
 
 
 def _json_from_result_output(result) -> object:
@@ -777,9 +777,29 @@ def test_cli_thread_by_course_number(monkeypatch, thread_factory) -> None:
 
 
 def test_cli_thread_json(monkeypatch, thread_factory) -> None:
+    staff = User(id=7, name="Jordan", course_role="admin")
+    answer = Comment(
+        id=9001,
+        type="answer",
+        content="<document><paragraph>Use brew install python3</paragraph></document>",
+        document="Use brew install python3",
+        user_id=staff.id,
+        is_endorsed=True,
+        created_at="2026-01-15T11:00:00.123456+10:00",
+        author=staff,
+    )
+
     class FakeClient:
         def fetch_thread(self, thread_id):
-            return thread_factory(thread_id, title="JSON thread", number=9)
+            return thread_factory(
+                thread_id,
+                title="JSON thread",
+                number=9,
+                user_id=staff.id,
+                author=staff,
+                is_pinned=True,
+                answers=[answer],
+            )
 
     monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
     runner = CliRunner()
@@ -788,6 +808,52 @@ def test_cli_thread_json(monkeypatch, thread_factory) -> None:
     payload = json.loads(result.output)
     assert payload["title"] == "JSON thread"
     assert payload["number"] == 9
+    assert payload["flags"] == ["pinned"]
+    assert payload["endorsement"]["endorsedAnswerIds"] == [9001]
+    assert "content" not in payload
+    assert payload["users"]["7"]["courseRole"] == "admin"
+
+
+def test_cli_thread_json_pretty_include_html_and_legacy(monkeypatch, thread_factory) -> None:
+    staff = User(id=7, name="Jordan", course_role="admin")
+    answer = Comment(
+        id=9001,
+        type="answer",
+        content="<document><paragraph>Use brew install python3</paragraph></document>",
+        document="Use brew install python3",
+        user_id=staff.id,
+        is_endorsed=True,
+        created_at="2026-01-15T11:00:00.123456+10:00",
+        author=staff,
+    )
+
+    class FakeClient:
+        def fetch_thread(self, thread_id):
+            return thread_factory(
+                thread_id,
+                title="JSON thread",
+                number=9,
+                user_id=staff.id,
+                author=staff,
+                answers=[answer],
+            )
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+    runner = CliRunner()
+
+    pretty_result = runner.invoke(cli, ["thread", "5001", "--json", "--pretty", "--include-html"])
+    assert pretty_result.exit_code == 0
+    assert "\n  \"title\"" in pretty_result.output
+    pretty_payload = json.loads(pretty_result.output)
+    assert pretty_payload["content"].startswith("<document")
+    assert pretty_payload["answers"][0]["content"].startswith("<document")
+
+    legacy_result = runner.invoke(cli, ["thread", "5001", "--json", "--legacy-json"])
+    assert legacy_result.exit_code == 0
+    legacy_payload = json.loads(legacy_result.output)
+    assert "author" in legacy_payload
+    assert "users" not in legacy_payload
+    assert legacy_payload["answers"][0]["author"]["name"] == "Jordan"
 
 
 def test_cli_thread_rejects_invalid_reference() -> None:
