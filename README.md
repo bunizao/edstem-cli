@@ -107,6 +107,9 @@ edstem threads <course_id> --max 50 --json
 edstem thread <thread_id>
 edstem thread <course_id>#<number>      # by course thread number
 edstem thread <thread_id> --json
+edstem thread <thread_id> --json --pretty
+edstem thread <thread_id> --json --include-html
+edstem thread <thread_id> --json --legacy-json
 
 # Lessons
 edstem lessons <course_id>
@@ -134,6 +137,17 @@ export ED_API_TOKEN="your-token-here"
 # Option 2: Will prompt on first use and save automatically
 edstem user
 ```
+
+## Thread JSON
+
+`edstem thread ... --json` emits a compact thread shape by default. It hoists
+authors into a top-level `users` map, drops XML `content` unless
+`--include-html` is requested, trims default false/zero/empty fields, and adds
+an `endorsement` block for source-marked endorsed replies and staff activity.
+
+- Use `--pretty` when a human needs to read the JSON in the terminal.
+- Use `--legacy-json` when an existing consumer still expects embedded authors
+  and the verbose legacy shape.
 
 ## Mark Lessons Read
 

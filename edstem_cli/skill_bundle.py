@@ -11,7 +11,8 @@ SKILL_DESCRIPTION = (
     "Inspect Ed Discussion from the terminal with the `edstem` CLI. "
     "Use when an agent needs to list courses, browse or filter lessons or threads "
     "in a course, open a lesson or thread by ID, inspect recent activity, or "
-    "fetch the current user profile. Prefer JSON output for agent workflows."
+    "fetch the current user profile. Prefer JSON output for agent workflows, "
+    "with compact thread JSON available by default."
 )
 SKILL_SOURCE = "https://github.com/bunizao/edstem-cli"
 SKILLS_SPEC_URL = "https://github.com/vercel-labs/skills"
