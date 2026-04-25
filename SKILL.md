@@ -10,6 +10,7 @@ Use `edstem` for Ed Discussion access from the terminal.
 ## Defaults
 
 - Use `--json` on every command. Do not parse the rich-text table output.
+- `edstem thread ... --json` now emits compact thread JSON by default.
 - Add `--max` to list commands to keep results small.
 - Use `-o <file>` when the JSON payload is too large for stdout.
 - Omit `--json` only when a human explicitly wants the formatted terminal view.
@@ -64,6 +65,9 @@ edstem lesson <lesson_id> --json
 # Thread detail
 edstem thread <thread_id> --json
 edstem thread <course_id>#<number> --json
+edstem thread <thread_id> --json --pretty
+edstem thread <thread_id> --json --include-html
+edstem thread <thread_id> --json --legacy-json
 
 # Activity
 edstem activity --max 10 --json
@@ -80,6 +84,9 @@ For less common flags, check `edstem --help` and the relevant subcommand help.
 - If the user asks for lessons in a specific course and the `course_id` is already known, run `edstem lessons <course_id> --json`.
 - If the user names a course but does not provide the `course_id`, run `edstem courses --json` first, resolve the course, then run `edstem lessons <course_id> --json`.
 - If the user asks for one lesson's full content or slides, run `edstem lesson <lesson_id> --json`.
+- For thread detail, prefer the default compact JSON. It hoists users into a top-level `users` map, trims default fields, and adds an `endorsement` block with source-marked staff and endorsed reply signals.
+- Use `--include-html` only when the XML `content` payload itself matters. Plain `document` text is usually enough.
+- Use `--legacy-json` only when a downstream consumer depends on the old embedded-author shape.
 - Prefer filtering at the CLI, for example `edstem lessons <course_id> --module "Week 2" --json`, instead of fetching everything and filtering in prompt context.
 - If the user wants lessons marked as read, use `edstem lessons read <course_id> [query...] --json` and let the CLI handle the slide actions.
 
