@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "edstem-cli"
-version = "0.3.1"
+version = "0.3.5"
 description = "A CLI for Ed Discussion — browse courses, threads, and comments in terminal"
 readme = "README.md"
 license = "Apache-2.0"
