@@ -1,11 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.3.6 - 2026-05-15
 
 ### Added
 
 - Added Markdown export for `edstem lesson` and `edstem thread` with `--md`, `--format md`, and `-o <file>` support.
 - Preserved quiz slide `passage` text in lesson exports when Ed stores the readable body outside `content`.
+
+### Fixed
+
+- Preserved literal angle brackets in Markdown exports, including comparison text such as `x < y` and generic-looking text such as `Array<T>`.
 
 ## 0.3.5 - 2026-04-27
 
