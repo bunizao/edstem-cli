@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added Markdown export for `edstem lesson` and `edstem thread` with `--md`, `--format md`, and `-o <file>` support.
+- Preserved quiz slide `passage` text in lesson exports when Ed stores the readable body outside `content`.
+
 ## 0.3.5 - 2026-04-27
 
 ### Highlights
