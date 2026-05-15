@@ -13,6 +13,7 @@ Use `edstem` for Ed Discussion access from the terminal.
 - `edstem thread ... --json` now emits compact thread JSON by default.
 - Add `--max` to list commands to keep results small.
 - Use `-o <file>` when the JSON payload is too large for stdout.
+- Use `--md -o <file>` for user-facing lesson or thread exports.
 - Omit `--json` only when a human explicitly wants the formatted terminal view.
 - Use `edstem lessons read ... --json` when you need a machine-readable summary of which lessons were updated.
 
@@ -61,10 +62,12 @@ edstem lessons read <course_id> Week 3 Workshop --delay 0.3 --json
 
 # Lesson detail
 edstem lesson <lesson_id> --json
+edstem lesson <lesson_id> --md -o lesson.md
 
 # Thread detail
 edstem thread <thread_id> --json
 edstem thread <course_id>#<number> --json
+edstem thread <thread_id> --md -o thread.md
 edstem thread <thread_id> --json --pretty
 edstem thread <thread_id> --json --include-html
 edstem thread <thread_id> --json --legacy-json
@@ -84,6 +87,7 @@ For less common flags, check `edstem --help` and the relevant subcommand help.
 - If the user asks for lessons in a specific course and the `course_id` is already known, run `edstem lessons <course_id> --json`.
 - If the user names a course but does not provide the `course_id`, run `edstem courses --json` first, resolve the course, then run `edstem lessons <course_id> --json`.
 - If the user asks for one lesson's full content or slides, run `edstem lesson <lesson_id> --json`.
+- If the user asks for a readable handoff, notes, or Markdown export, run `edstem lesson <lesson_id> --md -o lesson.md` or `edstem thread <ref> --md -o thread.md`.
 - For thread detail, prefer the default compact JSON. It hoists users into a top-level `users` map, trims default fields, and adds an `endorsement` block with source-marked staff and endorsed reply signals.
 - Use `--include-html` only when the XML `content` payload itself matters. Plain `document` text is usually enough.
 - Use `--legacy-json` only when a downstream consumer depends on the old embedded-author shape.

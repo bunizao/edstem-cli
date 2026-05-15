@@ -59,6 +59,20 @@ class TestParseLessonSlide:
         assert slide.index == 2
         assert slide.title == "Slide A"
 
+    def test_lesson_slide_uses_quiz_passage_as_content(self):
+        slide = _parse_lesson_slide({
+            "id": 5,
+            "lesson_id": 9,
+            "index": 2,
+            "type": "quiz",
+            "title": "Feedback",
+            "data": {
+                "passage": "<document><paragraph>Explain your answer.</paragraph></document>",
+            },
+        })
+
+        assert slide.content == "<document><paragraph>Explain your answer.</paragraph></document>"
+
 
 class TestParseLesson:
     def test_basic_lesson(self):

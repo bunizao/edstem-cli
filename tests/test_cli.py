@@ -331,6 +331,48 @@ def test_cli_lesson_json(monkeypatch, lesson_factory) -> None:
     assert payload["slides"][0]["title"] == "Slide 1"
 
 
+def test_cli_lesson_markdown_writes_file_only(monkeypatch, lesson_factory, tmp_path) -> None:
+    class FakeClient:
+        def fetch_lesson(self, lesson_id):
+            assert lesson_id == 7001
+            return lesson_factory(lesson_id, title="Markdown lesson")
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+    output_file = tmp_path / "lesson.md"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["lesson", "7001", "--md", "-o", str(output_file)])
+
+    assert result.exit_code == 0
+    assert result.output == "Saved to %s\n" % output_file
+    content = output_file.read_text(encoding="utf-8")
+    assert content.startswith("# Markdown lesson\n")
+    assert "Hello lesson" in content
+
+
+def test_cli_lesson_format_md_matches_md_flag(monkeypatch, lesson_factory) -> None:
+    class FakeClient:
+        def fetch_lesson(self, lesson_id):
+            return lesson_factory(lesson_id, title="Markdown lesson")
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+    runner = CliRunner()
+    md_result = runner.invoke(cli, ["lesson", "7001", "--md"])
+    format_result = runner.invoke(cli, ["lesson", "7001", "--format", "md"])
+
+    assert md_result.exit_code == 0
+    assert format_result.exit_code == 0
+    assert format_result.output == md_result.output
+
+
+def test_cli_lesson_rejects_conflicting_output_flags(monkeypatch) -> None:
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: object())
+    runner = CliRunner()
+    result = runner.invoke(cli, ["lesson", "7001", "--json", "--md"])
+
+    assert result.exit_code == 1
+    assert "Use only one of --json or --md" in result.output
+
+
 def test_cli_lessons_legacy_invocation_accepts_options_before_course_id(
     monkeypatch, lesson_factory
 ) -> None:
@@ -854,6 +896,75 @@ def test_cli_thread_json_pretty_include_html_and_legacy(monkeypatch, thread_fact
     assert "author" in legacy_payload
     assert "users" not in legacy_payload
     assert legacy_payload["answers"][0]["author"]["name"] == "Jordan"
+
+
+def test_cli_thread_markdown_writes_file_only(monkeypatch, thread_factory, tmp_path) -> None:
+    staff = User(id=7, name="Jordan", course_role="admin")
+    answer = Comment(
+        id=9001,
+        type="answer",
+        document="Use brew install python3",
+        user_id=staff.id,
+        is_endorsed=True,
+        author=staff,
+    )
+
+    class FakeClient:
+        def fetch_thread(self, thread_id):
+            assert thread_id == 5001
+            return thread_factory(
+                thread_id,
+                title="Markdown thread",
+                number=9,
+                user_id=staff.id,
+                author=staff,
+                answers=[answer],
+            )
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+    output_file = tmp_path / "thread.md"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["thread", "5001", "--md", "-o", str(output_file)])
+
+    assert result.exit_code == 0
+    assert result.output == "Saved to %s\n" % output_file
+    content = output_file.read_text(encoding="utf-8")
+    assert content.startswith("# #9 Markdown thread\n")
+    assert "## Answers" in content
+    assert "Use brew install python3" in content
+
+
+def test_cli_thread_format_md_matches_md_flag(monkeypatch, thread_factory) -> None:
+    class FakeClient:
+        def fetch_thread(self, thread_id):
+            return thread_factory(thread_id, title="Markdown thread")
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+    runner = CliRunner()
+    md_result = runner.invoke(cli, ["thread", "5001", "--md"])
+    format_result = runner.invoke(cli, ["thread", "5001", "--format", "md"])
+
+    assert md_result.exit_code == 0
+    assert format_result.exit_code == 0
+    assert format_result.output == md_result.output
+
+
+def test_cli_thread_rejects_json_flags_with_markdown(monkeypatch) -> None:
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: object())
+    runner = CliRunner()
+    result = runner.invoke(cli, ["thread", "5001", "--md", "--pretty"])
+
+    assert result.exit_code == 1
+    assert "--include-html, --pretty, and --legacy-json require JSON output" in result.output
+
+
+def test_cli_thread_rejects_conflicting_output_flags(monkeypatch) -> None:
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: object())
+    runner = CliRunner()
+    result = runner.invoke(cli, ["thread", "5001", "--json", "--format", "md"])
+
+    assert result.exit_code == 1
+    assert "--json cannot be combined with --format md" in result.output
 
 
 def test_cli_thread_rejects_invalid_reference() -> None:

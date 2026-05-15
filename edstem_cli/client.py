@@ -385,13 +385,20 @@ def _parse_lesson_module(data: Dict[str, Any]) -> LessonModule:
 
 
 def _parse_lesson_slide(data: Dict[str, Any]) -> LessonSlide:
+    slide_data = data.get("data") or {}
     return LessonSlide(
         id=int(data.get("id") or 0),
         lesson_id=int(data.get("lesson_id") or 0),
         course_id=int(data.get("course_id") or 0),
         title=str(data.get("title") or ""),
         type=str(data.get("type") or ""),
-        content=str(data.get("content") or ""),
+        content=str(
+            data.get("content")
+            or data.get("passage")
+            or slide_data.get("content")
+            or slide_data.get("passage")
+            or ""
+        ),
         index=int(data.get("index") or 0),
         status=str(data.get("status") or ""),
         is_hidden=bool(data.get("is_hidden")),

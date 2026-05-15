@@ -46,6 +46,7 @@ from .formatter import (
     print_user_profile,
     strip_xml,
 )
+from .markdown import lesson_to_markdown, thread_to_markdown
 from .serialization import (
     courses_to_json,
     lesson_question_responses_to_json,
@@ -136,6 +137,32 @@ def _save_output(path, content):
     """Write command output to disk and report the destination on stderr."""
     Path(path).write_text(content, encoding="utf-8")
     click.echo("Saved to %s" % path, err=True)
+
+
+def _resolve_output_format(as_json, as_md, output_format):
+    # type: (bool, bool, Optional[str]) -> str
+    """Resolve legacy and explicit output format flags."""
+    if as_json and as_md:
+        raise RuntimeError("Use only one of --json or --md")
+    if as_json:
+        if output_format and output_format != "json":
+            raise RuntimeError("--json cannot be combined with --format %s" % output_format)
+        return "json"
+    if as_md:
+        if output_format and output_format != "md":
+            raise RuntimeError("--md cannot be combined with --format %s" % output_format)
+        return "md"
+    return output_format or "text"
+
+
+def _reject_json_flags_for_non_json(resolved_format, include_html=False, pretty=False,
+                                    legacy_json=False):
+    # type: (str, bool, bool, bool) -> None
+    """Reject JSON-only controls for non-JSON output."""
+    if resolved_format == "json":
+        return
+    if include_html or pretty or legacy_json:
+        raise RuntimeError("--include-html, --pretty, and --legacy-json require JSON output")
 
 
 def _get_ctx_protected_args(ctx):
@@ -384,17 +411,43 @@ def lessons_list(course_id, module, lesson_type, state, status, as_json, output_
 @cli.command()
 @click.argument("lesson_id", type=int)
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
-def lesson(lesson_id, as_json):
-    # type: (int, bool) -> None
+@click.option("--md", "as_md", is_flag=True, help="Output as Markdown.")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json", "md"], case_sensitive=False),
+    default=None,
+    help="Output format: text, json, or md.",
+)
+@click.option("--output", "-o", "output_file", type=str, default=None, help="Save to file.")
+def lesson(lesson_id, as_json, as_md, output_format, output_file):
+    # type: (int, bool, bool, Optional[str], Optional[str]) -> None
     """View a lesson and its slides."""
     def _run():
+        resolved_format = _resolve_output_format(as_json, as_md, output_format)
+        if output_file and resolved_format == "text":
+            raise RuntimeError("--output requires --json, --md, or --format")
+
         client = _get_client()
         current_lesson = client.fetch_lesson(lesson_id)
 
-        if as_json:
-            click.echo(json.dumps(lesson_to_dict(current_lesson), ensure_ascii=False, indent=2))
+        if resolved_format == "json":
+            payload = json.dumps(lesson_to_dict(current_lesson), ensure_ascii=False, indent=2)
+        elif resolved_format == "md":
+            payload = lesson_to_markdown(current_lesson)
+        else:
+            payload = ""
+
+        if output_file and resolved_format != "text":
+            _save_output(output_file, payload)
             return
 
+        if resolved_format == "json":
+            click.echo(payload)
+            return
+        if resolved_format == "md":
+            click.echo(payload, nl=False)
+            return
         print_lesson_detail(current_lesson, console)
 
     _run_guarded(_run)
@@ -840,6 +893,14 @@ def threads(course_id, max_count, sort, category, thread_type, answered, unanswe
 @cli.command()
 @click.argument("thread_ref")
 @click.option("--json", "as_json", is_flag=True, help="Output as compact JSON.")
+@click.option("--md", "as_md", is_flag=True, help="Output as Markdown.")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json", "md"], case_sensitive=False),
+    default=None,
+    help="Output format: text, json, or md.",
+)
 @click.option("--include-html", is_flag=True, default=False, help="Keep XML content in JSON.")
 @click.option("--pretty", is_flag=True, default=False, help="Pretty-print JSON output.")
 @click.option(
@@ -848,13 +909,25 @@ def threads(course_id, max_count, sort, category, thread_type, answered, unanswe
     default=False,
     help="Use the previous verbose JSON shape.",
 )
-def thread(thread_ref, as_json, include_html, pretty, legacy_json):
-    # type: (str, bool, bool, bool, bool) -> None
+@click.option("--output", "-o", "output_file", type=str, default=None, help="Save to file.")
+def thread(thread_ref, as_json, as_md, output_format, include_html, pretty, legacy_json,
+           output_file):
+    # type: (str, bool, bool, Optional[str], bool, bool, bool, Optional[str]) -> None
     """View a thread and its comments.
 
     THREAD_REF is either a thread ID or course_id#number.
     """
     def _run():
+        resolved_format = _resolve_output_format(as_json, as_md, output_format)
+        _reject_json_flags_for_non_json(
+            resolved_format,
+            include_html=include_html,
+            pretty=pretty,
+            legacy_json=legacy_json,
+        )
+        if output_file and resolved_format == "text":
+            raise RuntimeError("--output requires --json, --md, or --format")
+
         thread_id, number = _parse_thread_ref(thread_ref)
         client = _get_client()
 
@@ -863,15 +936,27 @@ def thread(thread_ref, as_json, include_html, pretty, legacy_json):
         else:
             t = client.fetch_thread(thread_id)
 
-        if as_json:
-            click.echo(
-                thread_to_json(
-                    t,
-                    include_html=include_html,
-                    legacy=legacy_json,
-                    pretty=pretty,
-                )
+        if resolved_format == "json":
+            payload = thread_to_json(
+                t,
+                include_html=include_html,
+                legacy=legacy_json,
+                pretty=pretty,
             )
+        elif resolved_format == "md":
+            payload = thread_to_markdown(t)
+        else:
+            payload = ""
+
+        if output_file and resolved_format != "text":
+            _save_output(output_file, payload)
+            return
+
+        if resolved_format == "json":
+            click.echo(payload)
+            return
+        if resolved_format == "md":
+            click.echo(payload, nl=False)
             return
 
         print_thread_detail(t, console)
