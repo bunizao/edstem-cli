@@ -150,3 +150,44 @@ def test_lesson_to_markdown_preserves_block_structure_and_links(lesson_factory) 
     assert "- Install dependencies" in output
     assert "- Read the [spec](https://example.com/spec)" in output
     assert "File: [starter.zip](https://example.com/starter.zip)" in output
+
+
+def test_markdown_preserves_literal_angle_brackets(lesson_factory, thread_factory) -> None:
+    lesson = lesson_factory(
+        7001,
+        slides=[
+            LessonSlide(
+                id=99,
+                lesson_id=7001,
+                title="Comparisons",
+                content="Use x < y and y > z. Array<T> is not Ed XML.",
+                index=2,
+            )
+        ],
+    )
+    thread = thread_factory(5001, document="Can I write x < y and use Array<T>?")
+
+    lesson_output = lesson_to_markdown(lesson)
+    thread_output = thread_to_markdown(thread)
+
+    assert "Use x < y and y > z. Array<T> is not Ed XML." in lesson_output
+    assert "Can I write x < y and use Array<T>?" in thread_output
+
+
+def test_markdown_preserves_malformed_xml_source_text(lesson_factory) -> None:
+    lesson = lesson_factory(
+        7001,
+        slides=[
+            LessonSlide(
+                id=99,
+                lesson_id=7001,
+                title="Malformed",
+                content="<document><paragraph>Use x < y before fixing parser",
+                index=2,
+            )
+        ],
+    )
+
+    output = lesson_to_markdown(lesson)
+
+    assert "<document><paragraph>Use x < y before fixing parser" in output

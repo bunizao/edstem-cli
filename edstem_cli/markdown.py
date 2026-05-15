@@ -7,8 +7,29 @@ from html import unescape
 from typing import Iterable, List
 from xml.etree import ElementTree
 
-from .formatter import strip_xml
 from .models import Comment, Lesson, LessonSlide, Thread
+
+
+_ED_XML_TAGS = frozenset({
+    "document",
+    "paragraph",
+    "heading",
+    "callout",
+    "list",
+    "list-item",
+    "table",
+    "table-row",
+    "table-cell",
+    "figure",
+    "video",
+    "image",
+    "file",
+    "break",
+    "code",
+    "bold",
+    "italic",
+    "link",
+})
 
 
 def _plain_text(value: str) -> str:
@@ -16,7 +37,7 @@ def _plain_text(value: str) -> str:
     text = (value or "").strip()
     if not text:
         return ""
-    if "<" not in text:
+    if not _looks_like_ed_xml(text):
         return _normalize_text(text)
     try:
         root = ElementTree.fromstring(text if text.startswith("<") else "<document>%s</document>" % text)
@@ -24,8 +45,16 @@ def _plain_text(value: str) -> str:
         try:
             root = ElementTree.fromstring("<document>%s</document>" % text)
         except ElementTree.ParseError:
-            return _normalize_text(unescape(strip_xml(text)))
+            return _normalize_text(text)
     return _render_blocks(root).strip()
+
+
+def _looks_like_ed_xml(value: str) -> bool:
+    # type: (str) -> bool
+    return any(
+        re.search(r"</?%s(?:\s|>|/>)" % re.escape(tag), value)
+        for tag in _ED_XML_TAGS
+    )
 
 
 def _heading_text(value: str) -> str:
