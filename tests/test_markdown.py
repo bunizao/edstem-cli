@@ -47,10 +47,27 @@ def test_thread_to_markdown_renders_post_and_replies(thread_factory) -> None:
     assert "- **Flags:** answered" in output
     assert "## Post\n\nHow do I install Python on macOS?" in output
     assert "## Answers" in output
-    assert "- **Jordan** [endorsed, +2] - 2026-01-15T11:00:00Z" in output
+    assert "- **Jordan** [staff, endorsed, +2] - 2026-01-15T11:00:00Z" in output
     assert "## Comments" in output
     assert "  - **Anonymous** [anonymous]" in output
     assert "Thanks, that worked." in output
+
+
+def test_thread_to_markdown_indents_multiline_comment_bodies(thread_factory) -> None:
+    staff = User(id=7, name="Jordan", course_role="admin")
+    answer = Comment(
+        id=9001,
+        type="answer",
+        document="First line<break/><break/>Second paragraph",
+        user_id=staff.id,
+        author=staff,
+    )
+    thread = thread_factory(5001, answers=[answer])
+
+    output = thread_to_markdown(thread)
+
+    assert "  First line" in output
+    assert "\n  \n  Second paragraph\n" in output
 
 
 def test_lesson_to_markdown_renders_outline_and_slides(lesson_factory) -> None:
@@ -58,7 +75,11 @@ def test_lesson_to_markdown_renders_outline_and_slides(lesson_factory) -> None:
         7001,
         title="Week 1",
         module_name="Module A",
-        outline="<document><paragraph>Read before class</paragraph></document>",
+        outline=(
+            "<document><paragraph>Read before class</paragraph>"
+            "<list style=\"bullet\"><list-item><paragraph>Bring laptop</paragraph></list-item>"
+            "<list-item><paragraph>Open `main.py`</paragraph></list-item></list></document>"
+        ),
     )
 
     output = lesson_to_markdown(lesson)
@@ -67,6 +88,8 @@ def test_lesson_to_markdown_renders_outline_and_slides(lesson_factory) -> None:
     assert "- **Lesson ID:** 7001" in output
     assert "- **Module:** Module A" in output
     assert "## Outline\n\nRead before class" in output
+    assert "- Bring laptop" in output
+    assert "- Open `main.py`" in output
     assert "## Slides" in output
     assert "### 1. Slide 1" in output
     assert "- **Status:** completed" in output
@@ -93,3 +116,37 @@ def test_lesson_to_markdown_includes_quiz_slide_passage(lesson_factory) -> None:
     assert "### 3. Feedback" in output
     assert "- **Type:** quiz" in output
     assert "Explain your answer." in output
+
+
+def test_lesson_to_markdown_preserves_block_structure_and_links(lesson_factory) -> None:
+    lesson = lesson_factory(
+        7001,
+        slides=[
+            LessonSlide(
+                id=99,
+                lesson_id=7001,
+                title="Structured slide",
+                type="document",
+                content=(
+                    "<document>"
+                    "<paragraph>Intro &amp; setup</paragraph>"
+                    "<heading level=\"2\">Checklist</heading>"
+                    "<list style=\"bullet\">"
+                    "<list-item><paragraph>Install dependencies</paragraph></list-item>"
+                    "<list-item><paragraph>Read the <link href=\"https://example.com/spec\">spec</link></paragraph></list-item>"
+                    "</list>"
+                    "<file filename=\"starter.zip\" url=\"https://example.com/starter.zip\"/>"
+                    "</document>"
+                ),
+                index=2,
+            )
+        ],
+    )
+
+    output = lesson_to_markdown(lesson)
+
+    assert "Intro & setup" in output
+    assert "#### Checklist" in output
+    assert "- Install dependencies" in output
+    assert "- Read the [spec](https://example.com/spec)" in output
+    assert "File: [starter.zip](https://example.com/starter.zip)" in output
