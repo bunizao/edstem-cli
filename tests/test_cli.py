@@ -6,7 +6,7 @@ from click.testing import CliRunner
 
 from edstem_cli import __version__
 from edstem_cli.cli import _filter_courses, _filter_lessons, _parse_thread_ref, _resolve_fetch_count, cli
-from edstem_cli.models import Comment, Course, LessonQuestion, LessonQuestionResponse, User
+from edstem_cli.models import Comment, Course, LessonQuestion, LessonQuestionResponse, LessonSlide, User
 
 
 def _json_from_result_output(result) -> object:
@@ -347,6 +347,40 @@ def test_cli_lesson_markdown_writes_file_only(monkeypatch, lesson_factory, tmp_p
     content = output_file.read_text(encoding="utf-8")
     assert content.startswith("# Markdown lesson\n")
     assert "Hello lesson" in content
+
+
+def test_cli_lesson_markdown_preserves_literal_angle_brackets(
+    monkeypatch,
+    lesson_factory,
+    tmp_path,
+) -> None:
+    class FakeClient:
+        def fetch_lesson(self, lesson_id):
+            assert lesson_id == 7001
+            return lesson_factory(
+                lesson_id,
+                title="Markdown lesson",
+                slides=[
+                    LessonSlide(
+                        id=99,
+                        lesson_id=lesson_id,
+                        title="Comparisons",
+                        content="Use x < y and y > z. Array<T> is not Ed XML.",
+                        index=2,
+                    )
+                ],
+            )
+
+    monkeypatch.setattr("edstem_cli.cli._get_client", lambda: FakeClient())
+    output_file = tmp_path / "lesson.md"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["lesson", "7001", "--md", "-o", str(output_file)])
+
+    assert result.exit_code == 0
+    assert result.output == "Saved to %s\n" % output_file
+    assert "Use x < y and y > z. Array<T> is not Ed XML." in output_file.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_cli_lesson_format_md_matches_md_flag(monkeypatch, lesson_factory) -> None:
