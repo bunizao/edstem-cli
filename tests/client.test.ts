@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { EdAuthExpiredError, EdClient } from "../src/ed/client.js";
+import { EdAuthExpiredError, EdClient, type FetchLike } from "../src/ed/client.js";
 
 function fixture(name: string): unknown {
   return JSON.parse(readFileSync(new URL(`fixtures/${name}.json`, import.meta.url), "utf8"));
@@ -17,7 +17,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 describe("EdClient", () => {
   it("fetches identity with one authenticated request", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(jsonResponse(fixture("user_info")));
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(jsonResponse(fixture("user_info")));
     const client = new EdClient({ apiBaseUrl: "https://ed.example/api", fetch, token: "secret" });
 
     const identity = await client.fetchUser();
@@ -32,7 +32,7 @@ describe("EdClient", () => {
   });
 
   it("parses nested thread authors and comments", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(jsonResponse(fixture("thread_detail")));
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(jsonResponse(fixture("thread_detail")));
     const client = new EdClient({ fetch, token: "secret" });
 
     const thread = await client.fetchThread(5001);
@@ -43,7 +43,7 @@ describe("EdClient", () => {
   });
 
   it("parses slide content from nested passage data", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(
       jsonResponse({ slide: { id: 8, index: 2, data: { passage: "Read this" } } })
     );
     const client = new EdClient({ fetch, token: "secret" });
@@ -55,7 +55,7 @@ describe("EdClient", () => {
   });
 
   it("maps expired tokens without exposing the credential", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(
       jsonResponse({ code: "bad_token", message: "invalid" }, 401)
     );
     const client = new EdClient({ fetch, token: "never-print-this" });
@@ -65,7 +65,7 @@ describe("EdClient", () => {
   });
 
   it("marks a slide complete with an empty response", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(null, { status: 204 }));
     const client = new EdClient({ fetch, token: "secret" });
 
     await client.completeSlide(42);

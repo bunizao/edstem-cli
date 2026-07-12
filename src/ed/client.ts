@@ -48,14 +48,16 @@ export interface SlideSubmitResult {
 
 export interface EdClientOptions {
   apiBaseUrl?: string;
-  fetch?: typeof globalThis.fetch;
+  fetch?: FetchLike;
   token: string;
   timeoutMs?: number;
 }
 
+export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
 export class EdClient {
   private readonly apiBaseUrl: string;
-  private readonly fetch: typeof globalThis.fetch;
+  private readonly fetch: FetchLike;
   private readonly token: string;
   private readonly timeoutMs: number;
 

@@ -4,7 +4,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { EdClient } from "../src/ed/client.js";
+import { EdClient, type FetchLike } from "../src/ed/client.js";
 import { createEdMcpServer } from "../src/mcp/server.js";
 
 function fixture(name: string): unknown {
@@ -21,7 +21,7 @@ describe("stdio MCP adapter", () => {
   });
 
   it("exposes compact thread lists through the shared Ed modules", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(
       new Response(JSON.stringify(fixture("course_threads")), { status: 200 })
     );
     const client = await connect(new EdClient({ fetch, token: "test-token" }));
@@ -38,7 +38,7 @@ describe("stdio MCP adapter", () => {
   });
 
   it("does not duplicate payloads in structuredContent", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(
       new Response(JSON.stringify(fixture("thread_detail")), { status: 200 })
     );
     const client = await connect(new EdClient({ fetch, token: "test-token" }));
@@ -50,7 +50,7 @@ describe("stdio MCP adapter", () => {
   });
 
   it("enforces write scope at the MCP seam", async () => {
-    const edClient = new EdClient({ fetch: vi.fn<typeof globalThis.fetch>(), token: "test-token" });
+    const edClient = new EdClient({ fetch: vi.fn<FetchLike>(), token: "test-token" });
     const server = createEdMcpServer({ canWrite: () => false, getClient: () => edClient });
     const client = new Client({ name: "test", version: "1.0.0" });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
