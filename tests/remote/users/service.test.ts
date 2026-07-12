@@ -59,7 +59,7 @@ describe("users service", () => {
     expect(migrated.displayName).toBe("Ada Updated");
   });
 
-  it("rejects binding a different Ed account onto an existing user", async () => {
+  it("rejects binding a different Ed identity onto an existing user", async () => {
     const { runtime, cleanup } = await createTestRuntime({
       apiBaseUrl: "http://127.0.0.1:1/api/"
     });

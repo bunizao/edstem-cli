@@ -10,7 +10,7 @@ function fixture(name: string): unknown {
   return JSON.parse(readFileSync(new URL(`fixtures/${name}.json`, import.meta.url), "utf8"));
 }
 
-function makeRuntime(status = 200): {
+function makeRuntime(status = 200, isTTY = false): {
   fetch: ReturnType<typeof vi.fn<FetchLike>>;
   runtime: CliRuntime;
   stderr: string[];
@@ -33,7 +33,7 @@ function makeRuntime(status = 200): {
     runtime: {
       createClient: async () => client,
       defaultFetchCount: async () => 30,
-      isTTY: false,
+      isTTY,
       writeStderr: (text) => stderr.push(text),
       writeStdout: (text) => stdout.push(text),
     },
@@ -68,6 +68,16 @@ describe("CLI", () => {
       { id: 5001, title: "How do I install Python?" },
       { id: 5002, title: "Helpful resources for HW1" },
     ]);
+  });
+
+  it("keeps human-readable tables for TTY output", async () => {
+    const { runtime, stdout } = makeRuntime(200, true);
+
+    await run(["node", "edstem", "courses"], runtime);
+
+    expect(stdout.join("")).toContain("ID");
+    expect(stdout.join("")).toContain("CS101");
+    expect(stdout.join("")).not.toMatch(/^\[/);
   });
 
   it("omits Ed XML from thread detail by default", async () => {

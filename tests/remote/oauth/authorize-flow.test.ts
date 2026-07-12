@@ -115,7 +115,7 @@ describe("oauth authorize flow", () => {
     expect(tokens.scope).toBe("mcp:tools.read mcp:tools.write");
   });
 
-  it("rejects invalid Ed tokens without persisting the account", async () => {
+  it("rejects invalid Ed tokens without persisting the identity", async () => {
     const fakeEd = await startFakeEdServer([]);
     cleanups.push(fakeEd.close);
 

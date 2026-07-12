@@ -116,4 +116,4 @@ npm run pack:smoke
 
 ## License
 
-Apache-2.0
+Apache-2.0. The migrated remote MCP code retains its MIT notice in `THIRD_PARTY_NOTICES.md`.

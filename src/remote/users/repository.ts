@@ -122,10 +122,6 @@ export class UsersRepository {
         userId
       );
   }
-
-  touchLastLogin(userId: number, timestamp: number): void {
-    this.db.query("UPDATE users SET last_login_at = ? WHERE id = ?").run(timestamp, userId);
-  }
 }
 
 function mapUser(row: UserRow): UserRecord {
