@@ -24,6 +24,7 @@ import {
 import { serializeThread } from "./ed/serialization.js";
 import { CliError, normalizeError } from "./errors.js";
 import { lessonToMarkdown, threadToMarkdown } from "./markdown.js";
+import { isMainModule } from "./main.js";
 import { writeError, writeHuman, writeJson, writeText } from "./output.js";
 import { addSkill, formatSkillSummary, writeGeneratedSkill } from "./skills.js";
 import { applyUpdate, checkForUpdate } from "./update.js";
@@ -427,7 +428,7 @@ export async function run(argv = process.argv, runtime?: CliRuntime): Promise<nu
   }
 }
 
-if (import.meta.url === new URL(process.argv[1] ?? "", "file:").href) {
+if (isMainModule(import.meta.url)) {
   void run().then((exitCode) => {
     process.exitCode = exitCode;
   });

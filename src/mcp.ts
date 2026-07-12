@@ -4,6 +4,7 @@ import { loadToken } from "./auth.js";
 import { loadConfig } from "./config.js";
 import { EdClient } from "./ed/client.js";
 import { normalizeError } from "./errors.js";
+import { isMainModule } from "./main.js";
 import { createEdMcpServer } from "./mcp/server.js";
 import { writeError } from "./output.js";
 
@@ -17,7 +18,7 @@ export async function startStdioServer(): Promise<void> {
   await server.connect(new StdioServerTransport());
 }
 
-if (import.meta.url === new URL(process.argv[1] ?? "", "file:").href) {
+if (isMainModule(import.meta.url)) {
   void startStdioServer().catch((error) => {
     writeError(normalizeError(error));
     process.exitCode = 1;
