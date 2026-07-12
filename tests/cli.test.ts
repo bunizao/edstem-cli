@@ -1,7 +1,94 @@
-import { createProgram } from "../src/cli.js";
+import { readFileSync } from "node:fs";
 
-describe("CLI foundation", () => {
+import { describe, expect, it, vi } from "vitest";
+
+import type { CliRuntime } from "../src/cli.js";
+import { createProgram, run } from "../src/cli.js";
+import { EdClient } from "../src/ed/client.js";
+
+function fixture(name: string): unknown {
+  return JSON.parse(readFileSync(new URL(`fixtures/${name}.json`, import.meta.url), "utf8"));
+}
+
+function makeRuntime(status = 200): {
+  fetch: ReturnType<typeof vi.fn<typeof globalThis.fetch>>;
+  runtime: CliRuntime;
+  stderr: string[];
+  stdout: string[];
+} {
+  const responses: Record<string, unknown> = {
+    "/api/user": fixture("user_info"),
+    "/api/courses/100/threads": fixture("course_threads"),
+    "/api/threads/5001": fixture("thread_detail"),
+  };
+  const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async (input) => {
+    const path = new URL(String(input)).pathname;
+    return new Response(JSON.stringify(status === 200 ? responses[path] : { code: "bad_token" }), { status });
+  });
+  const client = new EdClient({ fetch, token: "test-token" });
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  return {
+    fetch,
+    runtime: {
+      createClient: async () => client,
+      defaultFetchCount: async () => 30,
+      isTTY: false,
+      writeStderr: (text) => stderr.push(text),
+      writeStdout: (text) => stdout.push(text),
+    },
+    stderr,
+    stdout,
+  };
+}
+
+describe("CLI", () => {
   it("uses the edstem command name", () => {
-    expect(createProgram().name()).toBe("edstem");
+    expect(createProgram(makeRuntime().runtime).name()).toBe("edstem");
+  });
+
+  it("fetches user data without a separate verification request", async () => {
+    const { fetch, runtime, stdout } = makeRuntime();
+
+    expect(await run(["node", "edstem", "user", "--json"], runtime)).toBe(0);
+
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(JSON.parse(stdout.join(""))).toMatchObject({
+      id: 12345,
+      courses: expect.arrayContaining([expect.objectContaining({ id: 100, code: "CS101" })]),
+    });
+  });
+
+  it("emits compact thread summaries and field selection", async () => {
+    const { runtime, stdout } = makeRuntime();
+
+    await run(["node", "edstem", "threads", "100", "--fields", "id,title"], runtime);
+
+    expect(JSON.parse(stdout.join(""))).toEqual([
+      { id: 5001, title: "How do I install Python?" },
+      { id: 5002, title: "Helpful resources for HW1" },
+    ]);
+  });
+
+  it("omits Ed XML from thread detail by default", async () => {
+    const { runtime, stdout } = makeRuntime();
+
+    await run(["node", "edstem", "thread", "5001"], runtime);
+
+    expect(stdout.join("")).not.toContain("<document");
+    expect(JSON.parse(stdout.join(""))).toHaveProperty("users.67890.name", "Bob TA");
+  });
+
+  it("writes stable machine-readable auth errors", async () => {
+    const { runtime, stderr } = makeRuntime(401);
+
+    expect(await run(["node", "edstem", "user"], runtime)).toBe(3);
+
+    expect(JSON.parse(stderr.join(""))).toEqual({
+      error: {
+        code: "auth",
+        message: "Authentication failed (HTTP 401). Check your Ed API token.",
+      },
+    });
   });
 });
