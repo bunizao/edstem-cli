@@ -16,9 +16,15 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "npm run build:local && npm run build:remote",
+    "build:local": "tsup",
+    "build:remote": "bun build src/remote/index.ts src/remote/admin.ts --outdir dist/remote --target bun && cp -R src/remote/db/migrations dist/remote/migrations",
     "check": "tsc --noEmit",
-    "test": "vitest run",
+    "remote:admin": "bun src/remote/admin.ts",
+    "remote:start": "bun src/remote/index.ts",
+    "test": "npm run test:node && npm run test:remote",
+    "test:node": "vitest run",
+    "test:remote": "bun test tests/remote",
     "test:watch": "vitest",
     "prepublishOnly": "npm run check && npm test && npm run build"
   },
@@ -30,6 +36,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/bun": "^1.3.14",
     "@types/node": "^24.0.10",
     "tsup": "^8.5.0",
     "typescript": "^7.0.2",

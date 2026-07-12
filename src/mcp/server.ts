@@ -26,8 +26,13 @@ export interface McpToolContext {
 }
 
 export interface EdMcpRuntime {
+  authErrorExtra?: (context: McpToolContext) => Record<string, unknown>;
   canWrite: (context: McpToolContext) => boolean;
   getClient: (context: McpToolContext) => EdClient | Promise<EdClient>;
+  mapError?: (
+    error: unknown,
+    context: McpToolContext
+  ) => { extra?: Record<string, unknown>; message: string; type: string } | undefined;
   onAuthExpired?: (context: McpToolContext) => void | Promise<void>;
 }
 
@@ -239,9 +244,17 @@ async function runTool(
   try {
     return jsonResult(await action(await runtime.getClient(context)));
   } catch (error) {
+    const mapped = runtime.mapError?.(error, context);
+    if (mapped) {
+      return jsonError(mapped.type, mapped.message, mapped.extra);
+    }
     if (error instanceof EdAuthExpiredError) {
       await runtime.onAuthExpired?.(context);
-      return jsonError("EDSTEM_REAUTH_REQUIRED", error.message);
+      return jsonError(
+        "EDSTEM_REAUTH_REQUIRED",
+        error.message,
+        runtime.authErrorExtra?.(context)
+      );
     }
     if (error instanceof EdApiError) {
       return jsonError("EDSTEM_API_ERROR", error.message, { statusCode: error.statusCode });

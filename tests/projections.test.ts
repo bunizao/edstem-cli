@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { EdClient } from "../src/ed/client.js";
+import { EdClient, type FetchLike } from "../src/ed/client.js";
 import { projectThreadDetail, projectThreadSummary } from "../src/ed/projections.js";
 
 function fixture(name: string): unknown {
@@ -11,7 +11,7 @@ function fixture(name: string): unknown {
 
 describe("agent projections", () => {
   it("keeps thread lists compact", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(
       new Response(JSON.stringify(fixture("course_threads")), { status: 200 })
     );
     const [thread] = await new EdClient({ fetch, token: "secret" }).fetchThreads(100);
@@ -25,7 +25,7 @@ describe("agent projections", () => {
   });
 
   it("hoists users and omits HTML from thread detail by default", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(
       new Response(JSON.stringify(fixture("thread_detail")), { status: 200 })
     );
     const thread = await new EdClient({ fetch, token: "secret" }).fetchThread(5001);
@@ -40,7 +40,7 @@ describe("agent projections", () => {
   });
 
   it("includes source HTML only when requested", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(
       new Response(JSON.stringify(fixture("thread_detail")), { status: 200 })
     );
     const thread = await new EdClient({ fetch, token: "secret" }).fetchThread(5001);

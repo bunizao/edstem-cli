@@ -4,14 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { CliRuntime } from "../src/cli.js";
 import { createProgram, run } from "../src/cli.js";
-import { EdClient } from "../src/ed/client.js";
+import { EdClient, type FetchLike } from "../src/ed/client.js";
 
 function fixture(name: string): unknown {
   return JSON.parse(readFileSync(new URL(`fixtures/${name}.json`, import.meta.url), "utf8"));
 }
 
 function makeRuntime(status = 200): {
-  fetch: ReturnType<typeof vi.fn<typeof globalThis.fetch>>;
+  fetch: ReturnType<typeof vi.fn<FetchLike>>;
   runtime: CliRuntime;
   stderr: string[];
   stdout: string[];
@@ -21,7 +21,7 @@ function makeRuntime(status = 200): {
     "/api/courses/100/threads": fixture("course_threads"),
     "/api/threads/5001": fixture("thread_detail"),
   };
-  const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async (input) => {
+  const fetch = vi.fn<FetchLike>().mockImplementation(async (input) => {
     const path = new URL(String(input)).pathname;
     return new Response(JSON.stringify(status === 200 ? responses[path] : { code: "bad_token" }), { status });
   });
