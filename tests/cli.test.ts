@@ -79,6 +79,15 @@ describe("CLI", () => {
     expect(JSON.parse(stdout.join(""))).toHaveProperty("users.67890.name", "Bob TA");
   });
 
+  it("exports thread Markdown without JSON quoting", async () => {
+    const { runtime, stdout } = makeRuntime();
+
+    await run(["node", "edstem", "thread", "5001", "--md"], runtime);
+
+    expect(stdout.join("")).toContain("# #1 How do I install Python?");
+    expect(stdout.join("")).not.toMatch(/^"/);
+  });
+
   it("writes stable machine-readable auth errors", async () => {
     const { runtime, stderr } = makeRuntime(401);
 

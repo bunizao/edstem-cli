@@ -24,6 +24,21 @@ export async function writeJson(
   write(text);
 }
 
+export async function writeText(
+  value: string,
+  output: string | undefined,
+  write = (text: string): void => {
+    process.stdout.write(text);
+  }
+): Promise<void> {
+  const text = value.endsWith("\n") ? value : `${value}\n`;
+  if (output) {
+    await writeFile(output, text, "utf8");
+    return;
+  }
+  write(text);
+}
+
 export function selectFields(value: unknown, fields?: string): unknown {
   if (!fields) {
     return value;

@@ -16,6 +16,7 @@ import {
   projectThreadSummary,
 } from "../ed/projections.js";
 import { VERSION } from "../version.js";
+import { toolDescription } from "./catalog.js";
 
 const READ_ONLY = { destructiveHint: false, readOnlyHint: true } as const;
 const WRITES_PROGRESS = { destructiveHint: false, readOnlyHint: false } as const;
@@ -41,7 +42,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
 
   server.registerTool(
     "get_user",
-    { annotations: READ_ONLY, description: "Get the current Ed identity and enrolled courses." },
+    { annotations: READ_ONLY, description: toolDescription("get_user") },
     async (extra) => runTool(runtime, extra, false, async (client) => {
       const identity = projectIdentity(await client.fetchUser());
       return { ...(identity.user as Record<string, unknown>), courses: identity.courses };
@@ -52,7 +53,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     "list_courses",
     {
       annotations: READ_ONLY,
-      description: "List enrolled courses; archived courses are omitted by default.",
+      description: toolDescription("list_courses"),
       inputSchema: { includeArchived: z.boolean().optional().default(false) },
     },
     async ({ includeArchived }, extra) => runTool(runtime, extra, false, async (client) => {
@@ -67,7 +68,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     "list_lessons",
     {
       annotations: READ_ONLY,
-      description: "List compact lesson summaries for one course.",
+      description: toolDescription("list_lessons"),
       inputSchema: {
         courseId: z.number().int().positive(),
         lessonType: z.string().trim().min(1).optional(),
@@ -87,7 +88,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     "get_lesson",
     {
       annotations: READ_ONLY,
-      description: "Get one lesson with slide content.",
+      description: toolDescription("get_lesson"),
       inputSchema: { lessonId: z.number().int().positive() },
     },
     async ({ lessonId }, extra) => runTool(runtime, extra, false, async (client) =>
@@ -99,7 +100,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     "list_slide_questions",
     {
       annotations: READ_ONLY,
-      description: "List quiz questions for one lesson slide.",
+      description: toolDescription("list_slide_questions"),
       inputSchema: { slideId: z.number().int().positive() },
     },
     async ({ slideId }, extra) => runTool(runtime, extra, false, async (client) =>
@@ -111,7 +112,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     "list_slide_responses",
     {
       annotations: READ_ONLY,
-      description: "List saved quiz responses for one lesson slide.",
+      description: toolDescription("list_slide_responses"),
       inputSchema: { slideId: z.number().int().positive() },
     },
     async ({ slideId }, extra) => runTool(runtime, extra, false, async (client) =>
@@ -123,7 +124,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     "list_threads",
     {
       annotations: READ_ONLY,
-      description: "List compact thread summaries for one course.",
+      description: toolDescription("list_threads"),
       inputSchema: {
         answered: z.boolean().optional(),
         category: z.string().trim().min(1).optional(),
@@ -144,7 +145,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     "get_thread",
     {
       annotations: READ_ONLY,
-      description: "Get a compact thread detail by global thread ID.",
+      description: toolDescription("get_thread"),
       inputSchema: {
         includeHtml: z.boolean().optional().default(false),
         threadId: z.number().int().positive(),
@@ -159,7 +160,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     "get_course_thread",
     {
       annotations: READ_ONLY,
-      description: "Get a compact thread detail by course ID and course-local number.",
+      description: toolDescription("get_course_thread"),
       inputSchema: {
         courseId: z.number().int().positive(),
         includeHtml: z.boolean().optional().default(false),
@@ -176,7 +177,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     "list_activity",
     {
       annotations: READ_ONLY,
-      description: "List compact current-user activity, optionally for one course.",
+      description: toolDescription("list_activity"),
       inputSchema: {
         courseId: z.number().int().positive().optional(),
         filterType: z.enum(["all", "thread", "answer", "comment"]).optional().default("all"),
@@ -192,7 +193,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     "mark_lessons_read",
     {
       annotations: WRITES_PROGRESS,
-      description: "Mark matching lessons and slides as read for the current Ed user.",
+      description: toolDescription("mark_lessons_read"),
       inputSchema: {
         courseId: z.number().int().positive(),
         delaySeconds: z.number().min(0).max(10).optional().default(0),
@@ -207,7 +208,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     "submit_slide_answer",
     {
       annotations: WRITE,
-      description: "Submit one-based quiz choices for one question.",
+      description: toolDescription("submit_slide_answer"),
       inputSchema: {
         amend: z.boolean().optional().default(false),
         choices: z.array(z.number().int().positive()).optional().default([]),
@@ -223,7 +224,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     "submit_slide",
     {
       annotations: WRITE,
-      description: "Submit all saved answers for one quiz slide.",
+      description: toolDescription("submit_slide"),
       inputSchema: { slideId: z.number().int().positive() },
     },
     async ({ slideId }, extra) => runTool(runtime, extra, true, (client) => client.submitSlide(slideId))
