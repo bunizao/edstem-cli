@@ -3,6 +3,7 @@ import { defineConfig } from "tsup";
 export default defineConfig({
   entry: {
     edstem: "src/cli.ts",
+    "edstem-mcp": "src/mcp.ts",
   },
   format: ["esm"],
   target: "node20",
