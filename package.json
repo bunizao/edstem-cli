@@ -6,7 +6,8 @@
   "type": "module",
   "packageManager": "npm@11.14.1",
   "bin": {
-    "edstem": "dist/edstem.js"
+    "edstem": "dist/edstem.js",
+    "edstem-mcp": "dist/edstem-mcp.js"
   },
   "files": [
     "dist",
