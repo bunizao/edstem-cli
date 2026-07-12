@@ -5,6 +5,7 @@ dist/
 build/
 .venv/
 .env
-*.json
-!tests/fixtures/*.json
-!config.yaml
+node_modules/
+coverage/
+.data/
+*.tgz
