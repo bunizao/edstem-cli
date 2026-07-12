@@ -1516,7 +1516,7 @@ function canReuseAuthorizeSession(runtime: Runtime, userId: number | undefined):
 
 function mapEdConnectionError(error: unknown): string {
   if (error instanceof EdIdentityMismatchError) {
-    return `${error.message} Start a fresh OAuth sign-in if you want to switch accounts.`;
+    return `${error.message} Start a fresh OAuth sign-in if you want to switch Ed identities.`;
   }
   return error instanceof Error ? error.message : String(error);
 }
@@ -1570,12 +1570,12 @@ function renderDeletedPage(): string {
       <section class="card">
         <div class="card-header">
           <div class="eyebrow">Connection Removed</div>
-          <h1>Account Deleted</h1>
+          <h1>Identity Deleted</h1>
           <p class="description">Your encrypted Ed token and local session were removed from this service.</p>
         </div>
       </section>
     `,
-    title: "Account deleted"
+    title: "Identity deleted"
   });
 }
 
@@ -1609,7 +1609,7 @@ function renderSettingsPage(options: {
       <section class="card">
         <div class="card-header">
           <h2>Rotate Ed Token</h2>
-          <p class="description">Paste a fresh token for the same Ed account. To switch accounts, start a new OAuth sign-in.</p>
+          <p class="description">Paste a fresh token for the same Ed identity. To switch identities, start a new OAuth sign-in.</p>
         </div>
         <div class="card-content">
           ${options.errorMessage ? `<div class="error-banner" aria-live="polite">${escapeHtml(options.errorMessage)}</div>` : ""}
@@ -1621,9 +1621,9 @@ function renderSettingsPage(options: {
           </form>
         </div>
         <div class="card-footer">
-          <form method="post" action="/settings/delete" onsubmit="return confirm('Delete this account?');" data-busy-label="Deleting…">
+          <form method="post" action="/settings/delete" onsubmit="return confirm('Delete this local identity?');" data-busy-label="Deleting…">
             <input type="hidden" name="csrf_token" value="${escapeHtml(options.csrfToken)}">
-            <button type="submit" class="button-destructive">Delete Local Account</button>
+            <button type="submit" class="button-destructive">Delete Local Identity</button>
           </form>
         </div>
       </section>
@@ -1656,7 +1656,7 @@ function renderReconnectPage(options: {
       <section class="card">
         <div class="card-header">
           <h2>Paste a Fresh Token</h2>
-          <p class="description">This restores MCP access for the same Ed account.</p>
+          <p class="description">This restores MCP access for the same Ed identity.</p>
         </div>
         <div class="card-content">
           ${options.errorMessage ? `<div class="error-banner" aria-live="polite">${escapeHtml(options.errorMessage)}</div>` : ""}

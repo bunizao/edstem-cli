@@ -13,7 +13,8 @@
     "dist",
     "README.md",
     "SKILL.md",
-    "LICENSE"
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "build": "npm run build:local && npm run build:remote",
@@ -47,6 +48,9 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
   },
   "repository": {
     "type": "git",

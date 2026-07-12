@@ -5,7 +5,7 @@ import { verifyEdToken, type VerifiedEdIdentity } from "./verifier.js";
 
 export class EdNotConnectedError extends Error {
   constructor() {
-    super("Ed Discussion is not connected for this account.");
+    super("Ed Discussion is not connected for this Ed identity.");
     this.name = "EdNotConnectedError";
   }
 }

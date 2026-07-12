@@ -116,4 +116,4 @@ npm run pack:smoke
 
 ## License
 
-MIT
+MIT. The migrated remote MCP code retains its MIT notice in `THIRD_PARTY_NOTICES.md`.

@@ -24,7 +24,7 @@ import {
 import { serializeThread } from "./ed/serialization.js";
 import { CliError, normalizeError } from "./errors.js";
 import { lessonToMarkdown, threadToMarkdown } from "./markdown.js";
-import { writeError, writeJson, writeText } from "./output.js";
+import { writeError, writeHuman, writeJson, writeText } from "./output.js";
 import { addSkill, formatSkillSummary, writeGeneratedSkill } from "./skills.js";
 import { applyUpdate, checkForUpdate } from "./update.js";
 import { VERSION } from "./version.js";
@@ -104,7 +104,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     .description("Show a thread by ID or course_id#number.")
     .argument("<reference>", "Thread ID or course_id#number")
     .option("--md", "Emit Markdown.")
-    .addOption(new Option("--format <format>", "Output format").choices(["json", "md"]))
+    .addOption(new Option("--format <format>", "Output format").choices(["text", "json", "md"]))
     .option("--include-html", "Include Ed XML content.")
     .option("--legacy-json", "Use the previous verbose JSON shape.")
     .action(async (reference: string, _options: unknown, command: Command) => {
@@ -156,15 +156,15 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
   lessons.command("questions")
     .description("List quiz questions for a slide.")
     .argument("<slide-id>", "Slide ID", positiveInteger)
-    .action(withOutput(runtime, async (client, _command, slideId: number) =>
-      (await client.fetchSlideQuestions(slideId)).map(projectQuestion)
+    .action(withOutput(runtime, (client, _command, slideId: number) =>
+      fetchQuestions(client, slideId)
     ));
 
   lessons.command("responses")
     .description("List saved quiz responses for a slide.")
     .argument("<slide-id>", "Slide ID", positiveInteger)
-    .action(withOutput(runtime, async (client, _command, slideId: number) =>
-      (await client.fetchSlideQuestionResponses(slideId)).map(projectQuestionResponse)
+    .action(withOutput(runtime, (client, _command, slideId: number) =>
+      fetchResponses(client, slideId)
     ));
 
   lessons.command("quiz")
@@ -218,14 +218,10 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     program.command("slides").description("Compatibility aliases for lesson slide commands.")
   );
   slides.command("questions").argument("<slide-id>", "Slide ID", positiveInteger).action(
-    withOutput(runtime, async (client, _command, slideId: number) =>
-      (await client.fetchSlideQuestions(slideId)).map(projectQuestion)
-    )
+    withOutput(runtime, (client, _command, slideId: number) => fetchQuestions(client, slideId))
   );
   slides.command("responses").argument("<slide-id>", "Slide ID", positiveInteger).action(
-    withOutput(runtime, async (client, _command, slideId: number) =>
-      (await client.fetchSlideQuestionResponses(slideId)).map(projectQuestionResponse)
-    )
+    withOutput(runtime, (client, _command, slideId: number) => fetchResponses(client, slideId))
   );
   slides.command("answer")
     .argument("<question-id>", "Question ID", positiveInteger)
@@ -242,7 +238,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     .description("Show a lesson and its slides.")
     .argument("<lesson-id>", "Lesson ID", positiveInteger)
     .option("--md", "Emit Markdown.")
-    .addOption(new Option("--format <format>", "Output format").choices(["json", "md"]))
+    .addOption(new Option("--format <format>", "Output format").choices(["text", "json", "md"]))
     .action(async (lessonId: number, _options: unknown, command: Command) => {
       const client = await runtime.createClient();
       const lesson = await client.fetchLesson(lessonId);
@@ -320,12 +316,20 @@ async function writeDomainOutput(
 ): Promise<void> {
   const local = command.opts();
   const global = command.optsWithGlobals() as GlobalOutputOptions;
-  const format = local.format ?? (local.md ? "md" : "json");
+  const format = local.format ?? (local.md
+    ? "md"
+    : runtime.isTTY && !global.json && !global.pretty
+      ? "text"
+      : "json");
   if (format === "md") {
     if (global.fields) {
       throw new CliError("input", "--fields is only available with JSON output", 2);
     }
     await writeText(markdown(), global.output, runtime.writeStdout);
+    return;
+  }
+  if (format === "text") {
+    await writeHuman(json, global.output, runtime.writeStdout);
     return;
   }
   await writeJson(json, {
@@ -337,6 +341,10 @@ async function writeDomainOutput(
 
 async function writeCommandJson(runtime: CliRuntime, command: Command, value: unknown): Promise<void> {
   const options = command.optsWithGlobals() as GlobalOutputOptions;
+  if (runtime.isTTY && !options.json && !options.pretty) {
+    await writeHuman(value, options.output, runtime.writeStdout);
+    return;
+  }
   await writeJson(value, {
     fields: options.fields,
     output: options.output,
@@ -354,6 +362,10 @@ function withOutput<Arguments extends unknown[]>(
     const actionArguments = args.slice(0, -1) as Arguments;
     const result = await action(client, command, ...actionArguments);
     const options = command.optsWithGlobals() as GlobalOutputOptions;
+    if (runtime.isTTY && !options.json && !options.pretty) {
+      await writeHuman(result, options.output, runtime.writeStdout);
+      return;
+    }
     await writeJson(result, {
       fields: options.fields,
       output: options.output,
@@ -389,6 +401,14 @@ function submitAnswer(
   amend: boolean
 ) {
   return client.submitSlideAnswer(questionId, choices.map((choice) => choice - 1), { amend });
+}
+
+async function fetchQuestions(client: EdClient, slideId: number) {
+  return (await client.fetchSlideQuestions(slideId)).map(projectQuestion);
+}
+
+async function fetchResponses(client: EdClient, slideId: number) {
+  return (await client.fetchSlideQuestionResponses(slideId)).map(projectQuestionResponse);
 }
 
 function hideCommand(command: Command): Command {

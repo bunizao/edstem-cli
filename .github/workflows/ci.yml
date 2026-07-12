@@ -23,10 +23,14 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
       - run: npm ci
       - run: npm run check
       - run: npm run test:node
-      - run: npm run build:local
+      - run: npm run build
+      - run: npm run pack:smoke
 
   package:
     name: Package and remote MCP

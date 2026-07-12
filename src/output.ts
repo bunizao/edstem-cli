@@ -39,6 +39,16 @@ export async function writeText(
   write(text);
 }
 
+export async function writeHuman(
+  value: unknown,
+  output: string | undefined,
+  write = (text: string): void => {
+    process.stdout.write(text);
+  }
+): Promise<void> {
+  await writeText(formatHuman(value), output, write);
+}
+
 export function selectFields(value: unknown, fields?: string): unknown {
   if (!fields) {
     return value;
@@ -68,4 +78,44 @@ export function writeError(
   }
 ): void {
   write(`${JSON.stringify({ error: { code: error.code, message: error.message } })}\n`);
+}
+
+function formatHuman(value: unknown): string {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "No results.";
+    const records = value.filter(isRecord);
+    if (records.length !== value.length) return JSON.stringify(value, null, 2);
+    const preferred = ["id", "number", "code", "name", "title", "type", "status", "role", "flags"];
+    const available = new Set(records.flatMap((record) => Object.keys(record)));
+    const columns = preferred.filter((field) => available.has(field));
+    if (columns.length === 0) return JSON.stringify(value, null, 2);
+    const widths = columns.map((column) => Math.min(48, Math.max(
+      column.length,
+      ...records.map((record) => displayValue(record[column]).length)
+    )));
+    const row = (record: Record<string, unknown>): string => columns
+      .map((column, index) => displayValue(record[column]).slice(0, widths[index]).padEnd(widths[index]))
+      .join("  ")
+      .trimEnd();
+    const header = Object.fromEntries(columns.map((column) => [column, column.toUpperCase()]));
+    return [row(header), ...records.map(row)].join("\n");
+  }
+  if (isRecord(value)) {
+    return Object.entries(value).map(([key, item]) => `${key}: ${displayValue(item)}`).join("\n");
+  }
+  return String(value ?? "");
+}
+
+function displayValue(value: unknown): string {
+  if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
+    return value.join(", ");
+  }
+  if (value && typeof value === "object") {
+    return JSON.stringify(value);
+  }
+  return String(value ?? "");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }

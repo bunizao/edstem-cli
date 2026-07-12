@@ -184,7 +184,7 @@ describe("security hardening", () => {
     expect(await blocked.text()).toContain("Too many Ed token attempts");
   });
 
-  it("rejects reconnecting with a token from a different Ed account", async () => {
+  it("rejects reconnecting with a token from a different Ed identity", async () => {
     const fakeEd = await startFakeEdServer([
       {
         courses: [],
@@ -231,7 +231,7 @@ describe("security hardening", () => {
       "ed-token-b"
     );
     expect(response.status).toBe(422);
-    expect(await response.text()).toContain("different Ed account");
+    expect(await response.text()).toContain("different Ed identity");
   });
 
   it("throttles repeated authorize attempts from the same identity", async () => {

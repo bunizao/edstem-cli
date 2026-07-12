@@ -363,7 +363,7 @@ export function renderAuthorizePage(
       <section class="card" aria-labelledby="auth-title">
         <div class="card-header">
           <div class="eyebrow" translate="no">EdStem MCP</div>
-          <h1 id="auth-title">Connect Your Ed Account</h1>
+          <h1 id="auth-title">Connect Your Ed Identity</h1>
           <p class="description">Paste your Ed API token to continue.</p>
           ${options.session ? `
             <div class="session-chip">

@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -19,6 +19,21 @@ describe("auth, config, and output", () => {
     await writeFile(tokenFile, "file-token\n", { mode: 0o600 });
 
     expect(await loadToken({ env: {}, tokenFile })).toBe("file-token");
+  });
+
+  it("prompts once and saves a private token file in an interactive terminal", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "edstem-prompt-"));
+    const tokenFile = join(directory, "config", "token");
+
+    expect(await loadToken({
+      env: {},
+      interactive: true,
+      prompt: async () => "prompt-token",
+      tokenFile,
+    })).toBe("prompt-token");
+
+    expect(await readFile(tokenFile, "utf8")).toBe("prompt-token\n");
+    expect((await stat(tokenFile)).mode & 0o777).toBe(0o600);
   });
 
   it("normalizes the configured fetch count", async () => {

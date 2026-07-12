@@ -3,7 +3,7 @@ import { UsersRepository, type UserRecord } from "./repository.js";
 
 export class EdIdentityMismatchError extends Error {
   constructor() {
-    super("This Ed API token belongs to a different Ed account.");
+    super("This Ed API token belongs to a different Ed identity.");
     this.name = "EdIdentityMismatchError";
   }
 }
@@ -17,10 +17,6 @@ export class UsersService {
 
   findByEmail(email: string): UserRecord | null {
     return this.repository.getByEmail(normalizeEmail(email));
-  }
-
-  findByEdUserId(edUserId: number): UserRecord | null {
-    return this.repository.getByEdUserId(edUserId);
   }
 
   getById(userId: number): UserRecord {
