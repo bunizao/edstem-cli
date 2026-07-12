@@ -1,221 +1,121 @@
 # edstem-cli
 
-A terminal-first CLI for Ed Discussion: browse courses, lessons, threads, and comments without leaving the terminal.
+TypeScript CLI and MCP access for [Ed Discussion](https://edstem.org).
 
-## Features
+One Ed implementation powers three adapters:
 
-- **Courses**: list all enrolled courses
-- **Lessons**: list course lessons and inspect lesson slides
-- **Lesson read automation**: read matching lessons and push their slide status forward
-- **Threads**: list, filter, and sort course threads
-- **Thread detail**: view full thread with answers and comment tree
-- **Activity**: browse your activity across courses
-- **User profile**: view current user info
-- **JSON output**: export any data for scripting and AI agent integration
+- `edstem`: compact JSON CLI for agents and scripts
+- `edstem-mcp`: local stdio MCP server
+- remote MCP: OAuth, encrypted Ed tokens, and SQLite for hosted connectors
 
-> **AI Agent Tip:** Always use `--json` for structured output instead of parsing the default rich-text display. Use `--max` to limit results.
-
-## Installation
+## Install
 
 ```bash
-# Recommended: uv tool (fast, isolated)
-uv tool install edstem-cli
-
-# Alternative: pipx
-pipx install edstem-cli
+npm install -g edstem-cli
+export ED_API_TOKEN="your-token"
+edstem user --fields id,name,courses
 ```
 
-## Agent Skill
+Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens). The CLI also reads `~/.config/edstem-cli/token`.
 
-Install the agent skill with the shared `skills` CLI spec:
+The npm package requires Node.js 20 or newer. The hosted remote adapter uses Bun.
+
+## CLI
+
+JSON is the default. List commands return summaries without thread bodies, lesson slides, or repeated user records.
+
+```bash
+edstem courses
+edstem threads 12345 --max 20 --fields id,number,title,flags
+edstem thread 67890
+edstem thread 12345#42
+edstem lessons 12345 --module "Week 2"
+edstem lesson 105199
+edstem activity 12345 --max 10
+```
+
+Detail commands support Markdown export:
+
+```bash
+edstem thread 67890 --md --output thread.md
+edstem lesson 105199 --md --output lesson.md
+```
+
+Raw Ed XML stays out of thread JSON unless you pass `--include-html`. Use `--pretty` for indented JSON and `--legacy-json` for the pre-0.4 thread shape.
+
+Quiz and lesson-progress commands update your Ed state:
+
+```bash
+edstem lessons questions 4401
+edstem lessons quiz 4401 --answer 991 --choice 2
+edstem lessons quiz 4401 --submit
+edstem lessons read 12345 Pre-Reading
+```
+
+Run `edstem --help` for the full command list.
+
+## Local MCP
+
+Configure an MCP client to launch the stdio executable:
+
+```json
+{
+  "mcpServers": {
+    "edstem": {
+      "command": "edstem-mcp",
+      "env": {
+        "ED_API_TOKEN": "your-token"
+      }
+    }
+  }
+}
+```
+
+The server exposes courses, lessons, threads, activity, quiz submission, and lesson-progress tools. It returns compact JSON text without a duplicate `structuredContent` payload.
+
+## Agent skill
 
 ```bash
 npx skills add https://github.com/bunizao/edstem-cli
+
+# Check metadata or regenerate SKILL.md
+edstem skills
+edstem skills generate
 ```
 
-If you already installed `edstem`, the CLI exposes the same thing as a thin alias:
+`SKILL.md` derives its CLI table and MCP tool list from the code. CI rejects drift.
+
+## Remote MCP
+
+The hosted adapter keeps each Ed token encrypted with AES-256-GCM and resolves it from the requesting OAuth identity. It enforces a separate write scope for quiz and progress mutations.
+
+Public endpoint: [https://edstem.tuuhub.com/mcp](https://edstem.tuuhub.com/mcp)
+
+Self-host with Docker:
 
 ```bash
-edstem skills add
+cp .env.example .env
+# Set MASTER_KEY and PUBLIC_BASE_URL.
+docker compose up -d
 ```
 
-If `npx` is not available, the alias falls back to `npm exec`.
-
-Install from source:
-
-```bash
-git clone https://github.com/bunizao/edstem-cli.git
-cd edstem-cli
-uv sync
-```
-
-## Update
-
-Update the CLI in place:
-
-```bash
-edstem update
-```
-
-If you installed from source, update the checkout instead:
-
-```bash
-git pull
-uv sync
-```
-
-> Running an older version? Check with `edstem --version` first. If a command in this README does not exist locally, update the CLI before trying again.
-
-## Quick Start
-
-Get your API token from: [https://edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens)
-
-```bash
-# View your profile and courses
-edstem user
-
-# List enrolled courses
-edstem courses
-
-# List threads in a course
-edstem threads 12345
-
-# List lessons in a course
-edstem lessons 12345
-
-# View a thread with comments
-edstem thread 67890
-```
-
-## Usage
-
-```bash
-# Courses
-edstem courses
-edstem courses --archived
-edstem courses --json
-
-# Threads
-edstem threads <course_id>
-edstem threads <course_id> --sort top
-edstem threads <course_id> --category "HW1"
-edstem threads <course_id> --type question
-edstem threads <course_id> --unanswered
-edstem threads <course_id> --max 50 --json
-
-# Thread detail
-edstem thread <thread_id>
-edstem thread <course_id>#<number>      # by course thread number
-edstem thread <thread_id> --json
-edstem thread <thread_id> --md -o thread.md
-edstem thread <thread_id> --json --pretty
-edstem thread <thread_id> --json --include-html
-edstem thread <thread_id> --json --legacy-json
-
-# Lessons
-edstem lessons <course_id>
-edstem lessons <course_id> --module "Week 1"
-edstem lessons <course_id> --type python --status attempted
-edstem lesson <lesson_id>
-edstem lesson <lesson_id> --json
-edstem lesson <lesson_id> --md -o lesson.md
-edstem lessons read <course_id> Pre-Reading
-edstem lessons read <course_id> Week 3 Workshop
-
-# Activity
-edstem activity                          # all courses
-edstem activity <course_id>              # specific course
-edstem activity --filter answer --json
-
-# User
-edstem user
-edstem user --json
-```
-
-```bash
-# Option 1: Environment variable
-export ED_API_TOKEN="your-token-here"
-
-# Option 2: Will prompt on first use and save automatically
-edstem user
-```
-
-## Thread JSON
-
-`edstem thread ... --json` emits a compact thread shape by default. It hoists
-authors into a top-level `users` map, drops XML `content` unless
-`--include-html` is requested, trims default false/zero/empty fields, and adds
-an `endorsement` block for source-marked endorsed replies and staff activity.
-
-- Use `--pretty` when a human needs to read the JSON in the terminal.
-- Use `--legacy-json` when an existing consumer still expects embedded authors
-  and the verbose legacy shape.
-
-## Markdown Export
-
-Use `--md` or `--format md` on full-detail commands when you want a readable
-Markdown file instead of JSON:
-
-```bash
-edstem lesson 105199 --md -o lesson.md
-edstem thread 29579#42 --md -o thread.md
-```
-
-Markdown output strips Ed XML into readable text and keeps lesson slides,
-thread answers, comments, nested replies, and visible source markers such as
-endorsed or anonymous replies.
-
-## Mark Lessons Read
-
-Use `lessons read` when you want the CLI to visit lessons and push their slide status forward.
-Query words are matched case-insensitively against lesson titles and module names.
-For non-quiz slides the CLI calls the lesson completion endpoint. For quiz slides it records a view.
-
-```bash
-# Mark all pre-reading lessons in a course as read
-edstem lessons read 29579 Pre-Reading
-
-# Mark week 1 applied/workshop content as read
-edstem lessons read 29579 Week 1 Workshop
-edstem lessons read 29579 Week 1 Applied
-
-# Add a delay between slide actions
-edstem lessons read 29579 Applied --delay 0.3
-
-# Export a machine-readable summary
-edstem lessons read 29579 Pre-Reading --json
-```
-
-## Configuration
-
-Create `config.yaml` in your working directory:
-
-```yaml
-fetch:
-  count: 30
-
-rateLimit:
-  requestDelay: 1.0
-  maxRetries: 3
-  retryBaseDelay: 3.0
-  maxCount: 100
-```
-
-- `fetch.count` is the default item count when `--max` is omitted
+The image exposes `/healthz`, `/readyz`, and `/mcp`. SQLite data lives in the `app_data` volume.
 
 ## Development
 
 ```bash
-# Install dev dependencies
-uv sync --extra dev
-
-# Lint + tests
-uv run ruff check .
-uv run pytest -q
+npm install
+npm run check
+npm test
+npm run build
+npm run pack:check
+npm run pack:smoke
 ```
 
-## Acknowledgements
+`npm test` runs Vitest for the Node CLI and stdio MCP, then Bun tests for remote OAuth, security, SQLite, and end-to-end reconnect behavior.
 
-This project builds on ideas and structure from  
-[twitter-cli](https://github.com/jackwener/twitter-cli).  
-Thanks to the original project for the foundation and inspiration.
+The Python 0.3.x source remains in this branch until the TypeScript release passes live-token and packed-install acceptance. The npm package contains only the TypeScript executables.
+
+## License
+
+MIT

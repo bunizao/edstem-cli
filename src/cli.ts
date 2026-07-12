@@ -23,7 +23,10 @@ import {
 } from "./ed/projections.js";
 import { serializeThread } from "./ed/serialization.js";
 import { CliError, normalizeError } from "./errors.js";
-import { writeError, writeJson } from "./output.js";
+import { lessonToMarkdown, threadToMarkdown } from "./markdown.js";
+import { writeError, writeJson, writeText } from "./output.js";
+import { addSkill, formatSkillSummary, writeGeneratedSkill } from "./skills.js";
+import { applyUpdate, checkForUpdate } from "./update.js";
 import { VERSION } from "./version.js";
 
 const SORT_OPTIONS = new Set(["new", "old", "top"]);
@@ -100,15 +103,19 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
   program.command("thread")
     .description("Show a thread by ID or course_id#number.")
     .argument("<reference>", "Thread ID or course_id#number")
+    .option("--md", "Emit Markdown.")
+    .addOption(new Option("--format <format>", "Output format").choices(["json", "md"]))
     .option("--include-html", "Include Ed XML content.")
     .option("--legacy-json", "Use the previous verbose JSON shape.")
-    .action(withOutput(runtime, async (client, command, reference: string) => {
+    .action(async (reference: string, _options: unknown, command: Command) => {
+      const client = await runtime.createClient();
       const thread = await resolveThread(client, reference);
       const options = command.opts();
-      return options.legacyJson
+      const projected = options.legacyJson
         ? serializeThread(thread)
         : projectThreadDetail(thread, { includeHtml: options.includeHtml });
-    }));
+      await writeDomainOutput(runtime, command, projected, () => threadToMarkdown(thread));
+    });
 
   const lessons = program.command("lessons")
     .description("List or update course lessons.")
@@ -193,12 +200,54 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
       return (await client.fetchSlideQuestions(slideId)).map(projectQuestion);
     }));
 
+  hideCommand(lessons.command("answer")
+    .description("Submit an answer for one quiz question."))
+    .argument("<question-id>", "Question ID", positiveInteger)
+    .option("--choice <number>", "One-based choice; repeat for multi-select", collectPositiveInteger, [])
+    .option("--amend", "Amend an existing response.")
+    .action(withOutput(runtime, async (client, command, questionId: number) =>
+      submitAnswer(client, questionId, command.opts().choice, command.opts().amend)
+    ));
+
+  hideCommand(lessons.command("submit")
+    .description("Submit all saved answers for one quiz slide."))
+    .argument("<slide-id>", "Slide ID", positiveInteger)
+    .action(withOutput(runtime, (client, _command, slideId: number) => client.submitSlide(slideId)));
+
+  const slides = hideCommand(
+    program.command("slides").description("Compatibility aliases for lesson slide commands.")
+  );
+  slides.command("questions").argument("<slide-id>", "Slide ID", positiveInteger).action(
+    withOutput(runtime, async (client, _command, slideId: number) =>
+      (await client.fetchSlideQuestions(slideId)).map(projectQuestion)
+    )
+  );
+  slides.command("responses").argument("<slide-id>", "Slide ID", positiveInteger).action(
+    withOutput(runtime, async (client, _command, slideId: number) =>
+      (await client.fetchSlideQuestionResponses(slideId)).map(projectQuestionResponse)
+    )
+  );
+  slides.command("answer")
+    .argument("<question-id>", "Question ID", positiveInteger)
+    .option("--choice <number>", "One-based choice; repeat for multi-select", collectPositiveInteger, [])
+    .option("--amend", "Amend an existing response.")
+    .action(withOutput(runtime, async (client, command, questionId: number) =>
+      submitAnswer(client, questionId, command.opts().choice, command.opts().amend)
+    ));
+  slides.command("submit").argument("<slide-id>", "Slide ID", positiveInteger).action(
+    withOutput(runtime, (client, _command, slideId: number) => client.submitSlide(slideId))
+  );
+
   program.command("lesson")
     .description("Show a lesson and its slides.")
     .argument("<lesson-id>", "Lesson ID", positiveInteger)
-    .action(withOutput(runtime, async (client, _command, lessonId: number) =>
-      projectLessonDetail(await client.fetchLesson(lessonId))
-    ));
+    .option("--md", "Emit Markdown.")
+    .addOption(new Option("--format <format>", "Output format").choices(["json", "md"]))
+    .action(async (lessonId: number, _options: unknown, command: Command) => {
+      const client = await runtime.createClient();
+      const lesson = await client.fetchLesson(lessonId);
+      await writeDomainOutput(runtime, command, projectLessonDetail(lesson), () => lessonToMarkdown(lesson));
+    });
 
   program.command("activity")
     .description("List current-user activity.")
@@ -214,6 +263,35 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
       });
       return compactActivity(items);
     }));
+
+  program.command("update")
+    .description("Check for an npm update or apply it.")
+    .option("--apply", "Install the latest npm package globally.")
+    .action(async (_options: unknown, command: Command) => {
+      const value = command.opts().apply
+        ? { applied: true, command: applyUpdate() }
+        : await checkForUpdate();
+      await writeCommandJson(runtime, command, value);
+    });
+
+  const skills = program.command("skills").description("Show, generate, or install the agent skill.");
+  skills.action(async (_options: unknown, command: Command) => {
+    await writeCommandJson(runtime, command, formatSkillSummary());
+  });
+  skills.command("generate").description("Regenerate SKILL.md from CLI and MCP metadata.").action(
+    async (_options: unknown, command: Command) => {
+      writeGeneratedSkill(program);
+      await writeCommandJson(runtime, command, { generated: "SKILL.md" });
+    }
+  );
+  skills.command("add")
+    .description("Install the skill through the shared skills CLI.")
+    .allowUnknownOption(true)
+    .allowExcessArguments(true)
+    .action(async (_options: unknown, command: Command) => {
+      const invoked = addSkill(command.args);
+      await writeCommandJson(runtime, command, { command: invoked });
+    });
 
   return program;
 }
@@ -232,6 +310,38 @@ function createDefaultRuntime(): CliRuntime {
     writeStderr: (text) => process.stderr.write(text),
     writeStdout: (text) => process.stdout.write(text),
   };
+}
+
+async function writeDomainOutput(
+  runtime: CliRuntime,
+  command: Command,
+  json: unknown,
+  markdown: () => string
+): Promise<void> {
+  const local = command.opts();
+  const global = command.optsWithGlobals() as GlobalOutputOptions;
+  const format = local.format ?? (local.md ? "md" : "json");
+  if (format === "md") {
+    if (global.fields) {
+      throw new CliError("input", "--fields is only available with JSON output", 2);
+    }
+    await writeText(markdown(), global.output, runtime.writeStdout);
+    return;
+  }
+  await writeJson(json, {
+    fields: global.fields,
+    output: global.output,
+    pretty: Boolean(global.pretty || (runtime.isTTY && !global.json)),
+  }, runtime.writeStdout);
+}
+
+async function writeCommandJson(runtime: CliRuntime, command: Command, value: unknown): Promise<void> {
+  const options = command.optsWithGlobals() as GlobalOutputOptions;
+  await writeJson(value, {
+    fields: options.fields,
+    output: options.output,
+    pretty: Boolean(options.pretty || (runtime.isTTY && !options.json)),
+  }, runtime.writeStdout);
 }
 
 function withOutput<Arguments extends unknown[]>(
@@ -270,6 +380,20 @@ function nonNegativeNumber(value: string): number {
 
 function collectPositiveInteger(value: string, previous: number[]): number[] {
   return [...previous, positiveInteger(value)];
+}
+
+function submitAnswer(
+  client: EdClient,
+  questionId: number,
+  choices: number[],
+  amend: boolean
+) {
+  return client.submitSlideAnswer(questionId, choices.map((choice) => choice - 1), { amend });
+}
+
+function hideCommand(command: Command): Command {
+  (command as unknown as { _hidden: boolean })._hidden = true;
+  return command;
 }
 
 export async function run(argv = process.argv, runtime?: CliRuntime): Promise<number> {
