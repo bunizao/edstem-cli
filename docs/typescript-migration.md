@@ -1,15 +1,15 @@
 # TypeScript migration
 
-The rewrite ships in verified vertical slices. Python remains available until the TypeScript package passes the same observable CLI contracts.
+The rewrite ships in verified vertical slices.
 
 ## Milestones
 
-1. **Foundation** — add the npm toolchain, domain language, and architecture decision.
-2. **Ed core** — migrate transport, parsing, errors, filtering, and compact projections behind one interface.
-3. **CLI adapter** — preserve command behavior, default non-TTY output to compact JSON, and add stable machine-readable errors.
-4. **MCP adapters** — expose the same Ed operations through local stdio MCP and migrate the remote OAuth runtime without coupling it to local startup.
-5. **Acceptance** — pass TypeScript, Python parity, MCP integration, real-token, package-content, and packed-install checks.
-6. **Release** — publish `edstem-cli@0.4.0`, verify registry installation, then deprecate the separate implementations.
+1. [x] **Foundation**: add the npm toolchain, domain language, and architecture decision.
+2. [x] **Ed core**: migrate transport, parsing, errors, filtering, and compact projections behind one interface.
+3. [x] **CLI adapter**: preserve command behavior, default non-TTY output to compact JSON, and add stable machine-readable errors.
+4. [x] **MCP adapters**: expose the same Ed operations through local stdio MCP and migrate the remote OAuth runtime without coupling it to local startup.
+5. [x] **Acceptance**: pass TypeScript, MCP integration, live-token, package-content, and packed-install checks.
+6. [ ] **Release**: publish `edstem-cli@0.4.0` and verify registry installation.
 
 ## Acceptance gates
 

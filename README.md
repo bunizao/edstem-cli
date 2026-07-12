@@ -114,8 +114,6 @@ npm run pack:smoke
 
 `npm test` runs Vitest for the Node CLI and stdio MCP, then Bun tests for remote OAuth, security, SQLite, and end-to-end reconnect behavior.
 
-The Python 0.3.x source remains in this branch until the TypeScript release passes live-token and packed-install acceptance. The npm package contains only the TypeScript executables.
-
 ## License
 
 MIT
