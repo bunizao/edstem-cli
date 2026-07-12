@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, for example v0.4.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/edstem-cli
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: npm ci
+      - name: Verify tag and package version
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          node - <<'JS'
+          const pkg = require("./package.json");
+          const expected = `v${pkg.version}`;
+          if (pkg.name !== "edstem-cli") throw new Error(`Unexpected package name: ${pkg.name}`);
+          if (process.env.RELEASE_TAG !== expected) throw new Error(`${process.env.RELEASE_TAG} does not match ${expected}`);
+          JS
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+      - run: npm run pack:check
+      - run: npm run pack:smoke
+      - name: Check generated skill
+        run: |
+          npm run skill:generate
+          git diff --exit-code SKILL.md
+      - name: Check npm publication state
+        id: npm
+        run: |
+          if npm view "edstem-cli@$(node -p 'require("./package.json").version')" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install npm with trusted publishing support
+        if: steps.npm.outputs.published != 'true'
+        run: npm install --global npm@12.0.1
+      - name: Publish npm package
+        if: steps.npm.outputs.published != 'true'
+        run: npm publish --access public --provenance
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          body_path: .github/release-notes/0.4.0.md
