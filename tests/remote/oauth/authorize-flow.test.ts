@@ -72,6 +72,9 @@ describe("oauth authorize flow", () => {
       })}`
     );
     expect(page.status).toBe(200);
+    expect(page.headers.get("content-security-policy")).toContain(
+      `form-action 'self' ${new URL(TEST_CLIENT.redirect_uris[0]!).origin}`
+    );
 
     const csrfToken = extractCsrfToken(await page.text());
     const response = await fetch(`${app.baseUrl}/authorize`, {
