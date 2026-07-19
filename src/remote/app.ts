@@ -295,13 +295,16 @@ async function handleAuthorize(
       runtime.config.oauth
     );
     const redirectUri = resolveRedirectUri(client, source.redirect_uri);
-    const response = new BunAuthorizeResponse({
-      body: form,
-      headers: {
-        cookie: request.headers.get("cookie") ?? undefined
+    const response = new BunAuthorizeResponse(
+      {
+        body: form,
+        headers: {
+          cookie: request.headers.get("cookie") ?? undefined
+        },
+        method: request.method
       },
-      method: request.method
-    });
+      redirectUri
+    );
     if (sessionState.reason === "expired" || sessionState.reason === "invalid") {
       response.appendHeader("Set-Cookie", buildExpiredSessionCookie(runtime.config.oauth));
     }

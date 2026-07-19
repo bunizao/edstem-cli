@@ -22,8 +22,9 @@ export class BunAuthorizeResponse implements AuthorizeResponse {
   private headers = new Headers();
   private statusCode = 200;
 
-  constructor(request: AuthorizeRequest) {
+  constructor(request: AuthorizeRequest, redirectUri: string) {
     this.req = request;
+    this.headers.set("Content-Security-Policy", buildAuthorizeCsp(redirectUri));
   }
 
   appendHeader(name: string, value: string): void {
@@ -88,4 +89,11 @@ export class BunAuthorizeResponse implements AuthorizeResponse {
     );
     return this;
   }
+}
+
+function buildAuthorizeCsp(redirectUri: string): string {
+  const redirectOrigin = new URL(redirectUri).origin;
+  const formAction = redirectOrigin === "null" ? "'self'" : `'self' ${redirectOrigin}`;
+
+  return `default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action ${formAction}; base-uri 'none'; frame-ancestors 'none'`;
 }
