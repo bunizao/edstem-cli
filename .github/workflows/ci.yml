@@ -10,52 +10,47 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Test (Python ${{ matrix.python-version }})
+  node:
+    name: Node ${{ matrix.node-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.12"]
+        node-version: [20, 22]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v6
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: npm ci
+      - run: npm run check
+      - run: npm run test:node
+      - run: npm run build
+      - run: npm run pack:smoke
 
-      - name: Install dependencies
-        run: uv sync --extra dev --frozen
-
-      - name: Lint
-        if: matrix.python-version == '3.12'
-        run: uv run ruff check .
-
-      - name: Test
-        run: uv run pytest -q
-
-  build:
-    name: Build distribution
+  package:
+    name: Package and remote MCP
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v6
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
         with:
-          python-version: "3.12"
-
-      - name: Build package
-        run: uv build
-
-      - name: Check distribution metadata
-        run: uvx twine check dist/*
+          node-version: 22
+          cache: npm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+      - run: npm run pack:check
+      - run: npm run pack:smoke
+      - name: Check generated skill
+        run: |
+          npm run skill:generate
+          git diff --exit-code SKILL.md

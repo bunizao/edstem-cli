@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0 - 2026-07-13
+
+### Changed
+
+- Rewrote the CLI with TypeScript 7 and switched distribution from PyPI to npm.
+- Merged the local stdio MCP and hosted OAuth MCP runtimes into this repository.
+- Replaced duplicated Ed clients and token verification with one shared implementation.
+- Made compact JSON the default and added top-level field selection with `--fields`.
+
+### Added
+
+- Added the `edstem-mcp` stdio executable and 13 MCP tools.
+- Added Node package smoke tests plus Bun OAuth, SQLite, security, and reconnect tests.
+- Added generated agent-skill metadata for CLI commands and MCP tools.
+
 ## 0.3.6 - 2026-05-15
 
 ### Added

@@ -1,3 +1,0 @@
-"""edstem-cli: A CLI for Ed Discussion."""
-
-__version__ = "0.3.6"

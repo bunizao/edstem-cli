@@ -1,0 +1,31 @@
+services:
+  app:
+    image: ghcr.io/bunizao/edstem-mcp:latest
+    init: true
+    pull_policy: always
+    read_only: true
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      DATABASE_PATH: /data/edstem-mcp.db
+      DB_CLEANUP_INTERVAL_SECONDS: ${DB_CLEANUP_INTERVAL_SECONDS:-900}
+      ED_API_BASE_URL: https://edstem.org/api/
+      MASTER_KEY: ${MASTER_KEY}
+      OAUTH_FIXED_CLIENT_ID: ${OAUTH_FIXED_CLIENT_ID:-}
+      OAUTH_FIXED_CLIENT_NAME: ${OAUTH_FIXED_CLIENT_NAME:-}
+      OAUTH_FIXED_CLIENT_REDIRECT_URIS: ${OAUTH_FIXED_CLIENT_REDIRECT_URIS:-}
+      OAUTH_FIXED_CLIENT_SECRET: ${OAUTH_FIXED_CLIENT_SECRET:-}
+      PORT: 8787
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+    ports:
+      - "8787:8787"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    volumes:
+      - app_data:/data
+
+volumes:
+  app_data:
