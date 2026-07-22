@@ -15,6 +15,9 @@ describe("generated skill", () => {
     expect(markdown).toContain("get_course_thread");
     expect(markdown).toContain("mark_lessons_read");
     expect(markdown).toContain("--fields");
+    expect(markdown).toContain("https://edstem.tuuhub.com/mcp");
+    expect(markdown).toContain("pass `--json` explicitly");
+    expect(markdown).toContain("Require explicit user intent");
   });
 
   it("writes the generated skill deterministically", async () => {

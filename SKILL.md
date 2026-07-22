@@ -1,20 +1,24 @@
 ---
 name: edstem-cli
-description: Inspect Ed Discussion with the edstem CLI or MCP server. Use for courses, lessons, threads, activity, quiz responses, and lesson progress. Prefer narrow commands and compact output.
+description: Inspect Ed Discussion through its CLI, local stdio MCP server, or hosted MCP server. Use for courses, lessons, threads, activity, quiz responses, and lesson progress. Prefer narrow queries and compact output.
 ---
 
 # edstem-cli
 
-Use `edstem` for Ed Discussion access or `edstem-mcp` as a local stdio MCP server.
+Choose the narrowest surface that fits the environment:
+
+- Use `edstem` for shell access, scripts, and deterministic automation.
+- Use `edstem-mcp` when a local MCP client can launch a stdio server with `ED_API_TOKEN`.
+- Use `https://edstem.tuuhub.com/mcp` when the client needs hosted Streamable HTTP and OAuth.
 
 ## Agent rules
 
-- Run the narrowest command that answers the request.
-- JSON is the default. Add `--fields` to keep only needed top-level fields.
+- Run the narrowest command or tool that answers the request.
+- For CLI automation, pass `--json` explicitly and add `--fields` to retain only needed top-level fields.
 - List commands return summaries. Fetch one lesson or thread only when its detail is needed.
 - Use `--include-html` only when raw Ed XML matters.
-- Treat `ED_API_TOKEN` as a password. Never print, log, or persist it in project files.
-- `lessons read`, `mark_lessons_read`, and quiz submission tools change the current user's Ed state.
+- Treat Ed API tokens as passwords. Never print, log, or persist them in project files.
+- `lessons read`, `mark_lessons_read`, and quiz submission tools change the current user's Ed state. Require explicit user intent before calling them.
 
 ## Setup
 

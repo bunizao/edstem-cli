@@ -1,14 +1,24 @@
 # edstem-cli
 
-TypeScript CLI and MCP access for [Ed Discussion](https://edstem.org).
+CLI and MCP access to Ed Discussion for people, scripts, and agents.
 
-One Ed implementation powers three adapters:
+[![npm](https://img.shields.io/npm/v/edstem-cli?logo=npm)](https://www.npmjs.com/package/edstem-cli)
+[![CI](https://github.com/bunizao/edstem-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/bunizao/edstem-cli/actions/workflows/ci.yml)
+[![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Bun remote runtime](https://img.shields.io/badge/remote-Bun-000?logo=bun)](https://bun.sh/)
+[![MCP](https://img.shields.io/badge/MCP-local%20%2B%20hosted-5A67D8)](https://modelcontextprotocol.io/)
+[![GHCR](https://img.shields.io/badge/GHCR-edstem--mcp-2496ED?logo=docker&logoColor=white)](https://github.com/bunizao/edstem-cli/pkgs/container/edstem-mcp)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-- `edstem`: compact JSON CLI for agents and scripts
-- `edstem-mcp`: local stdio MCP server
-- remote MCP: OAuth, encrypted Ed tokens, and SQLite for hosted connectors
+One Ed implementation powers three entry points:
 
-## Install
+| Surface | Runtime | Best for | Authentication |
+| --- | --- | --- | --- |
+| `edstem` | Node.js 20+ | People, scripts, and agents | Local Ed API token |
+| `edstem-mcp` | Node.js 20+ | Local stdio MCP clients | Local Ed API token |
+| Hosted MCP | Bun | Remote MCP clients and shared deployments | OAuth at [`edstem.tuuhub.com/mcp`](https://edstem.tuuhub.com/mcp) |
+
+## Installation
 
 ```bash
 npm install -g edstem-cli
@@ -18,45 +28,31 @@ edstem user --fields id,name,courses
 
 Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens). The CLI also reads `~/.config/edstem-cli/token`.
 
-The npm package requires Node.js 20 or newer. The hosted remote adapter uses Bun.
-
 ## CLI
 
-JSON is the default. List commands return summaries without thread bodies, lesson slides, or repeated user records.
+JSON is the default. List commands return compact summaries; detail commands fetch full records and can export Markdown.
 
 ```bash
 edstem courses
 edstem threads 12345 --max 20 --fields id,number,title,flags
-edstem thread 67890
 edstem thread 12345#42
 edstem lessons 12345 --module "Week 2"
-edstem lesson 105199
-edstem activity 12345 --max 10
-```
-
-Detail commands support Markdown export:
-
-```bash
 edstem thread 67890 --md --output thread.md
-edstem lesson 105199 --md --output lesson.md
 ```
 
-Raw Ed XML stays out of thread JSON unless you pass `--include-html`. Use `--pretty` for indented JSON and `--legacy-json` for the pre-0.4 thread shape.
-
-Quiz and lesson-progress commands update your Ed state:
+Quiz and lesson-progress commands mutate your Ed state. Run them only when that is intentional:
 
 ```bash
-edstem lessons questions 4401
-edstem lessons quiz 4401 --answer 991 --choice 2
-edstem lessons quiz 4401 --submit
 edstem lessons read 12345 Pre-Reading
 ```
 
-Run `edstem --help` for the full command list.
+Use `edstem --help` for the complete command reference. Raw Ed XML stays out of thread JSON unless you pass `--include-html`.
 
-## Local MCP
+## MCP
 
-Configure an MCP client to launch the stdio executable:
+### Local
+
+Configure an MCP client to launch the stdio server:
 
 ```json
 {
@@ -71,27 +67,27 @@ Configure an MCP client to launch the stdio executable:
 }
 ```
 
-The server exposes courses, lessons, threads, activity, quiz submission, and lesson-progress tools. It returns compact JSON text without a duplicate `structuredContent` payload.
+### Hosted
+
+Add [`https://edstem.tuuhub.com/mcp`](https://edstem.tuuhub.com/mcp) as a Streamable HTTP MCP server. Your client opens the OAuth flow, where you provide an Ed API token and approve the requested access.
+
+Local adapters receive your Ed token directly. The hosted server encrypts tokens at rest, maps them to OAuth identities, and requires a separate write scope for quiz and lesson-progress mutations.
 
 ## Agent skill
 
 ```bash
 npx skills add https://github.com/bunizao/edstem-cli
 
-# Check metadata or regenerate SKILL.md
+# Inspect metadata or regenerate the tracked reference.
 edstem skills
 edstem skills generate
 ```
 
-`SKILL.md` derives its CLI table and MCP tool list from the code. CI rejects drift.
+[`SKILL.md`](SKILL.md) is the canonical agent reference. Its CLI table and MCP tool list are generated from the implementation, and CI rejects drift.
 
-## Remote MCP
+## Self-hosting
 
-The hosted adapter keeps each Ed token encrypted with AES-256-GCM and resolves it from the requesting OAuth identity. It enforces a separate write scope for quiz and progress mutations.
-
-Public endpoint: [https://edstem.tuuhub.com/mcp](https://edstem.tuuhub.com/mcp)
-
-Self-host with Docker:
+The hosted adapter uses Bun, Streamable HTTP, OAuth, encrypted Ed tokens, and SQLite.
 
 ```bash
 cp .env.example .env
@@ -112,8 +108,8 @@ npm run pack:check
 npm run pack:smoke
 ```
 
-`npm test` runs Vitest for the Node CLI and stdio MCP, then Bun tests for remote OAuth, security, SQLite, and end-to-end reconnect behavior.
+`npm test` runs Vitest for the Node.js CLI and local MCP server, then Bun tests for remote OAuth, security, SQLite, and reconnect behavior.
 
 ## License
 
-MIT. The migrated remote MCP code retains its MIT notice in `THIRD_PARTY_NOTICES.md`.
+[MIT](LICENSE). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for migrated remote MCP attribution.
