@@ -2,12 +2,12 @@
 
 CLI and MCP access to Ed Discussion for people, scripts, and agents.
 
-[![npm](https://img.shields.io/npm/v/edstem-cli?logo=npm)](https://www.npmjs.com/package/edstem-cli)
+[![npm version](https://img.shields.io/npm/v/edstem-cli?logo=npm)](https://www.npmjs.com/package/edstem-cli)
+[![npm downloads](https://img.shields.io/npm/dm/edstem-cli?logo=npm)](https://www.npmjs.com/package/edstem-cli)
 [![CI](https://github.com/bunizao/edstem-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/bunizao/edstem-cli/actions/workflows/ci.yml)
 [![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-[![Bun remote runtime](https://img.shields.io/badge/remote-Bun-000?logo=bun)](https://bun.sh/)
 [![MCP](https://img.shields.io/badge/MCP-local%20%2B%20hosted-5A67D8)](https://modelcontextprotocol.io/)
-[![GHCR](https://img.shields.io/badge/GHCR-edstem--mcp-2496ED?logo=docker&logoColor=white)](https://github.com/bunizao/edstem-cli/pkgs/container/edstem-mcp)
+[![Quiz answering](https://img.shields.io/badge/quiz%20answering-beta-orange)](#quiz-answering-beta)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 One Ed implementation powers three entry points:
@@ -30,7 +30,9 @@ Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/a
 
 ## CLI
 
-JSON is the default. List commands return compact summaries; detail commands fetch full records and can export Markdown.
+`edstem-cli` is designed as AI native, so JSON is the default. List commands return compact summaries; detail commands fetch full records and can export Markdown.
+
+Cases:
 
 ```bash
 edstem courses
@@ -45,6 +47,25 @@ Quiz and lesson-progress commands mutate your Ed state. Run them only when that 
 ```bash
 edstem lessons read 12345 Pre-Reading
 ```
+
+### Quiz answering (beta)
+
+`edstem` can inspect quiz questions and saved responses, answer single- or multi-select questions, amend an answer, and submit the completed slide.
+
+```bash
+# Inspect a quiz slide and its saved responses.
+edstem lessons quiz 4401
+edstem lessons quiz 4401 --responses
+
+# Save an answer. Repeat --choice for multi-select questions.
+edstem lessons quiz 4401 --answer 991 --choice 2
+edstem lessons quiz 4401 --answer 991 --choice 2 --choice 4 --amend
+
+# Submit all saved answers for the slide.
+edstem lessons quiz 4401 --submit
+```
+
+This feature is beta because Ed's quiz endpoints are not part of a stable public API. Review the selected question and choices before writing, and treat `--submit` as final unless the course allows another attempt.
 
 Use `edstem --help` for the complete command reference. Raw Ed XML stays out of thread JSON unless you pass `--include-html`.
 
