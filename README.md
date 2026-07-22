@@ -6,17 +6,20 @@ CLI and MCP access to Ed Discussion for people, scripts, and agents.
 [![npm downloads](https://img.shields.io/npm/dm/edstem-cli?logo=npm)](https://www.npmjs.com/package/edstem-cli)
 [![CI](https://github.com/bunizao/edstem-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/bunizao/edstem-cli/actions/workflows/ci.yml)
 [![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Bun compatible](https://img.shields.io/badge/Bun-compatible-000?logo=bun)](https://bun.sh/)
 [![MCP](https://img.shields.io/badge/MCP-local%20%2B%20hosted-5A67D8)](https://modelcontextprotocol.io/)
 [![Quiz answering](https://img.shields.io/badge/quiz%20answering-beta-orange)](#quiz-answering-beta)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-One Ed implementation powers three entry points:
+One package provides a human- and agent-friendly CLI plus local and hosted MCP servers:
 
-| Surface | Runtime | Best for | Authentication |
+| Surface | What it does | Runtime | Authentication |
 | --- | --- | --- | --- |
-| `edstem` | Node.js 20+ | People, scripts, and agents | Local Ed API token |
-| `edstem-mcp` | Node.js 20+ | Local stdio MCP clients | Local Ed API token |
-| Hosted MCP | Bun | Remote MCP clients and shared deployments | OAuth at [`edstem.tuuhub.com/mcp`](https://edstem.tuuhub.com/mcp) |
+| **`edstem` CLI** | Query courses, lessons, threads, and activity as compact JSON or Markdown; answer quizzes in beta | Node.js 20+ or Bun | Local Ed API token |
+| **`edstem-mcp` local MCP** | Expose the same Ed operations to local MCP clients over stdio | Node.js 20+ or Bun | Local Ed API token |
+| **Hosted MCP** | Offer remote Streamable HTTP access for shared deployments and remote MCP clients | Bun | OAuth at [`edstem.tuuhub.com/mcp`](https://edstem.tuuhub.com/mcp) |
+
+Node.js 20+ is the supported npm baseline. The CLI and local MCP bundles are also Bun-compatible; the hosted server requires Bun for `Bun.serve` and `bun:sqlite`.
 
 ## Installation
 
