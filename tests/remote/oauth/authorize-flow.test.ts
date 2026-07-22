@@ -76,7 +76,10 @@ describe("oauth authorize flow", () => {
       `form-action 'self' ${new URL(TEST_CLIENT.redirect_uris[0]!).origin}`
     );
 
-    const csrfToken = extractCsrfToken(await page.text());
+    const pageHtml = await page.text();
+    expect(pageHtml).toContain("https://github.com/bunizao/edstem-cli");
+    expect(pageHtml).toContain("https://github.com/bunizao/edstem-cli/blob/main/TOS.md");
+    const csrfToken = extractCsrfToken(pageHtml);
     const response = await fetch(`${app.baseUrl}/authorize`, {
       body: new URLSearchParams({
         client_id: TEST_CLIENT.client_id,

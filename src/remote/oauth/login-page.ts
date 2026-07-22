@@ -1,8 +1,8 @@
 import type { AuthorizationParams } from "@modelcontextprotocol/sdk/server/auth/provider.js";
 import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/shared/auth.js";
 
-const REPOSITORY_URL = "https://github.com/bunizao/edstem-mcp";
-const TOS_URL = `${REPOSITORY_URL}/blob/master/TOS.md`;
+const REPOSITORY_URL = "https://github.com/bunizao/edstem-cli";
+const TOS_URL = `${REPOSITORY_URL}/blob/main/TOS.md`;
 const TOS_LABEL = "Terms of Service";
 
 export interface RenderAuthorizePageOptions {
