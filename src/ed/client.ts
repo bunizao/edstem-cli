@@ -63,7 +63,7 @@ export class EdClient {
 
   constructor(options: EdClientOptions) {
     this.apiBaseUrl = ensureTrailingSlash(
-      options.apiBaseUrl ?? process.env.ED_API_BASE_URL ?? "https://edstem.org/api/"
+      options.apiBaseUrl ?? getEnvironmentValue("ED_API_BASE_URL") ?? "https://edstem.org/api/"
     );
     this.fetch = options.fetch ?? globalThis.fetch;
     this.token = options.token;
@@ -533,6 +533,13 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function getEnvironmentValue(name: string): string | undefined {
+  const processValue = (globalThis as typeof globalThis & {
+    process?: { env?: Record<string, string | undefined> };
+  }).process;
+  return processValue?.env?.[name];
 }
 
 function ensureTrailingSlash(value: string): string {

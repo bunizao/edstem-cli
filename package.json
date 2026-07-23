@@ -17,34 +17,45 @@
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
-    "build": "npm run build:local && npm run build:remote",
+    "build": "npm run build:local && npm run build:remote && npm run worker:build",
     "build:local": "tsup",
     "build:remote": "rm -rf dist/remote && bun build src/remote/index.ts src/remote/admin.ts --outdir dist/remote --target bun && cp -R src/remote/db/migrations dist/remote/migrations",
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && npm run worker:check",
     "pack:check": "npm pack --dry-run --json | node -e \"let data=''; process.stdin.on('data', c => data += c); process.stdin.on('end', () => { const files = JSON.parse(data)[0]?.files?.map(f => f.path) ?? []; for (const required of ['dist/edstem.js','dist/edstem-mcp.js','dist/remote/index.js']) if (!files.includes(required)) throw new Error('npm package is missing ' + required); });\"",
     "pack:smoke": "tmp=\"$(mktemp -d)\" && npm pack --pack-destination \"$tmp\" >/dev/null && npm install --prefix \"$tmp/install\" \"$tmp\"/edstem-cli-*.tgz >/dev/null && test \"$(\"$tmp/install/node_modules/.bin/edstem\" --version)\" = \"$(node -p \"JSON.parse(require('node:fs').readFileSync('package.json','utf8')).version\")\" && test -x \"$tmp/install/node_modules/.bin/edstem-mcp\"",
     "remote:admin": "bun src/remote/admin.ts",
     "remote:start": "bun src/remote/index.ts",
     "skill:generate": "node dist/edstem.js skills generate --json >/dev/null",
-    "test": "npm run test:node && npm run test:remote",
+    "test": "npm run test:node && npm run test:worker && npm run test:remote",
     "test:node": "vitest run",
     "test:remote": "bun test tests/remote",
     "test:watch": "vitest",
+    "test:worker": "vitest run --config vitest.worker.config.ts",
+    "worker:build": "wrangler deploy --dry-run --outdir dist/cloudflare",
+    "worker:check": "tsc --noEmit -p tsconfig.worker.json",
+    "worker:deploy": "wrangler deploy",
+    "worker:dev": "wrangler dev",
+    "worker:types": "wrangler types worker-configuration.d.ts --env-interface CloudflareBindings",
+    "worker:types:check": "wrangler types worker-configuration.d.ts --env-interface CloudflareBindings --check",
     "prepublishOnly": "npm run check && npm test && npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "commander": "^14.0.0",
+    "jose": "^6.2.4",
     "node-html-parser": "^7.1.0",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.18.7",
+    "@cloudflare/workers-types": "^5.20260722.1",
     "@types/bun": "^1.3.14",
     "@types/node": "^24.0.10",
     "tsup": "^8.5.0",
     "typescript": "^7.0.2",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.10",
+    "wrangler": "^4.113.0"
   },
   "engines": {
     "node": ">=20"

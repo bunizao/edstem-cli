@@ -1,0 +1,6 @@
+ACCESS_TEAM_DOMAIN=https://your-team.cloudflareaccess.com
+ACCESS_AUD=replace-with-access-application-aud
+OWNER_EMAIL=you@example.com
+ED_API_BASE_URL=https://edstem.org/api/
+MCP_WRITE_ENABLED=false
+ED_API_TOKEN=replace-with-a-development-token

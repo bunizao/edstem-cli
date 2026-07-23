@@ -11,5 +11,6 @@
     "skipLibCheck": true,
     "outDir": "dist"
   },
+  "exclude": ["src/cloudflare/**", "tests/cloudflare/**"],
   "include": ["src/**/*.ts", "tests/**/*.ts", "tsup.config.ts", "vitest.config.ts"]
 }
