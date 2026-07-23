@@ -23,7 +23,8 @@ Choose the narrowest surface that fits the environment:
 ## Setup
 
 ```bash
-npm install -g edstem-cli
+npm i -g edstem-cli
+# or: bun add -g edstem-cli
 export ED_API_TOKEN="your-token"
 edstem user --fields id,name,courses
 ```
