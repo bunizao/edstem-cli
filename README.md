@@ -13,13 +13,11 @@ CLI and MCP access to Ed Discussion for people, scripts, and agents.
 
 One package provides a human- and agent-friendly CLI plus local and hosted MCP servers:
 
-
-| Surface                    | What it does                                                                                      | Runtime            | Authentication                                                    |
-| -------------------------- | ------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------- |
-| `edstem` **CLI**           | Query courses, lessons, threads, and activity as compact JSON or Markdown; answer quizzes in beta | Node.js 20+ or Bun | Local Ed API token                                                |
-| `edstem-mcp` **local MCP** | Expose the same Ed operations to local MCP clients over stdio                                     | Node.js 20+ or Bun | Local Ed API token                                                |
-| **Hosted MCP**             | Offer remote Streamable HTTP access for shared deployments and remote MCP clients                 | Bun                | OAuth at `[edstem.tuuhub.com/mcp](https://edstem.tuuhub.com/mcp)` |
-
+| Surface          | What it does                                                                                      | Runtime            | Authentication                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------- |
+| `edstem` **CLI** | Query courses, lessons, threads, and activity as compact JSON or Markdown; answer quizzes in beta | Node.js 20+ or Bun | Local Ed API token                                                |
+| **local MCP**    | Expose the same Ed operations to local MCP clients over stdio                                     | Node.js 20+ or Bun | Local Ed API token                                                |
+| **Hosted MCP**   | Offer remote Streamable HTTP access for shared deployments and remote MCP clients                 | Bun                | OAuth at [`edstem.tuuhub.com/mcp`](https://edstem.tuuhub.com/mcp) |
 
 Node.js 20+ is the supported npm baseline. The CLI and local MCP bundles are also Bun-compatible; the hosted server requires Bun for `Bun.serve` and `bun:sqlite`.
 
@@ -59,8 +57,6 @@ Quiz and lesson-progress commands mutate your Ed state. Run them only when that 
 edstem lessons read 12345 Pre-Reading
 ```
 
-
-
 ### Quiz answering (beta)
 
 `edstem` can inspect quiz questions and saved responses, answer single- or multi-select questions, amend an answer, and submit the completed slide.
@@ -84,8 +80,6 @@ Use `edstem --help` for the complete command reference. Raw Ed XML stays out of 
 
 ## MCP
 
-
-
 ### Local
 
 Configure an MCP client to launch the stdio server:
@@ -103,11 +97,9 @@ Configure an MCP client to launch the stdio server:
 }
 ```
 
-
-
 ### Hosted
 
-Add `[https://edstem.tuuhub.com/mcp](https://edstem.tuuhub.com/mcp)` as a Streamable HTTP MCP server. Your client opens the OAuth flow, where you provide an Ed API token and approve the requested access.
+Add `https://edstem.tuuhub.com/mcp` as a Streamable HTTP MCP server. Your client opens the OAuth flow, where you provide an Ed API token and approve the requested access.
 
 Local adapters receive your Ed token directly. The hosted server encrypts tokens at rest, maps them to OAuth identities, and requires a separate write scope for quiz and lesson-progress mutations.
 
@@ -121,7 +113,7 @@ edstem skills
 edstem skills generate
 ```
 
-`[SKILL.md](SKILL.md)` is the canonical agent reference. Its CLI table and MCP tool list are generated from the implementation, and CI rejects drift.
+[SKILL.md](https://github.com/bunizao/edstem-cli/blob/main/SKILL.md) is the canonical agent reference. Its CLI table and MCP tool list are generated from the implementation, and CI rejects drift.
 
 ## Self-hosting
 
