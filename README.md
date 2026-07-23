@@ -2,13 +2,14 @@
 
 CLI and MCP access to Ed Discussion for people, scripts, and agents.
 
-[npm version](https://www.npmjs.com/package/edstem-cli)
-[CI](https://github.com/bunizao/edstem-cli/actions/workflows/ci.yml)
-[Node.js 20+](https://nodejs.org/)
-[Bun compatible](https://bun.sh/)
-[MCP](https://modelcontextprotocol.io/)
-[Quiz answering](#quiz-answering-beta)
-[MIT License](LICENSE)
+[![npm version](https://img.shields.io/npm/v/edstem-cli?logo=npm)](https://www.npmjs.com/package/edstem-cli)
+[![npm downloads](https://img.shields.io/npm/dm/edstem-cli?logo=npm)](https://www.npmjs.com/package/edstem-cli)
+[![CI](https://github.com/bunizao/edstem-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/bunizao/edstem-cli/actions/workflows/ci.yml)
+[![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Bun compatible](https://img.shields.io/badge/Bun-compatible-000?logo=bun)](https://bun.sh/)
+[![MCP](https://img.shields.io/badge/MCP-local%20%2B%20hosted-5A67D8)](https://modelcontextprotocol.io/)
+[![Quiz answering](https://img.shields.io/badge/quiz%20answering-beta-orange)](#quiz-answering-beta)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 One package provides a human- and agent-friendly CLI plus local and hosted MCP servers:
 
