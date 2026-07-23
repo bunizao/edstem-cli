@@ -28,8 +28,15 @@ jobs:
           bun-version: latest
       - run: npm ci
       - run: npm run check
+      - if: matrix.node-version == 22
+        run: npm run worker:types:check
       - run: npm run test:node
-      - run: npm run build
+      - if: matrix.node-version == 22
+        run: npm run test:worker
+      - if: matrix.node-version == 20
+        run: npm run build:local && npm run build:remote
+      - if: matrix.node-version == 22
+        run: npm run build
       - run: npm run pack:smoke
 
   package:
@@ -46,6 +53,7 @@ jobs:
           bun-version: latest
       - run: npm ci
       - run: npm run check
+      - run: npm run worker:types:check
       - run: npm test
       - run: npm run build
       - run: npm run pack:check
