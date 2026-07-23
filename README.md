@@ -2,22 +2,23 @@
 
 CLI and MCP access to Ed Discussion for people, scripts, and agents.
 
-[![npm version](https://img.shields.io/npm/v/edstem-cli?logo=npm)](https://www.npmjs.com/package/edstem-cli)
-[![npm downloads](https://img.shields.io/npm/dm/edstem-cli?logo=npm)](https://www.npmjs.com/package/edstem-cli)
-[![CI](https://github.com/bunizao/edstem-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/bunizao/edstem-cli/actions/workflows/ci.yml)
-[![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-[![Bun compatible](https://img.shields.io/badge/Bun-compatible-000?logo=bun)](https://bun.sh/)
-[![MCP](https://img.shields.io/badge/MCP-local%20%2B%20hosted-5A67D8)](https://modelcontextprotocol.io/)
-[![Quiz answering](https://img.shields.io/badge/quiz%20answering-beta-orange)](#quiz-answering-beta)
-[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[npm version](https://www.npmjs.com/package/edstem-cli)
+[CI](https://github.com/bunizao/edstem-cli/actions/workflows/ci.yml)
+[Node.js 20+](https://nodejs.org/)
+[Bun compatible](https://bun.sh/)
+[MCP](https://modelcontextprotocol.io/)
+[Quiz answering](#quiz-answering-beta)
+[MIT License](LICENSE)
 
 One package provides a human- and agent-friendly CLI plus local and hosted MCP servers:
 
-| Surface | What it does | Runtime | Authentication |
-| --- | --- | --- | --- |
-| **`edstem` CLI** | Query courses, lessons, threads, and activity as compact JSON or Markdown; answer quizzes in beta | Node.js 20+ or Bun | Local Ed API token |
-| **`edstem-mcp` local MCP** | Expose the same Ed operations to local MCP clients over stdio | Node.js 20+ or Bun | Local Ed API token |
-| **Hosted MCP** | Offer remote Streamable HTTP access for shared deployments and remote MCP clients | Bun | OAuth at [`edstem.tuuhub.com/mcp`](https://edstem.tuuhub.com/mcp) |
+
+| Surface                    | What it does                                                                                      | Runtime            | Authentication                                                    |
+| -------------------------- | ------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------- |
+| `edstem` **CLI**           | Query courses, lessons, threads, and activity as compact JSON or Markdown; answer quizzes in beta | Node.js 20+ or Bun | Local Ed API token                                                |
+| `edstem-mcp` **local MCP** | Expose the same Ed operations to local MCP clients over stdio                                     | Node.js 20+ or Bun | Local Ed API token                                                |
+| **Hosted MCP**             | Offer remote Streamable HTTP access for shared deployments and remote MCP clients                 | Bun                | OAuth at `[edstem.tuuhub.com/mcp](https://edstem.tuuhub.com/mcp)` |
+
 
 Node.js 20+ is the supported npm baseline. The CLI and local MCP bundles are also Bun-compatible; the hosted server requires Bun for `Bun.serve` and `bun:sqlite`.
 
@@ -25,19 +26,21 @@ Node.js 20+ is the supported npm baseline. The CLI and local MCP bundles are als
 
 ```bash
 npm i -g edstem-cli
-# or: bun add -g edstem-cli
-
-export ED_API_TOKEN="your-token"
-edstem user --fields id,name,courses
+bun add -g edstem-cli  # if you like Bun🥟
 ```
-
-Or skip the install: `npx edstem-cli …` / `bunx edstem-cli …`.
 
 Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens). The CLI also reads `~/.config/edstem-cli/token`.
 
+```bash
+export ED_API_TOKEN="your-token"
+edstem courses
+```
+
+A course table in the terminal means you're set!
+
 ## CLI
 
-`edstem` is designed as an AI-native CLI, so JSON is the default. List commands return compact summaries; detail commands fetch full records and can export Markdown. The examples below use the globally installed command; without installing, prefix them with `npx edstem-cli` or `bunx edstem-cli`.
+`edstem` is designed as an **AI-native** CLI, so JSON is the default. List commands return compact summaries; detail commands fetch full records and can export Markdown. The examples below use the globally installed command; without installing, prefix them with `npx edstem-cli` or `bunx edstem-cli`.
 
 Cases:
 
@@ -54,6 +57,8 @@ Quiz and lesson-progress commands mutate your Ed state. Run them only when that 
 ```bash
 edstem lessons read 12345 Pre-Reading
 ```
+
+
 
 ### Quiz answering (beta)
 
@@ -78,6 +83,8 @@ Use `edstem --help` for the complete command reference. Raw Ed XML stays out of 
 
 ## MCP
 
+
+
 ### Local
 
 Configure an MCP client to launch the stdio server:
@@ -95,9 +102,11 @@ Configure an MCP client to launch the stdio server:
 }
 ```
 
+
+
 ### Hosted
 
-Add [`https://edstem.tuuhub.com/mcp`](https://edstem.tuuhub.com/mcp) as a Streamable HTTP MCP server. Your client opens the OAuth flow, where you provide an Ed API token and approve the requested access.
+Add `[https://edstem.tuuhub.com/mcp](https://edstem.tuuhub.com/mcp)` as a Streamable HTTP MCP server. Your client opens the OAuth flow, where you provide an Ed API token and approve the requested access.
 
 Local adapters receive your Ed token directly. The hosted server encrypts tokens at rest, maps them to OAuth identities, and requires a separate write scope for quiz and lesson-progress mutations.
 
@@ -111,7 +120,7 @@ edstem skills
 edstem skills generate
 ```
 
-[`SKILL.md`](SKILL.md) is the canonical agent reference. Its CLI table and MCP tool list are generated from the implementation, and CI rejects drift.
+`[SKILL.md](SKILL.md)` is the canonical agent reference. Its CLI table and MCP tool list are generated from the implementation, and CI rejects drift.
 
 ## Self-hosting
 
