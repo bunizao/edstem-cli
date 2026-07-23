@@ -23,17 +23,25 @@ Node.js 20+ is the supported npm baseline. The CLI and local MCP bundles are als
 
 ## Installation
 
+Run the CLI directly with Bun:
+
 ```bash
-npm install -g edstem-cli
 export ED_API_TOKEN="your-token"
+bunx --bun edstem-cli user --fields id,name,courses
+```
+
+Or install it globally with Bun and use the shorter `edstem` command:
+
+```bash
+bun add --global edstem-cli
 edstem user --fields id,name,courses
 ```
 
-Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens). The CLI also reads `~/.config/edstem-cli/token`.
+Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens). The CLI also reads `~/.config/edstem-cli/token`. npm remains supported with `npm install --global edstem-cli`.
 
 ## CLI
 
-`edstem-cli` is designed as AI native, so JSON is the default. List commands return compact summaries; detail commands fetch full records and can export Markdown.
+`edstem` is designed as an AI-native CLI, so JSON is the default. List commands return compact summaries; detail commands fetch full records and can export Markdown. The examples below use the globally installed command; without installing, prefix them with `bunx --bun edstem-cli`.
 
 Cases:
 
