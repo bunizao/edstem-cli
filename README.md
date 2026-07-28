@@ -94,7 +94,7 @@ npx skills add https://github.com/bunizao/edstem-cli
 edstem skills generate
 ```
 
-The tracked [SKILL.md](SKILL.md) is generated from `edstem commands --json` plus the MCP tool catalog. CI rejects drift. The shared CLI contract is loaded from the tagged `@bunizao/cli-kit` v0.1.0 source archive, without a sibling development checkout.
+The tracked [SKILL.md](SKILL.md) is generated from `edstem commands --json` plus the MCP tool catalog. CI rejects drift. The shared CLI contract comes from the published `@bunizao/cli-kit` npm package (`^0.1.0`).
 
 ## License
 
