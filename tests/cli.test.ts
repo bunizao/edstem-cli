@@ -179,4 +179,15 @@ describe("CLI", () => {
 
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it("validates mutation syntax before confirmation or authentication", async () => {
+    const { fetch, runtime, stderr } = makeRuntime();
+
+    expect(await run([
+      "node", "edstem", "slides", "submit", "12", "--choice", "2", "--dry-run", "--json",
+    ], runtime)).toBe(2);
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(JSON.parse(stderr.join(""))).toMatchObject({ error: { code: "usage" } });
+  });
 });

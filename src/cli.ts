@@ -126,7 +126,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     }));
   units.command("show")
     .description("Show one enrolled unit.")
-    .argument("<unit>", "Unit ID or code")
+    .argument("<unit>", "Unit ID or code", unitIdentifier)
     .action(outputAction(runtime, async (client, _command, unit: string) => {
       const { courses } = await client.fetchUser();
       const course = courses.find((candidate) =>
@@ -229,16 +229,22 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     .option("--choice <number>", "One-based choice; repeat for multi-select", collectPositiveInteger, [])
     .option("--amend", "Amend an existing response.")
     .action(mutationAction(runtime,
-      (command, slide: number) => ({
-        summary: command.opts().question
-          ? `Save an answer for question ${command.opts().question} on slide ${slide}.`
-          : `Submit all saved answers for slide ${slide}.`,
-      }),
-      async (client, command, slide: number) => {
+      (command, slide: number) => {
         const options = command.opts();
         if (options.choice.length > 0 && options.question === undefined) {
           throw new CliError("usage", "--choice requires --question.");
         }
+        if (options.amend && options.question === undefined) {
+          throw new CliError("usage", "--amend requires --question.");
+        }
+        return {
+          summary: options.question
+            ? `Save an answer for question ${options.question} on slide ${slide}.`
+            : `Submit all saved answers for slide ${slide}.`,
+        };
+      },
+      async (client, command, slide: number) => {
+        const options = command.opts();
         if (options.question !== undefined) {
           return client.submitSlideAnswer(
             options.question,
@@ -371,6 +377,11 @@ function positiveInteger(value: string): number {
     throw new CliError("usage", "Value must be a positive integer.");
   }
   return parsed;
+}
+
+function unitIdentifier(value: string): string {
+  if (/^\d+$/.test(value) || /^[a-z]{2,}\d{3,}[a-z0-9_-]*$/i.test(value)) return value;
+  throw new CliError("usage", "Unit must be a numeric ID or unit code.");
 }
 
 function nonNegativeNumber(value: string): number {
