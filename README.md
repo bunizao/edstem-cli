@@ -3,86 +3,76 @@
 CLI and MCP access to Ed Discussion for people, scripts, and agents.
 
 [![npm version](https://img.shields.io/npm/v/edstem-cli?logo=npm)](https://www.npmjs.com/package/edstem-cli)
-[![npm downloads](https://img.shields.io/npm/dm/edstem-cli?logo=npm)](https://www.npmjs.com/package/edstem-cli)
 [![CI](https://github.com/bunizao/edstem-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/bunizao/edstem-cli/actions/workflows/ci.yml)
 [![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-[![Bun compatible](https://img.shields.io/badge/Bun-compatible-000?logo=bun)](https://bun.sh/)
-[![MCP](https://img.shields.io/badge/MCP-local%20%2B%20hosted-5A67D8)](https://modelcontextprotocol.io/)
-[![Quiz answering](https://img.shields.io/badge/quiz%20answering-beta-orange)](#quiz-answering-beta)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-One package provides a human- and agent-friendly CLI plus local and hosted MCP servers:
-
-| Surface          | What it does                                                                                      | Runtime            | Authentication                                                    |
-| ---------------- | ------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------- |
-| `edstem` **CLI** | Query courses, lessons, threads, and activity as compact JSON or Markdown; answer quizzes in beta | Node.js 20+ or Bun | Local Ed API token                                                |
-| **local MCP**    | Expose the same Ed operations to local MCP clients over stdio                                     | Node.js 20+ or Bun | Local Ed API token                                                |
-| **Hosted MCP**   | Offer remote Streamable HTTP access for shared deployments and remote MCP clients                 | Bun                | OAuth at [`edstem.tuuhub.com/mcp`](https://edstem.tuuhub.com/mcp) |
-
-Node.js 20+ is the supported npm baseline. The CLI and local MCP bundles are also Bun-compatible; the hosted server requires Bun for `Bun.serve` and `bun:sqlite`.
-
-## Installation
+## Install
 
 ```bash
-npm i -g edstem-cli
-bun add -g edstem-cli  # if you like Bun🥟
+npm install -g edstem-cli
+export EDSTEM_TOKEN="your-token"
+edstem auth status
 ```
 
-Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens). The CLI also reads `~/.config/edstem-cli/token`.
+Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens). The CLI also reads `~/.config/edstem-cli/token` and `~/.config/edstem-cli/config.yaml`.
+
+## Command model
+
+Commands follow `edstem <plural-noun> [verb] [scope] [id] [flags]`. The canonical enrolment noun is `units`; `courses` and `projects` are equivalent aliases.
 
 ```bash
-export ED_API_TOKEN="your-token"
-edstem courses
-```
-
-A course table in the terminal means you're set!
-
-## CLI
-
-`edstem` is designed as an **AI-native** CLI, so JSON is the default. List commands return compact summaries; detail commands fetch full records and can export Markdown. The examples below use the globally installed command; without installing, prefix them with `npx edstem-cli` or `bunx edstem-cli`.
-
-Cases:
-
-```bash
-edstem courses
-edstem threads 12345 --max 20 --fields id,number,title,flags
-edstem thread 12345#42
+edstem units
+edstem courses FIT1045
+edstem threads 12345 --max 20 --fields id,number,title
+edstem threads show 12345#42
+edstem threads read 12345#42
 edstem lessons 12345 --module "Week 2"
-edstem thread 67890 --md --output thread.md
+edstem lessons show 67890
 ```
 
-Quiz and lesson-progress commands mutate your Ed state. Run them only when that is intentional:
+Omitted verbs are inferred when the arguments are unambiguous. `read` always emits Markdown and never changes upstream state.
+
+Slide facets use one read-only command so the verb vocabulary stays consistent:
 
 ```bash
-edstem lessons read 12345 Pre-Reading
+edstem slides show 4401
+edstem slides show 4401 --section questions
+edstem slides show 4401 --section responses
 ```
 
-### Quiz answering (beta)
+## Mutations
 
-`edstem` can inspect quiz questions and saved responses, answer single- or multi-select questions, amend an answer, and submit the completed slide.
+Mutations are visible in help, print a plan, and prompt with `y/N` in an interactive terminal. Non-interactive callers must pass `--yes`. `--dry-run` prints the plan without sending a write request.
 
 ```bash
-# Inspect a quiz slide and its saved responses.
-edstem lessons quiz 4401
-edstem lessons quiz 4401 --responses
+edstem lessons mark-read 12345 Pre-Reading --dry-run
+edstem lessons mark-read 12345 Pre-Reading --yes
 
-# Save an answer. Repeat --choice for multi-select questions.
-edstem lessons quiz 4401 --answer 991 --choice 2
-edstem lessons quiz 4401 --answer 991 --choice 2 --choice 4 --amend
-
-# Submit all saved answers for the slide.
-edstem lessons quiz 4401 --submit
+# Save one answer, then submit all saved answers for the slide.
+edstem slides submit 4401 --question 991 --choice 2 --yes
+edstem slides submit 4401 --yes
 ```
 
-This feature is beta because Ed's quiz endpoints are not part of a stable public API. Review the selected question and choices before writing, and treat `--submit` as final unless the course allows another attempt.
+## Output and errors
 
-Use `edstem --help` for the complete command reference. Raw Ed XML stays out of thread JSON unless you pass `--include-html`.
+Successful output is a table when stdout is a terminal and JSON when stdout is piped or redirected. Override this with `--json`, `--yaml`, or `--table`; select fields with `--fields a,b`; write to a file with `--output FILE`.
+
+Errors are rendered exactly once on stderr. Usage failures exit 2, authentication failures exit 3, missing entities exit 4, upstream rejections exit 5, and cancellation exits 130.
+
+Run `edstem commands --json` for the full machine-readable command tree, including aliases, positionals, enum values, and mutation markers.
+
+## Environment
+
+| Variable | Purpose |
+| --- | --- |
+| `EDSTEM_BASE_URL` | Override the Ed JSON API base URL. |
+| `EDSTEM_TOKEN` | Provide the Ed API token. |
+| `EDSTEM_CONFIG` | Override the local config file path. |
 
 ## MCP
 
-### Local
-
-Configure an MCP client to launch the stdio server:
+The package also installs `edstem-mcp`, a local stdio MCP server using the same `EDSTEM_TOKEN`. A hosted Streamable HTTP server is available at `https://edstem.tuuhub.com/mcp` and uses OAuth.
 
 ```json
 {
@@ -90,42 +80,21 @@ Configure an MCP client to launch the stdio server:
     "edstem": {
       "command": "edstem-mcp",
       "env": {
-        "ED_API_TOKEN": "your-token"
+        "EDSTEM_TOKEN": "your-token"
       }
     }
   }
 }
 ```
 
-### Hosted
-
-Add `https://edstem.tuuhub.com/mcp` as a Streamable HTTP MCP server. Your client opens the OAuth flow, where you provide an Ed API token and approve the requested access.
-
-Local adapters receive your Ed token directly. The hosted server encrypts tokens at rest, maps them to OAuth identities, and requires a separate write scope for quiz and lesson-progress mutations.
-
 ## Agent skill
 
 ```bash
 npx skills add https://github.com/bunizao/edstem-cli
-
-# Inspect metadata or regenerate the tracked reference.
-edstem skills
 edstem skills generate
 ```
 
-[SKILL.md](https://github.com/bunizao/edstem-cli/blob/main/SKILL.md) is the canonical agent reference. Its CLI table and MCP tool list are generated from the implementation, and CI rejects drift.
-
-## Self-hosting
-
-The hosted adapter uses Bun, Streamable HTTP, OAuth, encrypted Ed tokens, and SQLite.
-
-```bash
-cp .env.example .env
-# Set MASTER_KEY and PUBLIC_BASE_URL.
-docker compose up -d
-```
-
-The image exposes `/healthz`, `/readyz`, and `/mcp`. SQLite data lives in the `app_data` volume.
+The tracked [SKILL.md](SKILL.md) is generated from `edstem commands --json` plus the MCP tool catalog. CI rejects drift.
 
 ## Development
 
@@ -138,7 +107,7 @@ npm run pack:check
 npm run pack:smoke
 ```
 
-`npm test` runs Vitest for the Node.js CLI and local MCP server, then Bun tests for remote OAuth, security, SQLite, and reconnect behavior.
+Node.js 20+ is the supported npm baseline. The CLI and local MCP bundle are Bun-compatible; the hosted server requires Bun.
 
 ## License
 
