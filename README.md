@@ -94,20 +94,7 @@ npx skills add https://github.com/bunizao/edstem-cli
 edstem skills generate
 ```
 
-The tracked [SKILL.md](SKILL.md) is generated from `edstem commands --json` plus the MCP tool catalog. CI rejects drift.
-
-## Development
-
-```bash
-npm install
-npm run check
-npm test
-npm run build
-npm run pack:check
-npm run pack:smoke
-```
-
-Node.js 20+ is the supported npm baseline. The CLI and local MCP bundle are Bun-compatible; the hosted server requires Bun.
+The tracked [SKILL.md](SKILL.md) is generated from `edstem commands --json` plus the MCP tool catalog. CI rejects drift. The shared CLI contract is loaded from the tagged `@bunizao/cli-kit` v0.1.0 source archive, without a sibling development checkout.
 
 ## License
 

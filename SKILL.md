@@ -13,6 +13,7 @@ Choose the narrowest surface that fits the environment:
 
 ## Agent rules
 
+- Treat `edstem commands --json` as the source of truth for the v0.1.0 shared CLI contract.
 - Run the narrowest command or tool that answers the request.
 - Successful piped output is JSON by default. Use `--fields` to retain only needed top-level fields.
 - Use `--json`, `--yaml`, or `--table` only when overriding TTY-based format selection.

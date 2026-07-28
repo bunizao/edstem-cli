@@ -9,3 +9,5 @@ node_modules/
 coverage/
 .data/
 *.tgz
+.DS_Store
+.playwright-mcp/
