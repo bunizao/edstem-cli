@@ -13,11 +13,11 @@ import type {
 } from "./models.js";
 
 export class EdApiError extends Error {
-  readonly kind: "api" | "auth_expired" | "base_url" | "upstream";
+  readonly kind: "api" | "auth_expired" | "base_url" | "network" | "upstream";
   readonly statusCode: number;
 
   constructor(
-    kind: "api" | "auth_expired" | "base_url" | "upstream",
+    kind: "api" | "auth_expired" | "base_url" | "network" | "upstream",
     statusCode: number,
     message: string
   ) {
@@ -63,7 +63,7 @@ export class EdClient {
 
   constructor(options: EdClientOptions) {
     this.apiBaseUrl = ensureTrailingSlash(
-      options.apiBaseUrl ?? process.env.ED_API_BASE_URL ?? "https://edstem.org/api/"
+      options.apiBaseUrl ?? process.env.EDSTEM_BASE_URL ?? "https://edstem.org/api/"
     );
     this.fetch = options.fetch ?? globalThis.fetch;
     this.token = options.token;
@@ -250,7 +250,7 @@ export class EdClient {
       });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      throw new EdApiError("upstream", 0, `Failed to reach the Ed API: ${detail}`);
+      throw new EdApiError("network", 0, `Failed to reach the Ed API: ${detail}`);
     }
 
     if (response.status >= 300 && response.status < 400) {
@@ -258,7 +258,7 @@ export class EdClient {
       throw new EdApiError(
         "base_url",
         response.status,
-        `Ed API base URL redirected to ${location}. Set ED_API_BASE_URL to a valid JSON API endpoint.`
+        `Ed API base URL redirected to ${location}. Set EDSTEM_BASE_URL to a valid JSON API endpoint.`
       );
     }
 
@@ -292,7 +292,7 @@ export class EdClient {
       throw new EdApiError(
         "base_url",
         response.status,
-        "Ed API returned a non-JSON response. Set ED_API_BASE_URL to a valid JSON API endpoint."
+        "Ed API returned a non-JSON response. Set EDSTEM_BASE_URL to a valid JSON API endpoint."
       );
     }
 
@@ -301,7 +301,7 @@ export class EdClient {
       throw new EdApiError(
         "base_url",
         response.status,
-        "Ed API returned a non-JSON response. Set ED_API_BASE_URL to a valid JSON API endpoint."
+        "Ed API returned a non-JSON response. Set EDSTEM_BASE_URL to a valid JSON API endpoint."
       );
     }
 

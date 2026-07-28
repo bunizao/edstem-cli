@@ -33,6 +33,7 @@ function makeRuntime(status = 200, isTTY = false): {
     runtime: {
       createClient: async () => client,
       defaultFetchCount: async () => 30,
+      interactive: false,
       isTTY,
       writeStderr: (text) => stderr.push(text),
       writeStdout: (text) => stdout.push(text),
@@ -55,8 +56,25 @@ describe("CLI", () => {
     expect(fetch).toHaveBeenCalledOnce();
     expect(JSON.parse(stdout.join(""))).toMatchObject({
       id: 12345,
-      courses: expect.arrayContaining([expect.objectContaining({ id: 100, code: "CS101" })]),
+      units: expect.arrayContaining([expect.objectContaining({ id: 100, code: "CS101" })]),
     });
+  });
+
+  it("infers list and show verbs and resolves all unit aliases", async () => {
+    for (const noun of ["units", "courses", "projects"]) {
+      const list = makeRuntime();
+      expect(await run(["node", "edstem", noun], list.runtime)).toBe(0);
+      expect(JSON.parse(list.stdout.join(""))).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: 100, code: "CS101" })])
+      );
+    }
+
+    const detail = makeRuntime();
+    expect(await run(["node", "edstem", "threads", "show", "5001"], detail.runtime)).toBe(0);
+    expect(JSON.parse(detail.stdout.join(""))).toHaveProperty("users.67890.name", "Bob TA");
+
+    const interleaved = makeRuntime();
+    expect(await run(["node", "edstem", "threads", "--max", "1", "100"], interleaved.runtime)).toBe(0);
   });
 
   it("emits compact thread summaries and field selection", async () => {
@@ -73,41 +91,92 @@ describe("CLI", () => {
   it("keeps human-readable tables for TTY output", async () => {
     const { runtime, stdout } = makeRuntime(200, true);
 
-    await run(["node", "edstem", "courses"], runtime);
+    await run(["node", "edstem", "units"], runtime);
 
-    expect(stdout.join("")).toContain("ID");
+    expect(stdout.join("")).toContain("id");
     expect(stdout.join("")).toContain("CS101");
     expect(stdout.join("")).not.toMatch(/^\[/);
   });
 
-  it("omits Ed XML from thread detail by default", async () => {
-    const { runtime, stdout } = makeRuntime();
+  it("exports thread Markdown only through the read verb", async () => {
+    const { fetch, runtime, stdout } = makeRuntime();
 
-    await run(["node", "edstem", "thread", "5001"], runtime);
-
-    expect(stdout.join("")).not.toContain("<document");
-    expect(JSON.parse(stdout.join(""))).toHaveProperty("users.67890.name", "Bob TA");
-  });
-
-  it("exports thread Markdown without JSON quoting", async () => {
-    const { runtime, stdout } = makeRuntime();
-
-    await run(["node", "edstem", "thread", "5001", "--md"], runtime);
+    expect(await run(["node", "edstem", "threads", "read", "5001"], runtime)).toBe(0);
 
     expect(stdout.join("")).toContain("# #1 How do I install Python?");
     expect(stdout.join("")).not.toMatch(/^"/);
+    expect(fetch.mock.calls.map((call) => call[1]?.method)).toEqual(["GET"]);
   });
 
-  it("writes stable machine-readable auth errors", async () => {
+  it("renders structured auth errors with the shared contract", async () => {
     const { runtime, stderr } = makeRuntime(401);
 
-    expect(await run(["node", "edstem", "user"], runtime)).toBe(3);
+    expect(await run(["node", "edstem", "user", "--json"], runtime)).toBe(3);
 
     expect(JSON.parse(stderr.join(""))).toEqual({
       error: {
         code: "auth",
         message: "Authentication failed (HTTP 401). Check your Ed API token.",
       },
+      exit_code: 3,
+      ok: false,
     });
+  });
+
+  it("returns usage exit 2 for unknown commands and writes one error", async () => {
+    const { runtime, stderr, stdout } = makeRuntime();
+
+    expect(await run(["node", "edstem", "bogus", "--json"], runtime)).toBe(2);
+
+    expect(stdout).toEqual([]);
+    expect(stderr).toHaveLength(1);
+    expect(JSON.parse(stderr.join(""))).toMatchObject({ error: { code: "usage" }, exit_code: 2 });
+  });
+
+  it("treats help and version as successful control flow", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      expect(await run(["node", "edstem", "--help"], makeRuntime().runtime)).toBe(0);
+      expect(await run(["node", "edstem", "-V"], makeRuntime().runtime)).toBe(0);
+      expect(await run(["node", "edstem", "help", "threads"], makeRuntime().runtime)).toBe(0);
+      expect(write).toHaveBeenCalled();
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it("describes the normalized command tree", async () => {
+    const { runtime, stdout } = makeRuntime();
+
+    expect(await run(["node", "edstem", "commands", "--json"], runtime)).toBe(0);
+
+    const metadata = JSON.parse(stdout.join(""));
+    const commands = metadata.commands.flatMap((command: { commands: unknown[] }) => command.commands);
+    expect(commands).toEqual(expect.arrayContaining([
+      expect.objectContaining({ verb: "mark-read", mutating: true }),
+      expect.objectContaining({ verb: "submit", mutating: true }),
+    ]));
+    expect(commands.map((command: { verb?: string }) => command.verb).filter(Boolean)).not.toEqual(
+      expect.arrayContaining(["questions", "responses", "quiz", "answer"])
+    );
+  });
+
+  it("rejects non-interactive mutations unless confirmed", async () => {
+    const { fetch, runtime, stderr } = makeRuntime();
+
+    expect(await run(["node", "edstem", "lessons", "mark-read", "100"], runtime)).toBe(2);
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(stderr.join("")).toContain("--yes");
+  });
+
+  it("supports dry-run without issuing an upstream request", async () => {
+    const { fetch, runtime } = makeRuntime();
+
+    expect(await run([
+      "node", "edstem", "slides", "submit", "12", "--question", "15", "--choice", "2", "--dry-run",
+    ], runtime)).toBe(0);
+
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

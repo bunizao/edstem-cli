@@ -25,7 +25,7 @@ export async function listThreads(client: EdClient, options: ThreadListOptions):
 export async function resolveThread(client: EdClient, reference: string): Promise<Thread> {
   const match = /^(\d+)(?:#(\d+))?$/.exec(reference.trim());
   if (!match) {
-    throw new CliError("input", "Thread reference must be a thread ID or course_id#number", 2);
+    throw new CliError("usage", "Thread reference must be a thread ID or course_id#number");
   }
   const id = Number(match[1]);
   const number = match[2] ? Number(match[2]) : undefined;
@@ -91,7 +91,7 @@ export async function readLessons(
   delaySeconds = 0
 ): Promise<LessonReadResult[]> {
   if (delaySeconds < 0) {
-    throw new CliError("input", "--delay must be greater than or equal to 0", 2);
+    throw new CliError("usage", "--delay must be greater than or equal to 0");
   }
   const normalizedQueries = queries.map((query) => query.trim().toLowerCase()).filter(Boolean);
   const lessons = (await listLessons(client, courseId)).filter((lesson) => {
@@ -155,7 +155,7 @@ function lessonReadResult(
 
 function assertPositive(value: number, label: string): void {
   if (!Number.isInteger(value) || value <= 0) {
-    throw new CliError("input", `${label} must be greater than 0`, 2);
+    throw new CliError("usage", `${label} must be greater than 0`);
   }
 }
 

@@ -33,8 +33,9 @@
     "prepublishOnly": "npm run check && npm test && npm run build"
   },
   "dependencies": {
+    "@bunizao/cli-kit": "file:../cli-kit",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "commander": "^14.0.0",
+    "commander": "^13.1.0",
     "node-html-parser": "^7.1.0",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"

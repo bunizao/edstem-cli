@@ -2,15 +2,14 @@ import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { loadToken } from "../src/auth.js";
 import { loadConfig } from "../src/config.js";
-import { selectFields } from "../src/output.js";
 
 describe("auth, config, and output", () => {
   it("prefers the environment token", async () => {
-    expect(await loadToken({ env: { ED_API_TOKEN: " env-token " }, tokenFile: "/missing" })).toBe("env-token");
+    expect(await loadToken({ env: { EDSTEM_TOKEN: " env-token " }, tokenFile: "/missing" })).toBe("env-token");
   });
 
   it("loads a token file without verifying it", async () => {
@@ -44,9 +43,15 @@ describe("auth, config, and output", () => {
     expect(await loadConfig(configFile)).toMatchObject({ fetchCount: 12 });
   });
 
-  it("selects top-level fields from list results", () => {
-    expect(selectFields([{ id: 1, title: "A", body: "large" }], "id,title")).toEqual([
-      { id: 1, title: "A" },
-    ]);
+  it("uses the normalized base URL even when the config file is absent", async () => {
+    vi.stubEnv("EDSTEM_BASE_URL", "https://example.test/api/");
+    try {
+      expect(await loadConfig("/missing-edstem-config.yaml")).toMatchObject({
+        apiBaseUrl: "https://example.test/api/",
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
+
 });

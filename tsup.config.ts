@@ -9,6 +9,7 @@ export default defineConfig({
   target: "node20",
   platform: "node",
   bundle: true,
+  noExternal: ["@bunizao/cli-kit"],
   clean: true,
   sourcemap: false,
   dts: false,

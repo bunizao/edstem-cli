@@ -11,13 +11,15 @@ describe("generated skill", () => {
   it("includes CLI commands and MCP tools from canonical metadata", () => {
     const markdown = generateSkillMarkdown(createProgram());
 
-    expect(markdown).toContain("edstem threads");
+    expect(markdown).toContain("edstem threads read");
     expect(markdown).toContain("get_course_thread");
     expect(markdown).toContain("mark_lessons_read");
     expect(markdown).toContain("--fields");
     expect(markdown).toContain("https://edstem.tuuhub.com/mcp");
-    expect(markdown).toContain("pass `--json` explicitly");
-    expect(markdown).toContain("Require explicit user intent");
+    expect(markdown).toContain("Successful piped output is JSON by default");
+    expect(markdown).toContain("require explicit user intent");
+    expect(markdown).toContain("edstem commands --json");
+    expect(markdown).toContain("| edstem lessons mark-read");
   });
 
   it("writes the generated skill deterministically", async () => {

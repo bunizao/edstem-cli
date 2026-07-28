@@ -15,7 +15,7 @@ export interface TokenSourceOptions {
 
 export async function loadToken(options: TokenSourceOptions = {}): Promise<string> {
   const env = options.env ?? process.env;
-  const fromEnvironment = env.ED_API_TOKEN?.trim();
+  const fromEnvironment = env.EDSTEM_TOKEN?.trim();
   if (fromEnvironment) {
     return fromEnvironment;
   }
@@ -29,7 +29,7 @@ export async function loadToken(options: TokenSourceOptions = {}): Promise<strin
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code !== "ENOENT") {
-      throw new CliError("config", `Could not read Ed token file: ${tokenFile}`, 2);
+      throw new CliError("config", `Could not read Ed token file: ${tokenFile}`);
     }
   }
 
@@ -37,7 +37,7 @@ export async function loadToken(options: TokenSourceOptions = {}): Promise<strin
   if (interactive) {
     const token = (await (options.prompt ?? promptHiddenToken)()).trim();
     if (!token) {
-      throw new CliError("auth", "No Ed token provided", 3);
+      throw new CliError("auth", "No Ed token provided");
     }
     await mkdir(dirname(tokenFile), { recursive: true, mode: 0o700 });
     await writeFile(tokenFile, `${token}\n`, { encoding: "utf8", mode: 0o600 });
@@ -47,8 +47,7 @@ export async function loadToken(options: TokenSourceOptions = {}): Promise<strin
 
   throw new CliError(
     "auth",
-    `No Ed token found. Set ED_API_TOKEN or create ${tokenFile}. Get a token at ${TOKEN_HELP_URL}.`,
-    3
+    `No Ed token found. Set EDSTEM_TOKEN or create ${tokenFile}. Get a token at ${TOKEN_HELP_URL}.`
   );
 }
 
@@ -58,7 +57,7 @@ async function promptHiddenToken(): Promise<string> {
   );
   const stdin = process.stdin;
   if (!stdin.isTTY || typeof stdin.setRawMode !== "function") {
-    throw new CliError("auth", "Interactive token input requires a terminal", 3);
+    throw new CliError("auth", "Interactive token input requires a terminal");
   }
 
   return new Promise((resolve, reject) => {
@@ -74,7 +73,7 @@ async function promptHiddenToken(): Promise<string> {
     const onData = (chunk: Buffer): void => {
       for (const byte of chunk) {
         if (byte === 3) {
-          finish(new CliError("auth", "Token input cancelled", 3));
+          finish(new CliError("auth", "Token input cancelled"));
           return;
         }
         if (byte === 10 || byte === 13) {
