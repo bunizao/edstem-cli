@@ -5,7 +5,7 @@ export default defineConfig({
     globals: true,
     environment: "node",
     restoreMocks: true,
-    exclude: ["tests/remote/**"],
+    exclude: ["tests/remote/**", "tests/worker/**"],
     include: ["tests/**/*.test.ts"],
   },
 });

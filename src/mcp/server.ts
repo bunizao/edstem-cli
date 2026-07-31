@@ -1,5 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import { McpServer, type AuthInfo } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { EdApiError, EdAuthExpiredError, type EdClient } from "../ed/client.js";
@@ -23,7 +22,9 @@ const WRITES_PROGRESS = { destructiveHint: false, readOnlyHint: false } as const
 const WRITE = { destructiveHint: true, readOnlyHint: false } as const;
 
 export interface McpToolContext {
-  authInfo?: AuthInfo;
+  http?: {
+    authInfo?: AuthInfo;
+  };
 }
 
 export interface EdMcpRuntime {
@@ -54,7 +55,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("list_courses"),
-      inputSchema: { includeArchived: z.boolean().optional().default(false) },
+      inputSchema: z.object({ includeArchived: z.boolean().optional().default(false) }),
     },
     async ({ includeArchived }, extra) => runTool(runtime, extra, false, async (client) => {
       const { courses } = await client.fetchUser();
@@ -69,13 +70,13 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("list_lessons"),
-      inputSchema: {
+      inputSchema: z.object({
         courseId: z.number().int().positive(),
         lessonType: z.string().trim().min(1).optional(),
         module: z.string().trim().min(1).optional(),
         state: z.string().trim().min(1).optional(),
         status: z.string().trim().min(1).optional(),
-      },
+      }),
     },
     async ({ courseId, lessonType, module, state, status }, extra) =>
       runTool(runtime, extra, false, async (client) =>
@@ -89,7 +90,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("get_lesson"),
-      inputSchema: { lessonId: z.number().int().positive() },
+      inputSchema: z.object({ lessonId: z.number().int().positive() }),
     },
     async ({ lessonId }, extra) => runTool(runtime, extra, false, async (client) =>
       projectLessonDetail(await client.fetchLesson(lessonId))
@@ -101,7 +102,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("list_slide_questions"),
-      inputSchema: { slideId: z.number().int().positive() },
+      inputSchema: z.object({ slideId: z.number().int().positive() }),
     },
     async ({ slideId }, extra) => runTool(runtime, extra, false, async (client) =>
       (await client.fetchSlideQuestions(slideId)).map(projectQuestion)
@@ -113,7 +114,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("list_slide_responses"),
-      inputSchema: { slideId: z.number().int().positive() },
+      inputSchema: z.object({ slideId: z.number().int().positive() }),
     },
     async ({ slideId }, extra) => runTool(runtime, extra, false, async (client) =>
       (await client.fetchSlideQuestionResponses(slideId)).map(projectQuestionResponse)
@@ -125,14 +126,14 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("list_threads"),
-      inputSchema: {
+      inputSchema: z.object({
         answered: z.boolean().optional(),
         category: z.string().trim().min(1).optional(),
         courseId: z.number().int().positive(),
         limit: z.number().int().positive().max(100).optional().default(30),
         sort: z.enum(["new", "old", "top", "hot"]).optional().default("new"),
         threadType: z.string().trim().min(1).optional(),
-      },
+      }),
     },
     async ({ answered, category, courseId, limit, sort, threadType }, extra) =>
       runTool(runtime, extra, false, async (client) =>
@@ -146,10 +147,10 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("get_thread"),
-      inputSchema: {
+      inputSchema: z.object({
         includeHtml: z.boolean().optional().default(false),
         threadId: z.number().int().positive(),
-      },
+      }),
     },
     async ({ includeHtml, threadId }, extra) => runTool(runtime, extra, false, async (client) =>
       projectThreadDetail(await client.fetchThread(threadId), { includeHtml })
@@ -161,11 +162,11 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("get_course_thread"),
-      inputSchema: {
+      inputSchema: z.object({
         courseId: z.number().int().positive(),
         includeHtml: z.boolean().optional().default(false),
         number: z.number().int().positive(),
-      },
+      }),
     },
     async ({ courseId, includeHtml, number }, extra) =>
       runTool(runtime, extra, false, async (client) =>
@@ -178,11 +179,11 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("list_activity"),
-      inputSchema: {
+      inputSchema: z.object({
         courseId: z.number().int().positive().optional(),
         filterType: z.enum(["all", "thread", "answer", "comment"]).optional().default("all"),
         limit: z.number().int().positive().max(50).optional().default(30),
-      },
+      }),
     },
     async ({ courseId, filterType, limit }, extra) => runTool(runtime, extra, false, async (client) =>
       compactActivity(await listCurrentActivity(client, { courseId, filterType, limit }))
@@ -194,11 +195,11 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: WRITES_PROGRESS,
       description: toolDescription("mark_lessons_read"),
-      inputSchema: {
+      inputSchema: z.object({
         courseId: z.number().int().positive(),
         delaySeconds: z.number().min(0).max(10).optional().default(0),
         queries: z.array(z.string().trim().min(1)).max(10).optional().default([]),
-      },
+      }),
     },
     async ({ courseId, delaySeconds, queries }, extra) =>
       runTool(runtime, extra, true, (client) => readLessons(client, courseId, queries, delaySeconds))
@@ -209,11 +210,11 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: WRITE,
       description: toolDescription("submit_slide_answer"),
-      inputSchema: {
+      inputSchema: z.object({
         amend: z.boolean().optional().default(false),
         choices: z.array(z.number().int().positive()).optional().default([]),
         questionId: z.number().int().positive(),
-      },
+      }),
     },
     async ({ amend, choices, questionId }, extra) => runTool(runtime, extra, true, (client) =>
       client.submitSlideAnswer(questionId, choices.map((choice) => choice - 1), { amend })
@@ -225,7 +226,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: WRITE,
       description: toolDescription("submit_slide"),
-      inputSchema: { slideId: z.number().int().positive() },
+      inputSchema: z.object({ slideId: z.number().int().positive() }),
     },
     async ({ slideId }, extra) => runTool(runtime, extra, true, (client) => client.submitSlide(slideId))
   );

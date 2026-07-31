@@ -74,6 +74,8 @@ Run `edstem commands --json` for the full machine-readable command tree, includi
 
 The package also installs `edstem-mcp`, a local stdio MCP server using the same `EDSTEM_TOKEN`. A hosted Streamable HTTP server is available at `https://edstem.tuuhub.com/mcp` and uses OAuth.
 
+The remote runtime supports MCP `2026-07-28`, including stateless `server/discover`, header-based routing, and results with `resultType`. It also keeps a stateless compatibility lane for 2025 Streamable HTTP clients during migration.
+
 ```json
 {
   "mcpServers": {
@@ -86,6 +88,21 @@ The package also installs `edstem-mcp`, a local stdio MCP server using the same 
   }
 }
 ```
+
+### Cloudflare Worker
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/bunizao/edstem-cli)
+
+The button copies this repository to your Git provider and deploys `src/worker.ts`. The Worker uses no database, storage binding, or protocol session. Clients send an Ed access token or API key with each request; the Worker validates the credential without storing it. The hosted OAuth service stores the Ed token encrypted with AES-256-GCM instead.
+
+After deployment, the endpoints are:
+
+```text
+https://<worker-host>/mcp
+https://<worker-host>/healthz
+```
+
+See the [MCP setup guide](MCP_SETUP.md) for manual deployment, credential-storage details, Worker configuration, and connection steps for ChatGPT web, Codex, and Claude connectors.
 
 ## Agent skill
 
