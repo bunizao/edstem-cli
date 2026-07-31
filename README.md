@@ -93,7 +93,7 @@ The remote runtime supports MCP `2026-07-28`, including stateless `server/discov
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/bunizao/edstem-cli/tree/feat/cloudflare-worker-mcp)
 
-The button copies this repository to your Git provider and deploys `src/worker.ts`. The Worker uses no database, storage binding, or protocol session. Clients send an Ed access token or API key with each request; the Worker validates the credential without storing it.
+The button copies this repository to your Git provider and deploys `src/worker.ts`. The Worker uses no database, storage binding, or protocol session. Clients send an Ed access token or API key with each request; the Worker validates the credential without storing it. The hosted OAuth service stores the Ed token encrypted with AES-256-GCM instead.
 
 After deployment, the endpoints are:
 
@@ -110,7 +110,7 @@ npx wrangler login
 npm run deploy:worker
 ```
 
-See the [MCP setup guide](MCP_SETUP.md) for Worker configuration and connection steps for ChatGPT web, Codex, and Claude connectors.
+See the [MCP setup guide](MCP_SETUP.md) for credential-storage details, Worker configuration, and connection steps for ChatGPT web, Codex, and Claude connectors.
 
 ## Agent skill
 
