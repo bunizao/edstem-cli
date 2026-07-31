@@ -74,6 +74,8 @@ Run `edstem commands --json` for the full machine-readable command tree, includi
 
 The package also installs `edstem-mcp`, a local stdio MCP server using the same `EDSTEM_TOKEN`. A hosted Streamable HTTP server is available at `https://edstem.tuuhub.com/mcp` and uses OAuth.
 
+The remote runtime supports MCP `2026-07-28`, including stateless `server/discover`, header-based routing, and results with `resultType`. It also keeps a stateless compatibility lane for 2025 Streamable HTTP clients during migration.
+
 ```json
 {
   "mcpServers": {
@@ -86,6 +88,55 @@ The package also installs `edstem-mcp`, a local stdio MCP server using the same 
   }
 }
 ```
+
+### Cloudflare Worker
+
+The Worker entry point in `src/worker.ts` runs without SQLite, local files, protocol sessions, or a Durable Object. Each request supplies an Ed access token or API key, which the Worker validates against Ed before invoking an MCP tool. The credential is not persisted by the Worker.
+
+```bash
+npm run build:worker
+npm run dev:worker
+npm run deploy:worker
+```
+
+The endpoint is `/mcp`; health checks use `/healthz`. For production, set explicit comma-separated hostname allowlists in `wrangler.jsonc` or as Worker variables:
+
+```json
+{
+  "vars": {
+    "ED_API_BASE_URL": "https://edstem.org/api/",
+    "MCP_ALLOWED_HOSTNAMES": "edstem-mcp.example.workers.dev",
+    "MCP_ALLOWED_ORIGIN_HOSTNAMES": "chatgpt.com,platform.openai.com"
+  }
+}
+```
+
+Bearer authentication is the preferred HTTP form and works with OpenAI's Responses API:
+
+```ts
+const response = await openai.responses.create({
+  model: "gpt-5",
+  tools: [
+    {
+      type: "mcp",
+      server_label: "edstem",
+      server_url: "https://edstem-mcp.example.workers.dev/mcp",
+      authorization: process.env.EDSTEM_TOKEN,
+      require_approval: "never"
+    }
+  ],
+  input: "List my current Ed courses"
+});
+```
+
+Generic clients can send either header on every MCP request:
+
+```http
+Authorization: Bearer <ed-access-token-or-api-key>
+X-API-Key: <ed-access-token-or-api-key>
+```
+
+`X-API-Key` is a convenience extension, not part of MCP's OAuth authorization standard. ChatGPT custom apps do not support injecting an arbitrary API key; use the hosted OAuth flow for that product surface. The caller-controlled `authorization` field above is available through the Responses API.
 
 ## Agent skill
 

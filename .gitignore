@@ -11,3 +11,4 @@ coverage/
 *.tgz
 .DS_Store
 .playwright-mcp/
+.wrangler/

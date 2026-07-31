@@ -31,6 +31,23 @@ describe("EdClient", () => {
     expect(init?.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it("calls the default fetch with the global receiver", async () => {
+    const fetch = vi.fn<FetchLike>(function (this: unknown) {
+      expect(this).toBe(globalThis);
+      return Promise.resolve(jsonResponse(fixture("user_info")));
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    try {
+      const client = new EdClient({ apiBaseUrl: "https://ed.example/api", token: "secret" });
+      await client.fetchUser();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it("parses nested thread authors and comments", async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(jsonResponse(fixture("thread_detail")));
     const client = new EdClient({ fetch, token: "secret" });

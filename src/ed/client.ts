@@ -63,9 +63,9 @@ export class EdClient {
 
   constructor(options: EdClientOptions) {
     this.apiBaseUrl = ensureTrailingSlash(
-      options.apiBaseUrl ?? process.env.EDSTEM_BASE_URL ?? "https://edstem.org/api/"
+      options.apiBaseUrl ?? readEnvironmentValue("EDSTEM_BASE_URL") ?? "https://edstem.org/api/"
     );
-    this.fetch = options.fetch ?? globalThis.fetch;
+    this.fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.token = options.token;
     this.timeoutMs = options.timeoutMs ?? 15_000;
   }
@@ -307,6 +307,10 @@ export class EdClient {
 
     return payload;
   }
+}
+
+function readEnvironmentValue(name: string): string | undefined {
+  return typeof process === "undefined" ? undefined : process.env[name];
 }
 
 function safeParseJson(rawBody: string): Record<string, unknown> | null {
