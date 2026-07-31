@@ -14,7 +14,7 @@ Never put the Ed token in a URL. The Worker accepts it through `Authorization` o
 
 ## Deploy the Worker
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/bunizao/edstem-cli/tree/feat/cloudflare-worker-mcp)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/bunizao/edstem-cli)
 
 1. Select **Deploy to Cloudflare** and sign in.
 2. Choose a repository and Worker name.
