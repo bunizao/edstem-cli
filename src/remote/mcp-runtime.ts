@@ -12,10 +12,11 @@ export function createRemoteMcpServer(runtime: Runtime) {
       reconnect_url: new URL("/reconnect", runtime.config.publicBaseUrl).toString(),
     }),
     canWrite: (context) => {
-      if (!context.authInfo) {
+      const authInfo = context.http?.authInfo;
+      if (!authInfo) {
         return Boolean(runtime.config.devEdApiToken);
       }
-      return context.authInfo.scopes.includes(runtime.config.oauth.writeScope);
+      return authInfo.scopes.includes(runtime.config.oauth.writeScope);
     },
     getClient: (context) => {
       const userId = getUserId(context);
@@ -57,6 +58,6 @@ export function createRemoteMcpServer(runtime: Runtime) {
 }
 
 function getUserId(context: McpToolContext): number | undefined {
-  const userId = context.authInfo?.extra?.userId;
+  const userId = context.http?.authInfo?.extra?.userId;
   return typeof userId === "number" ? userId : undefined;
 }

@@ -4,9 +4,12 @@ import {
   createOAuthMetadata,
   getOAuthProtectedResourceMetadataUrl
 } from "@modelcontextprotocol/sdk/server/auth/router.js";
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { OAuthServerProvider } from "@modelcontextprotocol/sdk/server/auth/provider.js";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import {
+  createMcpHandler,
+  type AuthInfo,
+  type McpHttpHandler
+} from "@modelcontextprotocol/server";
 import {
   InvalidClientError,
   InvalidClientMetadataError,
@@ -96,6 +99,9 @@ export function createApp(runtime: Runtime): BunApp {
         scopesSupported: runtime.config.oauth.supportedScopes
       })
     : null;
+  const mcpHandler = createMcpHandler(() => createRemoteMcpServer(runtime), {
+    legacy: "stateless"
+  });
 
   return {
     async fetch(request: Request): Promise<Response> {
@@ -116,7 +122,8 @@ export function createApp(runtime: Runtime): BunApp {
           context,
           authMetadataPath,
           protectedResourceMetadataPath,
-          oauthMetadata
+          oauthMetadata,
+          mcpHandler
         );
       } catch (error) {
         runtime.logger.error(
@@ -164,7 +171,8 @@ async function routeRequest(
   context: RequestContext,
   authMetadataPath: string,
   protectedResourceMetadataPath: string,
-  oauthMetadata: Record<string, unknown> | null
+  oauthMetadata: Record<string, unknown> | null,
+  mcpHandler: McpHttpHandler
 ): Promise<Response> {
   const url = new URL(request.url);
   const pathname = url.pathname;
@@ -246,7 +254,7 @@ async function routeRequest(
   }
 
   if (pathname === runtime.config.mcpPath) {
-    return handleMcp(runtime, request, rateLimiter, context);
+    return handleMcp(runtime, request, rateLimiter, context, mcpHandler);
   }
 
   return new Response("Not found", { status: 404 });
@@ -680,7 +688,8 @@ async function handleMcp(
   runtime: Runtime,
   request: Request,
   rateLimiter: RateLimiter,
-  context: RequestContext
+  context: RequestContext,
+  mcpHandler: McpHttpHandler
 ): Promise<Response> {
   if (!rateLimiter.allow(requestKey(request, "mcp"), MCP_RATE_LIMIT)) {
     runtime.logger.warn(
@@ -711,13 +720,7 @@ async function handleMcp(
     authInfo = auth;
   }
 
-  const transport = new WebStandardStreamableHTTPServerTransport({
-    enableJsonResponse: true,
-    sessionIdGenerator: undefined
-  });
-  const server = createRemoteMcpServer(runtime);
-  await server.connect(transport);
-  return transport.handleRequest(request, { authInfo });
+  return mcpHandler.fetch(request, { authInfo });
 }
 
 function handleSettings(runtime: Runtime, request: Request): Response {
