@@ -102,15 +102,7 @@ https://<worker-host>/mcp
 https://<worker-host>/healthz
 ```
 
-For manual deployment:
-
-```bash
-npm ci
-npx wrangler login
-npm run deploy:worker
-```
-
-See the [MCP setup guide](MCP_SETUP.md) for credential-storage details, Worker configuration, and connection steps for ChatGPT web, Codex, and Claude connectors.
+See the [MCP setup guide](MCP_SETUP.md) for manual deployment, credential-storage details, Worker configuration, and connection steps for ChatGPT web, Codex, and Claude connectors.
 
 ## Agent skill
 

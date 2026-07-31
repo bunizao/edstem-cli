@@ -53,7 +53,7 @@ MCP_ALLOWED_ORIGIN_HOSTNAMES=chatgpt.com,claude.ai
 
 Static Ed tokens are a convenience authentication mode, not MCP OAuth. ChatGPT web does not provide a field for an arbitrary API key, so it uses the hosted OAuth endpoint.
 
-## How credentials are handled
+## How each mode handles credentials
 
 ### Hosted OAuth
 
@@ -62,11 +62,11 @@ The OAuth service persists credentials so clients can reconnect without receivin
 - The service verifies your Ed token against Ed's `/api/user` endpoint before saving it.
 - It encrypts the Ed token with AES-256-GCM using a new 12-byte IV and authentication tag for each write.
 - SQLite stores the ciphertext, IV, authentication tag, Ed user ID, Ed user name, verification time, and status. It does not store the plaintext Ed token.
-- A 32-byte `MASTER_KEY`, supplied outside SQLite as a server environment secret, encrypts and decrypts the token.
+- Operators supply a 32-byte `MASTER_KEY` outside SQLite as a server environment secret. The key encrypts and decrypts the token.
 - `MASTER_KEY_PREVIOUS` supports key rotation. The service decrypts an old record and re-encrypts it with the current key on the next read.
 - Plaintext exists in process memory while the service verifies the token or calls Ed. The application does not log it or include it in errors.
 
-The service also issues its own random OAuth access and refresh tokens. These are separate from the Ed token. The current implementation stores them by token value in SQLite with client, user, scope, and expiry metadata so it can validate, refresh, revoke, and delete them. Treat the OAuth database as sensitive even though the raw Ed token inside it is encrypted.
+The service also issues its own random OAuth access and refresh tokens. These are separate from the Ed token. The current implementation stores them by token value in SQLite with client, user, scope, and expiry metadata so it can validate, refresh, revoke, and delete them. Treat the OAuth database as sensitive even though AES-256-GCM protects the raw Ed token inside it.
 
 Deleting the hosted account removes the live encrypted Ed credential and associated OAuth records. Backups may follow the hosting provider's retention policy. See [Terms of Service](TOS.md) for the complete retention statement.
 
@@ -79,7 +79,7 @@ The Worker does not persist the credential.
 - The Worker has no D1, KV, R2, Durable Object, database, or filesystem binding for credentials.
 - The application does not write the header to logs. Your MCP client and hosting provider still apply their own credential and logging policies.
 
-In this mode, “API key” means the Ed token supplied directly by the client. The Worker does not mint or save a separate key.
+In this mode, “API key” means the Ed token that the client sends directly. The Worker does not mint or save a separate key.
 
 ## ChatGPT web
 
