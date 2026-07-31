@@ -15,7 +15,7 @@ RUN npm ci
 
 COPY tsconfig.json tsup.config.ts ./
 COPY src ./src
-RUN npm run build
+RUN npm run build:local && npm run build:remote
 
 FROM bun-runtime AS runtime
 WORKDIR /app
