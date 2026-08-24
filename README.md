@@ -32,7 +32,7 @@ edstem lessons 12345 --module "Week 2"
 edstem lessons show 67890
 ```
 
-Every `<unit>` argument accepts either the numeric Ed course ID or the exact course code. MCP tools use the same rule for `courseId`, so `courseId: "FIT2014"` can be called directly without a preceding `list_courses` lookup.
+Every `<unit>` argument accepts either the numeric Ed course ID or the exact course code. MCP tools use the same rule for `courseId`, so `courseId: "FIT2014"` can be called directly without a preceding `list_courses` lookup. If multiple enrolments share a code, use the numeric ID shown by `edstem units --archived` to select the intended year and session.
 
 Lesson filters are case-insensitive. `--module` accepts an ID or part of a module name; `--type`, `--state`, and `--status` use exact values. Common lesson values are `general`, `active` or `scheduled`, and `unattempted`, `attempted`, or `completed`. Pass `all` or omit a filter to include every value. If an unfiltered lesson list is empty, that unit has no Ed Lessons; an invalid filter reports the values available in that unit.
 

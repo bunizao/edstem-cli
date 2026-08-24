@@ -23,6 +23,13 @@ function makeRuntime(status = 200, isTTY = false): {
     "/api/user": fixture("user_info"),
     "/api/courses/100/threads": fixture("course_threads"),
     "/api/courses/100/threads/1": fixture("thread_detail"),
+    "/api/courses/100/lessons": {
+      lessons: [
+        { course_id: 100, id: 7001, module_id: 1, title: "Workshop", type: "general" },
+        { course_id: 100, id: 7002, module_id: 1, title: "Quiz", type: "quiz" },
+      ],
+      modules: [{ course_id: 100, id: 1, name: "Week 1" }],
+    },
     "/api/threads/5001": fixture("thread_detail"),
     "/api/lessons/7001": {
       lesson: {
@@ -138,6 +145,18 @@ describe("CLI", () => {
     expect(fetch.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
       "/api/user",
       "/api/courses/100/threads/1",
+    ]);
+  });
+
+  it("maps the CLI lesson type option to the core filter", async () => {
+    const { runtime, stdout } = makeRuntime();
+
+    expect(await run([
+      "node", "edstem", "lessons", "100", "--type", "general", "--json",
+    ], runtime)).toBe(0);
+
+    expect(JSON.parse(stdout.join(""))).toEqual([
+      expect.objectContaining({ id: 7001, type: "general" }),
     ]);
   });
 

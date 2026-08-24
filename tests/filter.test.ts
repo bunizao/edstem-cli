@@ -50,9 +50,9 @@ describe("filterThreads", () => {
 
     const result = filterThreads(threads, {
       answered: true,
-      category: "general",
-      subcategory: "minitests",
-      threadType: "question"
+      category: " general ",
+      subcategory: " minitests ",
+      threadType: " question "
     });
 
     expect(result).toHaveLength(1);

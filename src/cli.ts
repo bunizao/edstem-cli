@@ -25,6 +25,7 @@ import {
   listLessons,
   listThreads,
   readLessons,
+  resolveCourse,
   resolveThread,
 } from "./ed/operations.js";
 import {
@@ -145,14 +146,9 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
   units.command("show")
     .description("Show one enrolled unit.")
     .argument("<unit>", "Unit ID or code", unitIdentifier)
-    .action(outputAction(runtime, async (client, _command, unit: string) => {
-      const { courses } = await client.fetchUser();
-      const course = courses.find((candidate) =>
-        String(candidate.id) === unit || candidate.code.toLowerCase() === unit.toLowerCase()
-      );
-      if (!course) throw new CliError("not_found", `Unit ${unit} was not found.`);
-      return projectCourse(course);
-    }));
+    .action(outputAction(runtime, async (client, _command, unit: string) =>
+      projectCourse(await resolveCourse(client, unit))
+    ));
 
   const threads = program.command("threads").description("List, show, or read Ed threads.");
   threads.command("list")
@@ -208,9 +204,15 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     .option("--type <type>", "Exact lesson type, such as general; use all to disable.")
     .option("--state <state>", "Exact state, such as active or scheduled; use all to disable.")
     .option("--status <status>", "Progress: unattempted, attempted, completed, or all.")
-    .action(outputAction(runtime, async (client, command, unit: string) =>
-      (await listLessons(client, unit, command.opts())).map(projectLessonSummary)
-    ));
+    .action(outputAction(runtime, async (client, command, unit: string) => {
+      const options = command.opts();
+      return (await listLessons(client, unit, {
+        lessonType: options.type,
+        module: options.module,
+        state: options.state,
+        status: options.status,
+      })).map(projectLessonSummary);
+    }));
   lessons.command("show")
     .description("Show one lesson and its slides.")
     .argument("<lesson>", "Lesson ID", positiveInteger)

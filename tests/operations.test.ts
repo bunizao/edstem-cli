@@ -81,8 +81,8 @@ describe("resolveCourseId", () => {
     return {
       fetchUser: vi.fn().mockResolvedValue({
         courses: [
-          { id: 100, code: "CS101" },
-          { id: 200, code: "MATH201" },
+          { id: 100, code: "CS101", session: "Semester 1", status: "active", year: "2026" },
+          { id: 200, code: "MATH201", session: "Semester 2", status: "archived", year: "2025" },
         ],
         user: {},
       }),
@@ -96,6 +96,23 @@ describe("resolveCourseId", () => {
   it("reports the available codes when resolution fails", async () => {
     await expect(resolveCourseId(makeCourseClient(), "FIT2014")).rejects.toThrow(
       'Unknown course code "FIT2014". Available course codes: CS101, MATH201.'
+    );
+  });
+
+  it("rejects ambiguous course codes with identifying details", async () => {
+    const client = makeCourseClient();
+    vi.mocked(client.fetchUser).mockResolvedValue({
+      courses: [
+        { id: 100, code: "CS101", session: "Semester 1", status: "active", year: "2026" },
+        { id: 101, code: "CS101", session: "Semester 1", status: "archived", year: "2025" },
+      ],
+      user: {},
+    } as never);
+
+    await expect(resolveCourseId(client, "CS101")).rejects.toThrow(
+      'Course code "CS101" is ambiguous. Matching courses: ' +
+      "100 (2026, Semester 1, active), 101 (2025, Semester 1, archived). " +
+      "Use a numeric course ID."
     );
   });
 });

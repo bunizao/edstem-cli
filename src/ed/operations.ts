@@ -76,22 +76,12 @@ export async function listLessons(
   assertKnownLessonValue(lessons, "state", stateQuery, options.state);
   assertKnownLessonValue(lessons, "status", statusQuery, options.status);
 
-  return lessons.filter((lesson) => {
-    if (
-      moduleQuery &&
-      String(lesson.moduleId) !== moduleQuery &&
-      !lesson.moduleName.toLowerCase().includes(moduleQuery)
-    ) {
-      return false;
-    }
-    if (lessonTypeQuery && lesson.type.toLowerCase() !== lessonTypeQuery) {
-      return false;
-    }
-    if (stateQuery && lesson.state.toLowerCase() !== stateQuery) {
-      return false;
-    }
-    return !statusQuery || lesson.status.toLowerCase() === statusQuery;
-  });
+  return lessons.filter((lesson) =>
+    matchesModule(lesson, moduleQuery) &&
+    matchesLessonValue(lesson, "type", lessonTypeQuery) &&
+    matchesLessonValue(lesson, "state", stateQuery) &&
+    matchesLessonValue(lesson, "status", statusQuery)
+  );
 }
 
 function normalizeFilter(value?: string): string | undefined {
@@ -106,9 +96,7 @@ function assertKnownModule(
 ): void {
   if (
     !query ||
-    lessons.some((lesson) =>
-      String(lesson.moduleId) === query || lesson.moduleName.toLowerCase().includes(query)
-    )
+    lessons.some((lesson) => matchesModule(lesson, query))
   ) {
     return;
   }
@@ -129,7 +117,7 @@ function assertKnownLessonValue(
   query: string | undefined,
   input: string | undefined
 ): void {
-  if (!query || lessons.some((lesson) => lesson[field].toLowerCase() === query)) {
+  if (!query || lessons.some((lesson) => matchesLessonValue(lesson, field, query))) {
     return;
   }
 
@@ -137,6 +125,20 @@ function assertKnownLessonValue(
     .sort((left, right) => left.localeCompare(right))
     .join(", ");
   throw unknownLessonFilter(field, input, available);
+}
+
+function matchesModule(lesson: Lesson, query: string | undefined): boolean {
+  return !query ||
+    String(lesson.moduleId) === query ||
+    lesson.moduleName.toLowerCase().includes(query);
+}
+
+function matchesLessonValue(
+  lesson: Lesson,
+  field: "type" | "state" | "status",
+  query: string | undefined
+): boolean {
+  return !query || lesson[field].toLowerCase() === query;
 }
 
 function unknownLessonFilter(field: string, input: string | undefined, available: string): EdInputError {
@@ -170,22 +172,54 @@ export async function resolveCourseId(
   return resolveCourseIdFromCourses(reference, courses);
 }
 
+export async function resolveCourse(
+  client: EdClient,
+  reference: CourseReference
+): Promise<Course> {
+  const { courses } = await client.fetchUser();
+  const id = directCourseId(reference);
+  if (id !== undefined) {
+    const course = courses.find((candidate) => candidate.id === id);
+    if (course) return course;
+    throw new EdInputError(`Unknown course ID ${id}.`);
+  }
+  return resolveCourseCode(reference, courses);
+}
+
 function resolveCourseIdFromCourses(reference: CourseReference, courses: Course[]): number {
   const id = directCourseId(reference);
   if (id !== undefined) {
     return id;
   }
 
+  return resolveCourseCode(reference, courses).id;
+}
+
+function resolveCourseCode(reference: CourseReference, courses: Course[]): Course {
   const code = String(reference).trim();
-  const course = courses.find((candidate) => candidate.code.toLowerCase() === code.toLowerCase());
-  if (course) {
-    return course.id;
+  const matches = courses.filter(
+    (candidate) => candidate.code.toLowerCase() === code.toLowerCase()
+  ).sort((left, right) => left.id - right.id);
+  if (matches.length === 1 && matches[0]) return matches[0];
+  if (matches.length > 1) {
+    const available = matches.map(formatCourseChoice).join(", ");
+    throw new EdInputError(
+      `Course code ${JSON.stringify(code)} is ambiguous. Matching courses: ${available}. ` +
+      "Use a numeric course ID."
+    );
   }
 
-  const available = courses.map((candidate) => candidate.code).filter(Boolean).sort().join(", ");
+  const available = [...new Set(courses.map((candidate) => candidate.code).filter(Boolean))]
+    .sort()
+    .join(", ");
   throw new EdInputError(
     `Unknown course code ${JSON.stringify(code)}. Available course codes: ${available || "none"}.`
   );
+}
+
+function formatCourseChoice(course: Course): string {
+  const details = [course.year, course.session, course.status].filter(Boolean).join(", ");
+  return details ? `${course.id} (${details})` : String(course.id);
 }
 
 function directCourseId(reference: CourseReference): number | undefined {
