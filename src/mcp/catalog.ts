@@ -6,7 +6,7 @@ export const MCP_TOOL_CATALOG = [
     "List compact lesson summaries for one course. courseId accepts a numeric ID or course code. Call without filters first: an empty list means the course has no Ed Lessons. Filters are case-insensitive; use all or omit a filter to include every value.",
   ],
   ["get_lesson", "Get one lesson with slide content."],
-  ["list_lesson_files", "List downloadable files and direct resource links for one lesson."],
+  ["list_lesson_files", "List Ed-hosted downloadable files and direct resource links for one lesson."],
   ["list_slide_questions", "List quiz questions for one lesson slide."],
   ["list_slide_responses", "List saved quiz responses for one lesson slide."],
   [

@@ -279,15 +279,15 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
       }
     )));
 
-  const files = program.command("files").description("List or download lesson files.");
+  const files = program.command("files").description("List or download Ed-hosted lesson files.");
   files.command("list")
-    .description("List downloadable files in one lesson.")
+    .description("List Ed-hosted downloadable files in one lesson.")
     .argument("<lesson>", "Lesson ID", positiveInteger)
     .action(outputAction(runtime, async (client, _command, lesson: number) =>
       listLessonFiles(await client.fetchLesson(lesson))
     ));
   files.command("get")
-    .description("Download files from one lesson.")
+    .description("Download Ed-hosted files from one lesson.")
     .argument("<lesson>", "Lesson ID", positiveInteger)
     .option("--dest <directory>", "Destination directory", ".")
     .option("--slide <slide>", "Download only one slide file", positiveInteger)

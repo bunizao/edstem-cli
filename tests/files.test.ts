@@ -27,10 +27,34 @@ describe("lesson files", () => {
     ]);
   });
 
-  it("ignores invalid and non-HTTP file URLs", () => {
+  it("preserves slide associations when files share a URL", () => {
+    const url = "https://static.edusercontent.com/files/shared";
+    const lesson = makeLesson({
+      outline: `<document><file filename="outline.pdf" url="${url}"/></document>`,
+      slides: [
+        makeSlide({ fileUrl: url, id: 10 }),
+        makeSlide({ fileUrl: url, id: 11, index: 2 }),
+      ],
+    });
+
+    expect(listLessonFiles(lesson).map((file) => ({
+      slideId: file.slideId,
+      source: file.source,
+    }))).toEqual([
+      { slideId: undefined, source: "content" },
+      { slideId: 10, source: "slide" },
+      { slideId: 11, source: "slide" },
+    ]);
+  });
+
+  it("ignores invalid, insecure, and external file URLs", () => {
     const lesson = makeLesson({
       slides: [makeSlide({
-        content: '<document><file filename="bad" url="javascript:alert(1)"/></document>',
+        content: [
+          '<file filename="bad" url="javascript:alert(1)"/>',
+          '<file filename="insecure" url="http://static.edusercontent.com/files/insecure"/>',
+          '<file filename="external" url="https://example.com/external"/>',
+        ].join(""),
       })],
     });
 

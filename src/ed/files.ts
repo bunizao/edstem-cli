@@ -1,13 +1,15 @@
 import { HTMLElement, parse } from "node-html-parser";
 
+import { isDownloadableLessonFileUrl } from "./client.js";
 import type { Lesson, LessonFile, LessonSlide } from "./models.js";
 
 export function listLessonFiles(lesson: Lesson): LessonFile[] {
   const files: LessonFile[] = [];
   const seen = new Set<string>();
   const add = (file: LessonFile): void => {
-    if (!isHttpUrl(file.url) || seen.has(file.url)) return;
-    seen.add(file.url);
+    const key = `${file.slideId ?? "lesson"}\u0000${file.url}`;
+    if (!isDownloadableLessonFileUrl(file.url) || seen.has(key)) return;
+    seen.add(key);
     files.push(file);
   };
 
@@ -32,14 +34,10 @@ export function listLessonFiles(lesson: Lesson): LessonFile[] {
 
 function filesFromContent(source: string, lessonId: number, slide?: LessonSlide): LessonFile[] {
   if (!source || !/<file\b/i.test(source)) return [];
-  try {
-    return parse(source, { lowerCaseTagName: true })
-      .querySelectorAll("file")
-      .map((node) => fileFromNode(node, lessonId, slide))
-      .filter((file): file is LessonFile => file !== null);
-  } catch {
-    return [];
-  }
+  return parse(source, { lowerCaseTagName: true })
+    .querySelectorAll("file")
+    .map((node) => fileFromNode(node, lessonId, slide))
+    .filter((file): file is LessonFile => file !== null);
 }
 
 function fileFromNode(node: HTMLElement, lessonId: number, slide?: LessonSlide): LessonFile | null {
@@ -77,14 +75,5 @@ function filenameFromUrl(value: string): string {
     return decodeURIComponent(new URL(value).pathname.split("/").filter(Boolean).at(-1) ?? "");
   } catch {
     return "";
-  }
-}
-
-function isHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:";
-  } catch {
-    return false;
   }
 }
