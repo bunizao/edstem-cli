@@ -43,6 +43,19 @@ function makeRuntime(status = 200, isTTY = false): {
         }],
       },
     },
+    "/api/lessons/7002": {
+      lesson: {
+        id: 7002,
+        outline: '<file filename="outline.pdf" url="https://static.edusercontent.com/files/shared"/>',
+        slides: [{
+          id: 11,
+          index: 1,
+          title: "Shared Slides",
+          type: "pdf",
+          file_url: "https://static.edusercontent.com/files/shared",
+        }],
+      },
+    },
   };
   const fetch = vi.fn<FetchLike>().mockImplementation(async (input) => {
     const url = new URL(String(input));
@@ -213,6 +226,26 @@ describe("CLI", () => {
     expect(JSON.parse(stderr.join(""))).toMatchObject({
       error: { code: "not_found", message: expect.stringContaining("slide 99") },
     });
+  });
+
+  it("downloads a slide when the lesson outline shares its URL", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "edstem-cli-shared-download-"));
+    try {
+      const { runtime, stdout } = makeRuntime();
+
+      expect(await run([
+        "node", "edstem", "files", "get", "7002", "--slide", "11",
+        "--dest", directory, "--json",
+      ], runtime)).toBe(0);
+
+      expect(JSON.parse(stdout.join(""))).toMatchObject({
+        lessonId: 7002,
+        downloads: [{ slideId: 11 }],
+      });
+      expect(await readFile(join(directory, "Workshop Slides.pdf"), "utf8")).toBe("pdf-body");
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
   });
 
   it("renders structured auth errors with the shared contract", async () => {
