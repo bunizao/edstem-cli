@@ -33,7 +33,7 @@ edstem lessons show 67890
 
 Omitted verbs are inferred when the arguments are unambiguous. `read` always emits Markdown and never changes upstream state.
 
-Lesson files include PDF slides stored in Ed's `file_url` field and files embedded in lesson content. List them without downloading, or download all files to a directory. Existing files are protected unless `--force` is supplied.
+Lesson files include PDF slides stored in Ed's `file_url` field and Ed-hosted files embedded in lesson content. List them without downloading, or download all files to a directory. External links remain visible in lesson content but are not presented as downloadable files. Existing files are protected unless `--force` is supplied.
 
 ```bash
 edstem files list 67890

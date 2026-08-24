@@ -94,7 +94,7 @@ export class EdClient {
 
   async fetchFile(url: string): Promise<Response> {
     const target = new URL(url);
-    if (!isTrustedEdFileUrl(target)) {
+    if (!isDownloadableLessonFileUrl(target)) {
       throw new EdApiError(
         "api",
         0,
@@ -426,9 +426,14 @@ function parseLessonSlide(data: Record<string, unknown>): LessonSlide {
   };
 }
 
-function isTrustedEdFileUrl(url: URL): boolean {
-  return url.protocol === "https:" &&
-    (url.hostname === "edusercontent.com" || url.hostname.endsWith(".edusercontent.com"));
+export function isDownloadableLessonFileUrl(value: string | URL): boolean {
+  try {
+    const url = value instanceof URL ? value : new URL(value);
+    return url.protocol === "https:" &&
+      (url.hostname === "edusercontent.com" || url.hostname.endsWith(".edusercontent.com"));
+  } catch {
+    return false;
+  }
 }
 
 function parseLessonQuestion(data: Record<string, unknown>): LessonQuestion {
