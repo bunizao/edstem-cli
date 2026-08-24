@@ -44,7 +44,7 @@ import { isMainModule } from "./main.js";
 import { writeGeneratedSkill } from "./skills.js";
 import { VERSION } from "./version.js";
 
-const SORT_OPTIONS = ["new", "old", "top"] as const;
+const SORT_OPTIONS = ["new", "old", "top", "hot"] as const;
 const SLIDE_SECTIONS = ["slide", "questions", "responses", "quiz"] as const;
 
 const NOUNS: readonly NounSpec[] = [
@@ -58,7 +58,17 @@ const NOUNS: readonly NounSpec[] = [
     name: "threads",
     verbs: ["list", "show", "read"],
     defaultByArity: { 1: "list" },
-    valueFlags: ["-n", "--max", "-s", "--sort", "-c", "--category", "-t", "--type"],
+    valueFlags: [
+      "-n",
+      "--max",
+      "-s",
+      "--sort",
+      "-c",
+      "--category",
+      "--subcategory",
+      "-t",
+      "--type",
+    ],
   },
   {
     name: "lessons",
@@ -149,8 +159,12 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     .description("List threads in a unit.")
     .argument("<unit>", "Unit ID", positiveInteger)
     .option("-n, --max <count>", "Maximum threads to fetch", positiveInteger)
-    .addOption(program.createOption("-s, --sort <order>", "Sort order").choices([...SORT_OPTIONS]).default("new"))
-    .option("-c, --category <category>", "Filter by category.")
+    .addOption(program.createOption(
+      "-s, --sort <order>",
+      "Ed sort order; defaults to new and pinned threads may remain first."
+    ).choices([...SORT_OPTIONS]).default("new"))
+    .option("-c, --category <category>", "Filter by exact top-level category.")
+    .option("--subcategory <subcategory>", "Filter by exact second-level subcategory.")
     .option("-t, --type <type>", "Filter by thread type.")
     .option("--answered", "Only answered threads.")
     .option("--unanswered", "Only unanswered threads.")
@@ -166,6 +180,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
         courseId: unit,
         limit,
         sort: options.sort,
+        subcategory: options.subcategory,
         threadType: options.type,
       });
       return values.map(projectThreadSummary);
@@ -189,10 +204,10 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
   lessons.command("list")
     .description("List lessons in a unit.")
     .argument("<unit>", "Unit ID", positiveInteger)
-    .option("--module <module>", "Filter by module ID or exact module name.")
-    .option("--type <type>", "Filter by lesson type.")
-    .option("--state <state>", "Filter by lesson state.")
-    .option("--status <status>", "Filter by lesson status.")
+    .option("--module <module>", "Module ID or name text; use all to disable.")
+    .option("--type <type>", "Exact lesson type, such as general; use all to disable.")
+    .option("--state <state>", "Exact state, such as active or scheduled; use all to disable.")
+    .option("--status <status>", "Progress: unattempted, attempted, completed, or all.")
     .action(outputAction(runtime, async (client, command, unit: number) =>
       (await listLessons(client, unit, command.opts())).map(projectLessonSummary)
     ));

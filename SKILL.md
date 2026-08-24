@@ -41,7 +41,7 @@ edstem units --fields id,code,name
 | edstem units list | List enrolled units. |  | --archived | no |
 | edstem units show | Show one enrolled unit. | <unit> |  | no |
 | edstem threads | List, show, or read Ed threads. |  |  | no |
-| edstem threads list | List threads in a unit. | <unit> | -n, --max <count><br>-s, --sort <order><br>-c, --category <category><br>-t, --type <type><br>--answered<br>--unanswered | no |
+| edstem threads list | List threads in a unit. | <unit> | -n, --max <count><br>-s, --sort <order><br>-c, --category <category><br>--subcategory <subcategory><br>-t, --type <type><br>--answered<br>--unanswered | no |
 | edstem threads show | Show a thread by ID or unit_id#number. | <reference> | --include-html | no |
 | edstem threads read | Read a thread body as Markdown. | <reference> |  | no |
 | edstem lessons | List, show, or mark lessons as read. |  |  | no |
@@ -69,12 +69,12 @@ Run `edstem commands --json` for machine-readable metadata, including aliases, e
 | --- | --- |
 | get_user | Get the current Ed identity and enrolled courses. |
 | list_courses | List enrolled courses; archived courses are omitted by default. |
-| list_lessons | List compact lesson summaries for one course. |
+| list_lessons | List compact lesson summaries for one course. Call with only courseId first: an empty list means the course has no Ed Lessons. Filters are case-insensitive; use all or omit a filter to include every value. |
 | get_lesson | Get one lesson with slide content. |
 | list_lesson_files | List downloadable files and direct resource links for one lesson. |
 | list_slide_questions | List quiz questions for one lesson slide. |
 | list_slide_responses | List saved quiz responses for one lesson slide. |
-| list_threads | List compact thread summaries for one course. |
+| list_threads | List compact thread summaries for one course. Categories are hierarchical: category is top-level and subcategory is second-level. Sort defaults to new; Ed may keep pinned threads first. |
 | get_thread | Get a compact thread detail by global thread ID. |
 | get_course_thread | Get a compact thread detail by course ID and course-local number. |
 | list_activity | List compact current-user activity, optionally for one course. |

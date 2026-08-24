@@ -31,6 +31,15 @@ edstem lessons 12345 --module "Week 2"
 edstem lessons show 67890
 ```
 
+Lesson filters are case-insensitive. `--module` accepts an ID or part of a module name; `--type`, `--state`, and `--status` use exact values. Common lesson values are `general`, `active` or `scheduled`, and `unattempted`, `attempted`, or `completed`. Pass `all` or omit a filter to include every value. If an unfiltered lesson list is empty, that unit has no Ed Lessons; an invalid filter reports the values available in that unit.
+
+Thread categories are hierarchical: `--category` matches the top level and `--subcategory` matches the second level. Thread sorting defaults to `new`; Ed may keep pinned threads first regardless of the selected order.
+
+```bash
+edstem threads 12345 --category Applied --subcategory MiniTests
+edstem lessons 12345 --module "Week 5" --status all
+```
+
 Omitted verbs are inferred when the arguments are unambiguous. `read` always emits Markdown and never changes upstream state.
 
 Lesson files include PDF slides stored in Ed's `file_url` field and files embedded in lesson content. List them without downloading, or download all files to a directory. Existing files are protected unless `--force` is supplied.

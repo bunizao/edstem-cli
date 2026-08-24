@@ -37,6 +37,53 @@ describe("stdio MCP adapter", () => {
     expect(JSON.stringify(result)).not.toContain("\n  ");
   });
 
+  it("describes dynamic lesson filters and thread category levels", async () => {
+    const client = await connect(new EdClient({ fetch: vi.fn<FetchLike>(), token: "test-token" }));
+
+    const { tools } = await client.listTools();
+    const lessons = tools.find((tool) => tool.name === "list_lessons");
+    const threads = tools.find((tool) => tool.name === "list_threads");
+    const lessonProperties = lessons?.inputSchema.properties as
+      | Record<string, { description?: string }>
+      | undefined;
+    const threadProperties = threads?.inputSchema.properties as
+      | Record<string, { description?: string }>
+      | undefined;
+
+    expect(lessons?.description).toContain("only courseId first");
+    expect(lessonProperties?.module?.description).toContain('"Week 5"');
+    expect(lessonProperties?.state?.description).toContain('"active" or "scheduled"');
+    expect(lessonProperties?.status?.description).toContain('"unattempted", "attempted", or "completed"');
+    expect(threads?.description).toContain("category is top-level");
+    expect(threadProperties?.subcategory?.description).toContain("second-level");
+    expect(threadProperties?.sort?.description).toContain("pinned threads");
+  });
+
+  it("returns available lesson values for an invalid filter", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(JSON.stringify({
+      lessons: [
+        { id: 1, module_id: 7, state: "active", status: "unattempted", type: "general" },
+        { id: 2, module_id: 7, state: "scheduled", status: "completed", type: "general" },
+      ],
+      modules: [{ id: 7, name: "Week 1" }],
+    }), { status: 200 }));
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const result = await client.callTool({
+      arguments: { courseId: 100, status: "pending" },
+      name: "list_lessons",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseToolResult(result)).toEqual({
+      error: {
+        message: 'Unknown lesson status "pending". Available values: completed, unattempted. '
+          + 'Use "all" or omit the filter to include every value.',
+        type: "INVALID_ARGUMENT",
+      },
+    });
+  });
+
   it("does not duplicate payloads in structuredContent", async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(
       new Response(JSON.stringify(fixture("thread_detail")), { status: 200 })

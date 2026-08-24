@@ -8,6 +8,7 @@ export interface ThreadListOptions {
   courseId: number;
   limit: number;
   sort: string;
+  subcategory?: string;
   threadType?: string;
 }
 
@@ -54,19 +55,88 @@ export async function listLessons(
 ): Promise<Lesson[]> {
   assertPositive(courseId, "course ID");
   const { lessons } = await client.fetchLessons(courseId);
-  const moduleQuery = options.module?.toLowerCase();
+  if (lessons.length === 0) {
+    return [];
+  }
+
+  const moduleQuery = normalizeFilter(options.module);
+  const lessonTypeQuery = normalizeFilter(options.lessonType);
+  const stateQuery = normalizeFilter(options.state);
+  const statusQuery = normalizeFilter(options.status);
+
+  assertKnownModule(lessons, moduleQuery, options.module);
+  assertKnownLessonValue(lessons, "type", lessonTypeQuery, options.lessonType);
+  assertKnownLessonValue(lessons, "state", stateQuery, options.state);
+  assertKnownLessonValue(lessons, "status", statusQuery, options.status);
+
   return lessons.filter((lesson) => {
-    if (moduleQuery && String(lesson.moduleId) !== moduleQuery && lesson.moduleName.toLowerCase() !== moduleQuery) {
+    if (
+      moduleQuery &&
+      String(lesson.moduleId) !== moduleQuery &&
+      !lesson.moduleName.toLowerCase().includes(moduleQuery)
+    ) {
       return false;
     }
-    if (options.lessonType && lesson.type.toLowerCase() !== options.lessonType.toLowerCase()) {
+    if (lessonTypeQuery && lesson.type.toLowerCase() !== lessonTypeQuery) {
       return false;
     }
-    if (options.state && lesson.state.toLowerCase() !== options.state.toLowerCase()) {
+    if (stateQuery && lesson.state.toLowerCase() !== stateQuery) {
       return false;
     }
-    return !options.status || lesson.status.toLowerCase() === options.status.toLowerCase();
+    return !statusQuery || lesson.status.toLowerCase() === statusQuery;
   });
+}
+
+function normalizeFilter(value?: string): string | undefined {
+  const normalized = value?.trim().toLowerCase();
+  return normalized && normalized !== "all" ? normalized : undefined;
+}
+
+function assertKnownModule(
+  lessons: Lesson[],
+  query: string | undefined,
+  input: string | undefined
+): void {
+  if (
+    !query ||
+    lessons.some((lesson) =>
+      String(lesson.moduleId) === query || lesson.moduleName.toLowerCase().includes(query)
+    )
+  ) {
+    return;
+  }
+
+  const modules = new Map<number, string>();
+  for (const lesson of lessons) {
+    modules.set(lesson.moduleId, lesson.moduleName);
+  }
+  const available = [...modules]
+    .map(([id, name]) => `${id} (${name})`)
+    .join(", ");
+  throw unknownLessonFilter("module", input, available);
+}
+
+function assertKnownLessonValue(
+  lessons: Lesson[],
+  field: "type" | "state" | "status",
+  query: string | undefined,
+  input: string | undefined
+): void {
+  if (!query || lessons.some((lesson) => lesson[field].toLowerCase() === query)) {
+    return;
+  }
+
+  const available = [...new Set(lessons.map((lesson) => lesson[field]).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right))
+    .join(", ");
+  throw unknownLessonFilter(field, input, available);
+}
+
+function unknownLessonFilter(field: string, input: string | undefined, available: string): EdInputError {
+  return new EdInputError(
+    `Unknown lesson ${field} ${JSON.stringify(input?.trim())}. Available values: ${available}. ` +
+    'Use "all" or omit the filter to include every value.'
+  );
 }
 
 export async function listCurrentActivity(
