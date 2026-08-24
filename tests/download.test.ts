@@ -69,6 +69,27 @@ describe("lesson file downloads", () => {
     expect(await readFile(join(directory, "escaped.pdf"), "utf8")).toBe("safe");
   });
 
+  it("keeps colliding response filenames as separate downloads", async () => {
+    const directory = await temporaryDirectory();
+    const fetch = vi.fn<FetchLike>().mockImplementation(async (input) => new Response(
+      new URL(String(input)).pathname,
+      { headers: { "content-disposition": 'attachment; filename="Slides.pdf"' } }
+    ));
+    const client = new EdClient({ fetch, token: "secret" });
+
+    const downloads = await downloadLessonFiles(client, [
+      file(),
+      { ...file(), url: "https://static.edusercontent.com/files/notes" },
+    ], { destination: directory });
+
+    expect(downloads.map((download) => download.filename)).toEqual([
+      "Slides.pdf",
+      "Slides-2.pdf",
+    ]);
+    expect(await readFile(join(directory, "Slides.pdf"), "utf8")).toBe("/files/slides");
+    expect(await readFile(join(directory, "Slides-2.pdf"), "utf8")).toBe("/files/notes");
+  });
+
   async function temporaryDirectory(): Promise<string> {
     const directory = await mkdtemp(join(tmpdir(), "edstem-download-test-"));
     directories.push(directory);
