@@ -104,6 +104,17 @@ describe("EdClient", () => {
     expect(fetch.mock.calls[0]?.[1]?.redirect).toBe("manual");
   });
 
+  it("rejects lookalike Ed file hosts before issuing a request", async () => {
+    const fetch = vi.fn<FetchLike>();
+    const client = new EdClient({ fetch, token: "secret" });
+
+    await expect(client.fetchFile("https://edusercontent.com.example.com/file.pdf"))
+      .rejects.toThrow("Only HTTPS files hosted on edusercontent.com");
+    await expect(client.fetchFile("https://evil-edusercontent.com/file.pdf"))
+      .rejects.toThrow("Only HTTPS files hosted on edusercontent.com");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("maps expired tokens without exposing the credential", async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(
       jsonResponse({ code: "bad_token", message: "invalid" }, 401)
