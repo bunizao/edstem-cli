@@ -1,11 +1,13 @@
 import type { EdClient } from "./client.js";
 import { filterThreads } from "./filter.js";
-import type { Lesson, Thread } from "./models.js";
+import type { Course, Lesson, Thread } from "./models.js";
+
+export type CourseReference = number | string;
 
 export interface ThreadListOptions {
   answered?: boolean;
   category?: string;
-  courseId: number;
+  courseId: CourseReference;
   limit: number;
   sort: string;
   subcategory?: string;
@@ -20,9 +22,9 @@ export class EdInputError extends Error {
 }
 
 export async function listThreads(client: EdClient, options: ThreadListOptions): Promise<Thread[]> {
-  assertPositive(options.courseId, "course ID");
   assertPositive(options.limit, "--max");
-  const threads = await client.fetchThreads(options.courseId, {
+  const courseId = await resolveCourseId(client, options.courseId);
+  const threads = await client.fetchThreads(courseId, {
     limit: Math.min(options.limit, 100),
     sort: options.sort,
   });
@@ -30,15 +32,20 @@ export async function listThreads(client: EdClient, options: ThreadListOptions):
 }
 
 export async function resolveThread(client: EdClient, reference: string): Promise<Thread> {
-  const match = /^(\d+)(?:#(\d+))?$/.exec(reference.trim());
-  if (!match) {
-    throw new EdInputError("Thread reference must be a thread ID or course_id#number");
+  const normalized = reference.trim();
+  if (/^\d+$/.test(normalized)) {
+    return client.fetchThread(Number(normalized));
   }
-  const id = Number(match[1]);
-  const number = match[2] ? Number(match[2]) : undefined;
-  return number === undefined
-    ? client.fetchThread(id)
-    : client.fetchCourseThread(id, number);
+
+  const match = /^(.+)#(\d+)$/.exec(normalized);
+  if (match) {
+    const courseId = await resolveCourseId(client, match[1] ?? "");
+    return client.fetchCourseThread(courseId, Number(match[2]));
+  }
+
+  throw new EdInputError(
+    "Thread reference must be a thread ID or course ID/code followed by #number"
+  );
 }
 
 export interface LessonListOptions {
@@ -50,10 +57,10 @@ export interface LessonListOptions {
 
 export async function listLessons(
   client: EdClient,
-  courseId: number,
+  courseReference: CourseReference,
   options: LessonListOptions = {}
 ): Promise<Lesson[]> {
-  assertPositive(courseId, "course ID");
+  const courseId = await resolveCourseId(client, courseReference);
   const { lessons } = await client.fetchLessons(courseId);
   if (lessons.length === 0) {
     return [];
@@ -141,11 +148,63 @@ function unknownLessonFilter(field: string, input: string | undefined, available
 
 export async function listCurrentActivity(
   client: EdClient,
-  options: { courseId?: number; filterType?: string; limit: number }
+  options: { courseId?: CourseReference; filterType?: string; limit: number }
 ): Promise<unknown[]> {
   assertPositive(options.limit, "--max");
-  const { user } = await client.fetchUser();
-  return client.fetchUserActivity(user.id, options);
+  const { courses, user } = await client.fetchUser();
+  const courseId = options.courseId === undefined
+    ? undefined
+    : resolveCourseIdFromCourses(options.courseId, courses);
+  return client.fetchUserActivity(user.id, { ...options, courseId });
+}
+
+export async function resolveCourseId(
+  client: EdClient,
+  reference: CourseReference
+): Promise<number> {
+  const id = directCourseId(reference);
+  if (id !== undefined) {
+    return id;
+  }
+  const { courses } = await client.fetchUser();
+  return resolveCourseIdFromCourses(reference, courses);
+}
+
+function resolveCourseIdFromCourses(reference: CourseReference, courses: Course[]): number {
+  const id = directCourseId(reference);
+  if (id !== undefined) {
+    return id;
+  }
+
+  const code = String(reference).trim();
+  const course = courses.find((candidate) => candidate.code.toLowerCase() === code.toLowerCase());
+  if (course) {
+    return course.id;
+  }
+
+  const available = courses.map((candidate) => candidate.code).filter(Boolean).sort().join(", ");
+  throw new EdInputError(
+    `Unknown course code ${JSON.stringify(code)}. Available course codes: ${available || "none"}.`
+  );
+}
+
+function directCourseId(reference: CourseReference): number | undefined {
+  if (typeof reference === "number") {
+    assertPositive(reference, "course ID");
+    return reference;
+  }
+
+  const value = reference.trim();
+  if (!value) {
+    throw new EdInputError("Course ID or code must not be empty");
+  }
+  if (!/^\d+$/.test(value)) {
+    return undefined;
+  }
+
+  const id = Number(value);
+  assertPositive(id, "course ID");
+  return id;
 }
 
 export interface LessonReadResult {
@@ -162,7 +221,7 @@ export interface LessonReadResult {
 
 export async function readLessons(
   client: EdClient,
-  courseId: number,
+  courseId: CourseReference,
   queries: string[],
   delaySeconds = 0
 ): Promise<LessonReadResult[]> {

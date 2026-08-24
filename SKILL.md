@@ -42,7 +42,7 @@ edstem units --fields id,code,name
 | edstem units show | Show one enrolled unit. | <unit> |  | no |
 | edstem threads | List, show, or read Ed threads. |  |  | no |
 | edstem threads list | List threads in a unit. | <unit> | -n, --max <count><br>-s, --sort <order><br>-c, --category <category><br>--subcategory <subcategory><br>-t, --type <type><br>--answered<br>--unanswered | no |
-| edstem threads show | Show a thread by ID or unit_id#number. | <reference> | --include-html | no |
+| edstem threads show | Show a thread by ID or unit ID/code plus #number. | <reference> | --include-html | no |
 | edstem threads read | Read a thread body as Markdown. | <reference> |  | no |
 | edstem lessons | List, show, or mark lessons as read. |  |  | no |
 | edstem lessons list | List lessons in a unit. | <unit> | --module <module><br>--type <type><br>--state <state><br>--status <status> | no |
@@ -69,16 +69,16 @@ Run `edstem commands --json` for machine-readable metadata, including aliases, e
 | --- | --- |
 | get_user | Get the current Ed identity and enrolled courses. |
 | list_courses | List enrolled courses; archived courses are omitted by default. |
-| list_lessons | List compact lesson summaries for one course. Call with only courseId first: an empty list means the course has no Ed Lessons. Filters are case-insensitive; use all or omit a filter to include every value. |
+| list_lessons | List compact lesson summaries for one course. courseId accepts a numeric ID or course code. Call without filters first: an empty list means the course has no Ed Lessons. Filters are case-insensitive; use all or omit a filter to include every value. |
 | get_lesson | Get one lesson with slide content. |
 | list_lesson_files | List downloadable files and direct resource links for one lesson. |
 | list_slide_questions | List quiz questions for one lesson slide. |
 | list_slide_responses | List saved quiz responses for one lesson slide. |
-| list_threads | List compact thread summaries for one course. Categories are hierarchical: category is top-level and subcategory is second-level. Sort defaults to new; Ed may keep pinned threads first. |
+| list_threads | List compact thread summaries for one course. courseId accepts a numeric ID or course code. Categories are hierarchical: category is top-level and subcategory is second-level. Sort defaults to new; Ed may keep pinned threads first. |
 | get_thread | Get a compact thread detail by global thread ID. |
-| get_course_thread | Get a compact thread detail by course ID and course-local number. |
-| list_activity | List compact current-user activity, optionally for one course. |
-| mark_lessons_read | Mark matching lessons and slides as read for the current Ed user. |
+| get_course_thread | Get a compact thread detail by course ID or code and course-local number. |
+| list_activity | List compact current-user activity, optionally filtered by course ID or code. |
+| mark_lessons_read | Mark matching lessons and slides as read using a course ID or code. |
 | submit_slide_answer | Submit one-based quiz choices for one question. |
 | submit_slide | Submit all saved answers for one quiz slide. |
 

@@ -26,10 +26,13 @@ edstem units
 edstem courses FIT1045
 edstem threads 12345 --max 20 --fields id,number,title
 edstem threads show 12345#42
+edstem threads show FIT2014#42
 edstem threads read 12345#42
 edstem lessons 12345 --module "Week 2"
 edstem lessons show 67890
 ```
+
+Every `<unit>` argument accepts either the numeric Ed course ID or the exact course code. MCP tools use the same rule for `courseId`, so `courseId: "FIT2014"` can be called directly without a preceding `list_courses` lookup.
 
 Lesson filters are case-insensitive. `--module` accepts an ID or part of a module name; `--type`, `--state`, and `--status` use exact values. Common lesson values are `general`, `active` or `scheduled`, and `unattempted`, `attempted`, or `completed`. Pass `all` or omit a filter to include every value. If an unfiltered lesson list is empty, that unit has no Ed Lessons; an invalid filter reports the values available in that unit.
 

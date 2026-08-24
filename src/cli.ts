@@ -157,7 +157,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
   const threads = program.command("threads").description("List, show, or read Ed threads.");
   threads.command("list")
     .description("List threads in a unit.")
-    .argument("<unit>", "Unit ID", positiveInteger)
+    .argument("<unit>", "Unit ID or code", unitIdentifier)
     .option("-n, --max <count>", "Maximum threads to fetch", positiveInteger)
     .addOption(program.createOption(
       "-s, --sort <order>",
@@ -168,7 +168,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     .option("-t, --type <type>", "Filter by thread type.")
     .option("--answered", "Only answered threads.")
     .option("--unanswered", "Only unanswered threads.")
-    .action(outputAction(runtime, async (client, command, unit: number) => {
+    .action(outputAction(runtime, async (client, command, unit: string) => {
       const options = command.opts();
       if (options.answered && options.unanswered) {
         throw new CliError("usage", "Use only one of --answered or --unanswered.");
@@ -186,8 +186,8 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
       return values.map(projectThreadSummary);
     }));
   threads.command("show")
-    .description("Show a thread by ID or unit_id#number.")
-    .argument("<reference>", "Thread ID or unit_id#number")
+    .description("Show a thread by ID or unit ID/code plus #number.")
+    .argument("<reference>", "Thread ID or unit ID/code plus #number")
     .option("--include-html", "Include Ed XML content.")
     .action(outputAction(runtime, async (client, command, reference: string) => {
       const thread = await resolveThread(client, reference);
@@ -195,7 +195,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     }));
   threads.command("read")
     .description("Read a thread body as Markdown.")
-    .argument("<reference>", "Thread ID or unit_id#number")
+    .argument("<reference>", "Thread ID or unit ID/code plus #number")
     .action(textAction(runtime, async (client, _command, reference: string) =>
       threadToMarkdown(await resolveThread(client, reference))
     ));
@@ -203,12 +203,12 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
   const lessons = program.command("lessons").description("List, show, or mark lessons as read.");
   lessons.command("list")
     .description("List lessons in a unit.")
-    .argument("<unit>", "Unit ID", positiveInteger)
+    .argument("<unit>", "Unit ID or code", unitIdentifier)
     .option("--module <module>", "Module ID or name text; use all to disable.")
     .option("--type <type>", "Exact lesson type, such as general; use all to disable.")
     .option("--state <state>", "Exact state, such as active or scheduled; use all to disable.")
     .option("--status <status>", "Progress: unattempted, attempted, completed, or all.")
-    .action(outputAction(runtime, async (client, command, unit: number) =>
+    .action(outputAction(runtime, async (client, command, unit: string) =>
       (await listLessons(client, unit, command.opts())).map(projectLessonSummary)
     ));
   lessons.command("show")
@@ -219,14 +219,14 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     ));
   mutating(lessons.command("mark-read")
     .description("Mark matching lessons and slides as read.")
-    .argument("<unit>", "Unit ID", positiveInteger)
+    .argument("<unit>", "Unit ID or code", unitIdentifier)
     .argument("[queries...]", "Words required in lesson or module names")
     .option("--delay <seconds>", "Delay between slide updates", nonNegativeNumber, 0)
     .action(mutationAction(runtime,
-      (command, unit: number, queries: string[]) => ({
+      (command, unit: string, queries: string[]) => ({
         summary: `Mark lessons as read in unit ${unit}${queries.length ? ` matching: ${queries.join(", ")}` : ""}.`,
       }),
-      async (client, command, unit: number, queries: string[]) =>
+      async (client, command, unit: string, queries: string[]) =>
         readLessons(client, unit, queries, command.opts().delay)
     )));
 
@@ -315,10 +315,10 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
 
   program.command("activity")
     .description("List current-user activity.")
-    .argument("[unit]", "Unit ID", positiveInteger)
+    .argument("[unit]", "Unit ID or code", unitIdentifier)
     .option("-n, --max <count>", "Maximum activity items", positiveInteger)
     .option("-f, --filter <type>", "Activity type", "all")
-    .action(outputAction(runtime, async (client, command, unit?: number) => {
+    .action(outputAction(runtime, async (client, command, unit?: string) => {
       const limit = command.opts().max ?? await runtime.defaultFetchCount();
       return compactActivity(await listCurrentActivity(client, {
         courseId: unit,
@@ -437,8 +437,9 @@ function positiveInteger(value: string): number {
 }
 
 function unitIdentifier(value: string): string {
-  if (/^\d+$/.test(value) || /^[a-z]{2,}\d{3,}[a-z0-9_-]*$/i.test(value)) return value;
-  throw new CliError("usage", "Unit must be a numeric ID or unit code.");
+  const normalized = value.trim();
+  if (normalized) return normalized;
+  throw new CliError("usage", "Unit ID or code must not be empty.");
 }
 
 function nonNegativeNumber(value: string): number {

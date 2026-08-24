@@ -10,6 +10,7 @@ import {
   listLessons,
   listThreads,
   readLessons,
+  resolveCourseId,
 } from "../ed/operations.js";
 import {
   compactActivity,
@@ -28,6 +29,10 @@ import { toolDescription } from "./catalog.js";
 const READ_ONLY = { destructiveHint: false, readOnlyHint: true } as const;
 const WRITES_PROGRESS = { destructiveHint: false, readOnlyHint: false } as const;
 const WRITE = { destructiveHint: true, readOnlyHint: false } as const;
+const COURSE_REFERENCE = z.union([
+  z.number().int().positive(),
+  z.string().trim().min(1),
+]).describe('Ed course ID or exact course code, for example 38435 or "FIT2014".');
 
 export interface McpToolContext {
   http?: {
@@ -79,7 +84,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       annotations: READ_ONLY,
       description: toolDescription("list_lessons"),
       inputSchema: z.object({
-        courseId: z.number().int().positive().describe("Ed course ID."),
+        courseId: COURSE_REFERENCE,
         lessonType: z.string().trim().min(1).optional().describe(
           'Exact lesson type, for example "general". Use "all" or omit to include every type.'
         ),
@@ -159,7 +164,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
         category: z.string().trim().min(1).optional().describe(
           'Exact top-level category, for example "Applied".'
         ),
-        courseId: z.number().int().positive(),
+        courseId: COURSE_REFERENCE,
         limit: z.number().int().positive().max(100).optional().default(30),
         sort: z.enum(["new", "old", "top", "hot"]).optional().default("new").describe(
           'Ed sort order. Defaults to "new"; Ed may keep pinned threads ahead of that order.'
@@ -208,14 +213,17 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       annotations: READ_ONLY,
       description: toolDescription("get_course_thread"),
       inputSchema: z.object({
-        courseId: z.number().int().positive(),
+        courseId: COURSE_REFERENCE,
         includeHtml: z.boolean().optional().default(false),
         number: z.number().int().positive(),
       }),
     },
     async ({ courseId, includeHtml, number }, extra) =>
       runTool(runtime, extra, false, async (client) =>
-        projectThreadDetail(await client.fetchCourseThread(courseId, number), { includeHtml })
+        projectThreadDetail(
+          await client.fetchCourseThread(await resolveCourseId(client, courseId), number),
+          { includeHtml }
+        )
       )
   );
 
@@ -225,7 +233,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       annotations: READ_ONLY,
       description: toolDescription("list_activity"),
       inputSchema: z.object({
-        courseId: z.number().int().positive().optional(),
+        courseId: COURSE_REFERENCE.optional(),
         filterType: z.enum(["all", "thread", "answer", "comment"]).optional().default("all"),
         limit: z.number().int().positive().max(50).optional().default(30),
       }),
@@ -241,7 +249,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       annotations: WRITES_PROGRESS,
       description: toolDescription("mark_lessons_read"),
       inputSchema: z.object({
-        courseId: z.number().int().positive(),
+        courseId: COURSE_REFERENCE,
         delaySeconds: z.number().min(0).max(10).optional().default(0),
         queries: z.array(z.string().trim().min(1)).max(10).optional().default([]),
       }),

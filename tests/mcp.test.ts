@@ -50,13 +50,40 @@ describe("stdio MCP adapter", () => {
       | Record<string, { description?: string }>
       | undefined;
 
-    expect(lessons?.description).toContain("only courseId first");
+    expect(lessons?.description).toContain("numeric ID or course code");
+    expect(lessonProperties?.courseId?.description).toContain('38435 or "FIT2014"');
     expect(lessonProperties?.module?.description).toContain('"Week 5"');
     expect(lessonProperties?.state?.description).toContain('"active" or "scheduled"');
     expect(lessonProperties?.status?.description).toContain('"unattempted", "attempted", or "completed"');
     expect(threads?.description).toContain("category is top-level");
     expect(threadProperties?.subcategory?.description).toContain("second-level");
     expect(threadProperties?.sort?.description).toContain("pinned threads");
+  });
+
+  it("resolves a course code inside one MCP tool call", async () => {
+    const fetch = vi.fn<FetchLike>().mockImplementation(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === "/api/user") {
+        return new Response(JSON.stringify(fixture("user_info")), { status: 200 });
+      }
+      if (path === "/api/courses/100/lessons") {
+        return new Response(JSON.stringify({ lessons: [], modules: [] }), { status: 200 });
+      }
+      return new Response(null, { status: 404 });
+    });
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const result = await client.callTool({
+      arguments: { courseId: "cs101" },
+      name: "list_lessons",
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(parseToolResult(result)).toEqual([]);
+    expect(fetch.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
+      "/api/user",
+      "/api/courses/100/lessons",
+    ]);
   });
 
   it("returns available lesson values for an invalid filter", async () => {

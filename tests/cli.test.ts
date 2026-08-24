@@ -22,6 +22,7 @@ function makeRuntime(status = 200, isTTY = false): {
   const responses: Record<string, unknown> = {
     "/api/user": fixture("user_info"),
     "/api/courses/100/threads": fixture("course_threads"),
+    "/api/courses/100/threads/1": fixture("thread_detail"),
     "/api/threads/5001": fixture("thread_detail"),
     "/api/lessons/7001": {
       lesson: {
@@ -110,6 +111,33 @@ describe("CLI", () => {
     expect(JSON.parse(stdout.join(""))).toEqual([
       { id: 5001, title: "How do I install Python?" },
       { id: 5002, title: "Helpful resources for HW1" },
+    ]);
+  });
+
+  it("accepts a course code without a separate lookup command", async () => {
+    const { fetch, runtime, stdout } = makeRuntime();
+
+    expect(await run(["node", "edstem", "threads", "CS101", "--max", "1"], runtime)).toBe(0);
+
+    expect(JSON.parse(stdout.join(""))).toEqual([
+      expect.objectContaining({ id: 5001, courseId: 100 }),
+      expect.objectContaining({ id: 5002, courseId: 100 }),
+    ]);
+    expect(fetch.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
+      "/api/user",
+      "/api/courses/100/threads",
+    ]);
+  });
+
+  it("resolves course codes in course-local thread references", async () => {
+    const { fetch, runtime, stdout } = makeRuntime();
+
+    expect(await run(["node", "edstem", "threads", "show", "CS101#1"], runtime)).toBe(0);
+
+    expect(JSON.parse(stdout.join(""))).toHaveProperty("id", 5001);
+    expect(fetch.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
+      "/api/user",
+      "/api/courses/100/threads/1",
     ]);
   });
 

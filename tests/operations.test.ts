@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { EdClient } from "../src/ed/client.js";
 import type { Lesson } from "../src/ed/models.js";
-import { listLessons } from "../src/ed/operations.js";
+import { listLessons, resolveCourseId } from "../src/ed/operations.js";
 
 function makeLesson(overrides: Partial<Lesson>): Lesson {
   return {
@@ -73,5 +73,29 @@ describe("listLessons", () => {
 
   it("returns an empty list for a course without Ed Lessons", async () => {
     await expect(listLessons(makeClient([]), 100, { status: "pending" })).resolves.toEqual([]);
+  });
+});
+
+describe("resolveCourseId", () => {
+  function makeCourseClient(): EdClient {
+    return {
+      fetchUser: vi.fn().mockResolvedValue({
+        courses: [
+          { id: 100, code: "CS101" },
+          { id: 200, code: "MATH201" },
+        ],
+        user: {},
+      }),
+    } as unknown as EdClient;
+  }
+
+  it("resolves course codes case-insensitively", async () => {
+    await expect(resolveCourseId(makeCourseClient(), "cs101")).resolves.toBe(100);
+  });
+
+  it("reports the available codes when resolution fails", async () => {
+    await expect(resolveCourseId(makeCourseClient(), "FIT2014")).rejects.toThrow(
+      'Unknown course code "FIT2014". Available course codes: CS101, MATH201.'
+    );
   });
 });
