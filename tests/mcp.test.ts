@@ -86,6 +86,33 @@ describe("stdio MCP adapter", () => {
     ]);
   });
 
+  it("rejects ambiguous course codes before requesting course data", async () => {
+    const identity = fixture("user_info") as {
+      courses: Array<{ course: Record<string, unknown>; role: Record<string, unknown> }>;
+    };
+    const enrollment = identity.courses[0];
+    if (!enrollment) throw new Error("Expected a course fixture");
+    identity.courses.push({
+      course: { ...enrollment.course, id: 101, status: "archived", year: "2025" },
+      role: { ...enrollment.role, course_id: 101 },
+    });
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(
+      new Response(JSON.stringify(identity), { status: 200 })
+    );
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const result = await client.callTool({
+      arguments: { courseId: "CS101" },
+      name: "list_lessons",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseToolResult(result)).toMatchObject({
+      error: { message: expect.stringContaining("is ambiguous"), type: "INVALID_ARGUMENT" },
+    });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it("returns available lesson values for an invalid filter", async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(JSON.stringify({
       lessons: [

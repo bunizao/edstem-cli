@@ -13,14 +13,18 @@ function fixture(name: string): unknown {
   return JSON.parse(readFileSync(new URL(`fixtures/${name}.json`, import.meta.url), "utf8"));
 }
 
-function makeRuntime(status = 200, isTTY = false): {
+function makeRuntime(
+  status = 200,
+  isTTY = false,
+  userInfo: unknown = fixture("user_info")
+): {
   fetch: ReturnType<typeof vi.fn<FetchLike>>;
   runtime: CliRuntime;
   stderr: string[];
   stdout: string[];
 } {
   const responses: Record<string, unknown> = {
-    "/api/user": fixture("user_info"),
+    "/api/user": userInfo,
     "/api/courses/100/threads": fixture("course_threads"),
     "/api/courses/100/threads/1": fixture("thread_detail"),
     "/api/courses/100/lessons": {
@@ -134,6 +138,18 @@ describe("CLI", () => {
     ]);
   });
 
+  it("trims CLI thread filter values", async () => {
+    const { runtime, stdout } = makeRuntime();
+
+    expect(await run([
+      "node", "edstem", "threads", "100", "--category", " General ", "--json",
+    ], runtime)).toBe(0);
+
+    expect(JSON.parse(stdout.join(""))).toEqual([
+      expect.objectContaining({ id: 5001, category: "General" }),
+    ]);
+  });
+
   it("accepts a course code without a separate lookup command", async () => {
     const { fetch, runtime, stdout } = makeRuntime();
 
@@ -171,6 +187,30 @@ describe("CLI", () => {
     expect(JSON.parse(stdout.join(""))).toEqual([
       expect.objectContaining({ id: 7001, type: "general" }),
     ]);
+  });
+
+  it("rejects ambiguous course codes before a progress mutation", async () => {
+    const { fetch, runtime, stderr } = makeRuntime(200, false, duplicateCourseIdentity());
+
+    expect(await run([
+      "node", "edstem", "lessons", "mark-read", "CS101", "--yes", "--json",
+    ], runtime)).toBe(2);
+
+    expect(JSON.parse(stderr.join(""))).toMatchObject({
+      error: { code: "usage", message: expect.stringContaining("is ambiguous") },
+    });
+    expect(fetch.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
+      "/api/user",
+    ]);
+  });
+
+  it("reports an unknown unit ID as not found", async () => {
+    const { runtime, stderr } = makeRuntime();
+
+    expect(await run(["node", "edstem", "units", "show", "999", "--json"], runtime)).toBe(4);
+    expect(JSON.parse(stderr.join(""))).toMatchObject({
+      error: { code: "not_found", message: expect.stringContaining("999") },
+    });
   });
 
   it("keeps human-readable tables for TTY output", async () => {
@@ -331,3 +371,21 @@ describe("CLI", () => {
     expect(JSON.parse(stderr.join(""))).toMatchObject({ error: { code: "usage" } });
   });
 });
+
+function duplicateCourseIdentity(): unknown {
+  const identity = fixture("user_info") as {
+    courses: Array<{ course: Record<string, unknown>; role: Record<string, unknown> }>;
+  };
+  const enrollment = identity.courses[0];
+  if (!enrollment) throw new Error("Expected a course fixture");
+  identity.courses.push({
+    course: {
+      ...enrollment.course,
+      id: 101,
+      status: "archived",
+      year: "2025",
+    },
+    role: { ...enrollment.role, course_id: 101 },
+  });
+  return identity;
+}
