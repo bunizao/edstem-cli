@@ -92,6 +92,18 @@ describe("EdClient", () => {
     expect(fetch).toHaveBeenCalledOnce();
   });
 
+  it("rejects redirects before following an Ed-hosted file URL", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(null, {
+      headers: { location: "https://example.com/file.pdf" },
+      status: 302,
+    }));
+    const client = new EdClient({ fetch, token: "secret" });
+
+    await expect(client.fetchFile("https://static.edusercontent.com/files/slide-8"))
+      .rejects.toThrow("Ed file downloads cannot redirect");
+    expect(fetch.mock.calls[0]?.[1]?.redirect).toBe("manual");
+  });
+
   it("maps expired tokens without exposing the credential", async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(
       jsonResponse({ code: "bad_token", message: "invalid" }, 401)

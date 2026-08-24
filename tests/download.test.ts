@@ -53,6 +53,22 @@ describe("lesson file downloads", () => {
     expect(await readFile(target, "utf8")).toBe("replacement");
   });
 
+  it("keeps response filenames inside the destination", async () => {
+    const directory = await temporaryDirectory();
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response("safe", {
+      headers: {
+        "content-disposition": "attachment; filename*=UTF-8''..%2F..%2Fescaped.pdf",
+      },
+    }));
+    const client = new EdClient({ fetch, token: "secret" });
+
+    const downloads = await downloadLessonFiles(client, [file()], { destination: directory });
+
+    expect(downloads[0]?.filename).toBe("escaped.pdf");
+    expect(downloads[0]?.path).toBe(join(directory, "escaped.pdf"));
+    expect(await readFile(join(directory, "escaped.pdf"), "utf8")).toBe("safe");
+  });
+
   async function temporaryDirectory(): Promise<string> {
     const directory = await mkdtemp(join(tmpdir(), "edstem-download-test-"));
     directories.push(directory);

@@ -53,6 +53,7 @@ describe("stdio MCP adapter", () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(JSON.stringify({
       lesson: {
         id: 7001,
+        outline: '<file filename="external.pdf" url="https://example.com/external.pdf"/>',
         slides: [{
           id: 10,
           index: 1,
@@ -79,6 +80,7 @@ describe("stdio MCP adapter", () => {
         uri: "https://static.edusercontent.com/files/slides",
       }),
     ]));
+    expect(JSON.stringify(result)).not.toContain("example.com");
   });
 
   it("enforces write scope at the MCP seam", async () => {
