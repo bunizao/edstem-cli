@@ -1,4 +1,7 @@
 import { readFileSync } from "node:fs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -20,9 +23,31 @@ function makeRuntime(status = 200, isTTY = false): {
     "/api/user": fixture("user_info"),
     "/api/courses/100/threads": fixture("course_threads"),
     "/api/threads/5001": fixture("thread_detail"),
+    "/api/lessons/7001": {
+      lesson: {
+        id: 7001,
+        slides: [{
+          id: 10,
+          index: 1,
+          title: "Workshop Slides",
+          type: "pdf",
+          file_url: "https://static.edusercontent.com/files/slides",
+        }],
+      },
+    },
   };
   const fetch = vi.fn<FetchLike>().mockImplementation(async (input) => {
-    const path = new URL(String(input)).pathname;
+    const url = new URL(String(input));
+    const path = url.pathname;
+    if (url.hostname.endsWith("edusercontent.com")) {
+      return new Response("pdf-body", {
+        headers: {
+          "content-disposition": 'inline; filename="Workshop Slides.pdf"',
+          "content-type": "application/pdf",
+        },
+        status,
+      });
+    }
     return new Response(JSON.stringify(status === 200 ? responses[path] : { code: "bad_token" }), { status });
   });
   const client = new EdClient({ fetch, token: "test-token" });
@@ -106,6 +131,41 @@ describe("CLI", () => {
     expect(stdout.join("")).toContain("# #1 How do I install Python?");
     expect(stdout.join("")).not.toMatch(/^"/);
     expect(fetch.mock.calls.map((call) => call[1]?.method)).toEqual(["GET"]);
+  });
+
+  it("lists and downloads lesson files", async () => {
+    const listing = makeRuntime();
+
+    expect(await run(["node", "edstem", "files", "list", "7001", "--json"], listing.runtime)).toBe(0);
+    expect(JSON.parse(listing.stdout.join(""))).toEqual([
+      expect.objectContaining({ filename: "Workshop Slides.pdf", slideId: 10 }),
+    ]);
+
+    const directory = await mkdtemp(join(tmpdir(), "edstem-cli-download-"));
+    try {
+      const download = makeRuntime();
+      expect(await run([
+        "node", "edstem", "files", "get", "7001", "--dest", directory, "--json",
+      ], download.runtime)).toBe(0);
+      expect(await readFile(join(directory, "Workshop Slides.pdf"), "utf8")).toBe("pdf-body");
+      expect(JSON.parse(download.stdout.join(""))).toMatchObject({
+        lessonId: 7001,
+        downloads: [{ filename: "Workshop Slides.pdf", slideId: 10 }],
+      });
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
+  });
+
+  it("reports a missing selected slide file", async () => {
+    const { runtime, stderr } = makeRuntime();
+
+    expect(await run([
+      "node", "edstem", "files", "get", "7001", "--slide", "99", "--json",
+    ], runtime)).toBe(4);
+    expect(JSON.parse(stderr.join(""))).toMatchObject({
+      error: { code: "not_found", message: expect.stringContaining("slide 99") },
+    });
   });
 
   it("renders structured auth errors with the shared contract", async () => {

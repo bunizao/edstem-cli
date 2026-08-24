@@ -2,6 +2,7 @@ import { CliError, normalizeError } from "@bunizao/cli-kit";
 
 import { EdApiError } from "./ed/client.js";
 import { EdInputError } from "./ed/operations.js";
+import { LessonDownloadError } from "./download.js";
 
 export { CliError } from "@bunizao/cli-kit";
 
@@ -14,6 +15,9 @@ export function normalizeEdError(error: unknown): CliError {
     if (error.statusCode === 404) return new CliError("not_found", error.message);
     if (error.kind === "network") return new CliError("network", error.message);
     return new CliError("upstream", error.message);
+  }
+  if (error instanceof LessonDownloadError) {
+    return new CliError(error.kind === "exists" ? "usage" : "upstream", error.message);
   }
   return normalizeError(error);
 }

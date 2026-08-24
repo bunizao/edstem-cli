@@ -51,6 +51,9 @@ edstem units --fields id,code,name
 | edstem slides | Inspect or submit lesson slides. |  |  | no |
 | edstem slides show | Show slide content, questions, responses, or quiz context. | <slide> | --section <section> | no |
 | edstem slides submit | Save one answer or submit all saved answers for a slide. | <slide> | --question <question><br>--choice <number><br>--amend | yes |
+| edstem files | List or download lesson files. |  |  | no |
+| edstem files list | List downloadable files in one lesson. | <lesson> |  | no |
+| edstem files get | Download files from one lesson. | <lesson> | --dest <directory><br>--slide <slide><br>--force | no |
 | edstem activity | List current-user activity. | [unit] | -n, --max <count><br>-f, --filter <type> | no |
 | edstem commands | Describe the complete command tree. |  |  | no |
 | edstem skills | Generate the agent skill. |  |  | no |
@@ -68,6 +71,7 @@ Run `edstem commands --json` for machine-readable metadata, including aliases, e
 | list_courses | List enrolled courses; archived courses are omitted by default. |
 | list_lessons | List compact lesson summaries for one course. |
 | get_lesson | Get one lesson with slide content. |
+| list_lesson_files | List downloadable files and direct resource links for one lesson. |
 | list_slide_questions | List quiz questions for one lesson slide. |
 | list_slide_responses | List saved quiz responses for one lesson slide. |
 | list_threads | List compact thread summaries for one course. |

@@ -2,6 +2,8 @@ import { McpServer, type AuthInfo } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { EdApiError, EdAuthExpiredError, type EdClient } from "../ed/client.js";
+import { listLessonFiles } from "../ed/files.js";
+import type { LessonFile } from "../ed/models.js";
 import { listCurrentActivity, listLessons, listThreads, readLessons } from "../ed/operations.js";
 import {
   compactActivity,
@@ -94,6 +96,18 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     },
     async ({ lessonId }, extra) => runTool(runtime, extra, false, async (client) =>
       projectLessonDetail(await client.fetchLesson(lessonId))
+    )
+  );
+
+  server.registerTool(
+    "list_lesson_files",
+    {
+      annotations: READ_ONLY,
+      description: toolDescription("list_lesson_files"),
+      inputSchema: z.object({ lessonId: z.number().int().positive() }),
+    },
+    async ({ lessonId }, extra) => runTool(runtime, extra, false, async (client) =>
+      fileLinksResult(listLessonFiles(await client.fetchLesson(lessonId)))
     )
   );
 
@@ -244,7 +258,8 @@ async function runTool(
     return jsonError("INSUFFICIENT_SCOPE", "Write access is required for this tool.");
   }
   try {
-    return jsonResult(await action(await runtime.getClient(context)));
+    const result = await action(await runtime.getClient(context));
+    return isToolResult(result) ? result : jsonResult(result);
   } catch (error) {
     const mapped = runtime.mapError?.(error, context);
     if (mapped) {
@@ -267,7 +282,16 @@ async function runTool(
 }
 
 type ToolResult = {
-  content: Array<{ text: string; type: "text" }>;
+  content: Array<
+    | { text: string; type: "text" }
+    | {
+      description?: string;
+      mimeType?: string;
+      name: string;
+      type: "resource_link";
+      uri: string;
+    }
+  >;
   isError?: boolean;
 };
 
@@ -280,4 +304,23 @@ function jsonError(type: string, message: string, extra: Record<string, unknown>
     content: [{ type: "text", text: JSON.stringify({ error: { ...extra, message, type } }) }],
     isError: true,
   };
+}
+
+function fileLinksResult(files: LessonFile[]): ToolResult {
+  return {
+    content: [
+      { type: "text", text: JSON.stringify(files) },
+      ...files.map((file) => ({
+        description: file.slideTitle || `Lesson ${file.lessonId} file`,
+        ...(file.mediaType ? { mimeType: file.mediaType } : {}),
+        name: file.filename,
+        type: "resource_link" as const,
+        uri: file.url,
+      })),
+    ],
+  };
+}
+
+function isToolResult(value: unknown): value is ToolResult {
+  return Boolean(value && typeof value === "object" && Array.isArray((value as ToolResult).content));
 }

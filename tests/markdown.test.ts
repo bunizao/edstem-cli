@@ -96,6 +96,7 @@ function slide(overrides: Partial<LessonSlide> = {}): LessonSlide {
   return {
     content: "Hello lesson",
     courseId: 100,
+    fileUrl: "",
     id: 10,
     index: 1,
     isHidden: false,

@@ -17,7 +17,9 @@ import type { Command } from "commander";
 
 import { loadToken } from "./auth.js";
 import { loadConfig } from "./config.js";
+import { downloadLessonFiles } from "./download.js";
 import { EdClient } from "./ed/client.js";
+import { listLessonFiles } from "./ed/files.js";
 import {
   listCurrentActivity,
   listLessons,
@@ -69,6 +71,12 @@ const NOUNS: readonly NounSpec[] = [
     verbs: ["show", "submit"],
     defaultByArity: { 1: "show" },
     valueFlags: ["--section", "--question", "--choice"],
+  },
+  {
+    name: "files",
+    verbs: ["list", "get"],
+    defaultByArity: { 1: "list" },
+    valueFlags: ["--dest", "--slide"],
   },
 ];
 
@@ -255,6 +263,40 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
         return client.submitSlide(slide);
       }
     )));
+
+  const files = program.command("files").description("List or download lesson files.");
+  files.command("list")
+    .description("List downloadable files in one lesson.")
+    .argument("<lesson>", "Lesson ID", positiveInteger)
+    .action(outputAction(runtime, async (client, _command, lesson: number) =>
+      listLessonFiles(await client.fetchLesson(lesson))
+    ));
+  files.command("get")
+    .description("Download files from one lesson.")
+    .argument("<lesson>", "Lesson ID", positiveInteger)
+    .option("--dest <directory>", "Destination directory", ".")
+    .option("--slide <slide>", "Download only one slide file", positiveInteger)
+    .option("--force", "Replace existing files.")
+    .action(outputAction(runtime, async (client, command, lessonId: number) => {
+      const options = command.opts();
+      const available = listLessonFiles(await client.fetchLesson(lessonId));
+      const selected = options.slide === undefined
+        ? available
+        : available.filter((file) => file.slideId === options.slide);
+      if (options.slide !== undefined && selected.length === 0) {
+        throw new CliError(
+          "not_found",
+          `No downloadable file was found for slide ${options.slide} in lesson ${lessonId}.`
+        );
+      }
+      return {
+        lessonId,
+        downloads: await downloadLessonFiles(client, selected, {
+          destination: options.dest,
+          force: options.force,
+        }),
+      };
+    }));
 
   program.command("activity")
     .description("List current-user activity.")

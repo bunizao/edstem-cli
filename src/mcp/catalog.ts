@@ -3,6 +3,7 @@ export const MCP_TOOL_CATALOG = [
   ["list_courses", "List enrolled courses; archived courses are omitted by default."],
   ["list_lessons", "List compact lesson summaries for one course."],
   ["get_lesson", "Get one lesson with slide content."],
+  ["list_lesson_files", "List downloadable files and direct resource links for one lesson."],
   ["list_slide_questions", "List quiz questions for one lesson slide."],
   ["list_slide_responses", "List saved quiz responses for one lesson slide."],
   ["list_threads", "List compact thread summaries for one course."],

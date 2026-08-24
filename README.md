@@ -33,6 +33,14 @@ edstem lessons show 67890
 
 Omitted verbs are inferred when the arguments are unambiguous. `read` always emits Markdown and never changes upstream state.
 
+Lesson files include PDF slides stored in Ed's `file_url` field and files embedded in lesson content. List them without downloading, or download all files to a directory. Existing files are protected unless `--force` is supplied.
+
+```bash
+edstem files list 67890
+edstem files get 67890 --dest ./slides
+edstem files get 67890 --slide 4401 --dest ./slides
+```
+
 Slide facets use one read-only command so the verb vocabulary stays consistent:
 
 ```bash
@@ -75,6 +83,8 @@ Run `edstem commands --json` for the full machine-readable command tree, includi
 The package also installs `edstem-mcp`, a local stdio MCP server using the same `EDSTEM_TOKEN`. A hosted Streamable HTTP server is available at `https://edstem.tuuhub.com/mcp` and uses OAuth.
 
 The remote runtime supports MCP `2026-07-28`, including stateless `server/discover`, header-based routing, and results with `resultType`. It also keeps a stateless compatibility lane for 2025 Streamable HTTP clients during migration.
+
+The read-only `list_lesson_files` tool returns compact file metadata plus MCP resource links. Remote MCP servers cannot write to a client's local path, so clients can follow those links while the CLI's `files get` command handles direct filesystem downloads.
 
 ```json
 {
