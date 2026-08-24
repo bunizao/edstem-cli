@@ -21,6 +21,13 @@ export class EdInputError extends Error {
   }
 }
 
+export class EdCourseNotFoundError extends EdInputError {
+  constructor(message: string) {
+    super(message);
+    this.name = "EdCourseNotFoundError";
+  }
+}
+
 export async function listThreads(client: EdClient, options: ThreadListOptions): Promise<Thread[]> {
   assertPositive(options.limit, "--max");
   const courseId = await resolveCourseId(client, options.courseId);
@@ -181,7 +188,7 @@ export async function resolveCourse(
   if (id !== undefined) {
     const course = courses.find((candidate) => candidate.id === id);
     if (course) return course;
-    throw new EdInputError(`Unknown course ID ${id}.`);
+    throw new EdCourseNotFoundError(`Unknown course ID ${id}.`);
   }
   return resolveCourseCode(reference, courses);
 }

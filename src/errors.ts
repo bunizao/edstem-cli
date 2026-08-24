@@ -1,12 +1,15 @@
 import { CliError, normalizeError } from "@bunizao/cli-kit";
 
 import { EdApiError } from "./ed/client.js";
-import { EdInputError } from "./ed/operations.js";
+import { EdCourseNotFoundError, EdInputError } from "./ed/operations.js";
 import { LessonDownloadError } from "./download.js";
 
 export { CliError } from "@bunizao/cli-kit";
 
 export function normalizeEdError(error: unknown): CliError {
+  if (error instanceof EdCourseNotFoundError) {
+    return new CliError("not_found", error.message);
+  }
   if (error instanceof EdInputError) {
     return new CliError("usage", error.message);
   }
