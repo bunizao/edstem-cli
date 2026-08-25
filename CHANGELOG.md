@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.5.0 - 2026-08-25
+
+### Added
+
+- Added a stateless Cloudflare Worker MCP transport with Bearer and API-key authentication.
+- Added safe listing and local downloading for Ed-hosted lesson files and PDF slides.
+- Added direct course-code resolution across CLI and MCP commands.
+- Added module-name, lesson state/status/type, and hierarchical thread-category filters.
+
+### Changed
+
+- Normalized the CLI around plural nouns, explicit verbs, machine-readable command metadata, and shared output/error behavior from `@bunizao/cli-kit`.
+- Made ambiguous course codes fail with enrolment details instead of selecting an arbitrary course.
+- Made lesson filters report the values available in the selected course.
+
+### Fixed
+
+- Preserved slide associations when lesson files share a URL.
+- Rejected redirects, external hosts, lookalike domains, unsafe response filenames, and accidental download overwrites.
+- Preserved not-found errors for unknown numeric unit IDs.
+- Excluded Worker-only sources from the production Docker image build.
+- Updated vulnerable transitive URL, HTTP, and address-parsing dependencies.
+
+### Compatibility notes
+
+- The legacy singular command grammar has been replaced by the normalized plural noun and verb grammar. Run `edstem commands --json` to inspect the current command tree.
+
 ## 0.4.0 - 2026-07-13
 
 ### Changed
