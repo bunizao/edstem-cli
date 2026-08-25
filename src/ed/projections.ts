@@ -83,6 +83,7 @@ export function projectLessonDetail(lesson: Lesson): JsonObject {
       setNonEmpty(projected, "type", slide.type);
       setNonEmpty(projected, "status", slide.status);
       setNonEmpty(projected, "content", slide.content);
+      setNonEmpty(projected, "fileUrl", slide.fileUrl);
       setTrue(projected, "hidden", slide.isHidden);
       return projected;
     });

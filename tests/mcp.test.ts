@@ -49,6 +49,40 @@ describe("stdio MCP adapter", () => {
     expect(parseToolResult(result)).toHaveProperty("users.67890.name", "Bob TA");
   });
 
+  it("exposes lesson files as structured metadata and resource links", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(JSON.stringify({
+      lesson: {
+        id: 7001,
+        outline: '<file filename="external.pdf" url="https://example.com/external.pdf"/>',
+        slides: [{
+          id: 10,
+          index: 1,
+          title: "Workshop Slides",
+          type: "pdf",
+          file_url: "https://static.edusercontent.com/files/slides",
+        }],
+      },
+    }), { status: 200 }));
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const result = await client.callTool({
+      arguments: { lessonId: 7001 },
+      name: "list_lesson_files",
+    });
+
+    expect(parseToolResult(result)).toEqual([
+      expect.objectContaining({ filename: "Workshop Slides.pdf", slideId: 10 }),
+    ]);
+    expect(result.content).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        name: "Workshop Slides.pdf",
+        type: "resource_link",
+        uri: "https://static.edusercontent.com/files/slides",
+      }),
+    ]));
+    expect(JSON.stringify(result)).not.toContain("example.com");
+  });
+
   it("enforces write scope at the MCP seam", async () => {
     const edClient = new EdClient({ fetch: vi.fn<FetchLike>(), token: "test-token" });
     const server = createEdMcpServer({ canWrite: () => false, getClient: () => edClient });

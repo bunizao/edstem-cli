@@ -33,9 +33,21 @@ export interface LessonSlide {
   title: string;
   type: string;
   content: string;
+  fileUrl: string;
   index: number;
   status: string;
   isHidden: boolean;
+}
+
+export interface LessonFile {
+  lessonId: number;
+  slideId?: number;
+  slideIndex?: number;
+  slideTitle?: string;
+  filename: string;
+  url: string;
+  mediaType?: string;
+  source: "slide" | "content";
 }
 
 export interface Lesson {

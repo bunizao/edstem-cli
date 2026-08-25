@@ -61,14 +61,58 @@ describe("EdClient", () => {
 
   it("parses slide content from nested passage data", async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(
-      jsonResponse({ slide: { id: 8, index: 2, data: { passage: "Read this" } } })
+      jsonResponse({
+        slide: {
+          id: 8,
+          index: 2,
+          data: { passage: "Read this" },
+          file_url: "https://static.edusercontent.com/files/slide-8",
+        },
+      })
     );
     const client = new EdClient({ fetch, token: "secret" });
 
     const slide = await client.fetchSlide(8, { view: true });
 
     expect(slide.content).toBe("Read this");
+    expect(slide.fileUrl).toBe("https://static.edusercontent.com/files/slide-8");
     expect(String(fetch.mock.calls[0]?.[0])).toContain("lessons/slides/8?view=1");
+  });
+
+  it("downloads only trusted Ed-hosted HTTPS files without forwarding the token", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response("pdf", { status: 200 }));
+    const client = new EdClient({ fetch, token: "secret" });
+
+    await client.fetchFile("https://static.edusercontent.com/files/slide-8");
+
+    expect(fetch.mock.calls[0]?.[1]?.headers).toEqual({ Accept: "*/*" });
+    await expect(client.fetchFile("https://example.com/file.pdf")).rejects.toThrow(
+      "Only HTTPS files hosted on edusercontent.com"
+    );
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it("rejects redirects before following an Ed-hosted file URL", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(null, {
+      headers: { location: "https://example.com/file.pdf" },
+      status: 302,
+    }));
+    const client = new EdClient({ fetch, token: "secret" });
+
+    await expect(client.fetchFile("https://static.edusercontent.com/files/slide-8"))
+      .rejects.toThrow("Ed file downloads cannot redirect");
+    expect(fetch.mock.calls[0]?.[1]?.redirect).toBe("manual");
+  });
+
+  it("rejects lookalike Ed file hosts before issuing a request", async () => {
+    const fetch = vi.fn<FetchLike>();
+    const client = new EdClient({ fetch, token: "secret" });
+
+    await expect(client.fetchFile("https://edusercontent.com.example.com/file.pdf"))
+      .rejects.toThrow("Only HTTPS files hosted on edusercontent.com");
+    await expect(client.fetchFile("https://evil-edusercontent.com/file.pdf"))
+      .rejects.toThrow("Only HTTPS files hosted on edusercontent.com");
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("maps expired tokens without exposing the credential", async () => {

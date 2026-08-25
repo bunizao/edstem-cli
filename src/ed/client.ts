@@ -92,6 +92,41 @@ export class EdClient {
     return parseLessonSlide(asRecord(data.slide ?? data));
   }
 
+  async fetchFile(url: string): Promise<Response> {
+    const target = new URL(url);
+    if (!isDownloadableLessonFileUrl(target)) {
+      throw new EdApiError(
+        "api",
+        0,
+        "Only HTTPS files hosted on edusercontent.com can be downloaded automatically."
+      );
+    }
+
+    let response: Response;
+    try {
+      response = await this.fetch(target, {
+        headers: { Accept: "*/*" },
+        redirect: "manual",
+        signal: AbortSignal.timeout(Math.max(this.timeoutMs, 120_000))
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new EdApiError("network", 0, `Failed to download the Ed file: ${detail}`);
+    }
+
+    if (response.status >= 300 && response.status < 400) {
+      throw new EdApiError("upstream", response.status, "Ed file downloads cannot redirect.");
+    }
+    if (!response.ok) {
+      throw new EdApiError(
+        "upstream",
+        response.status,
+        `Ed file download failed (HTTP ${response.status}).`
+      );
+    }
+    return response;
+  }
+
   async completeSlide(slideId: number): Promise<void> {
     await this.request("PUT", `lessons/slides/${slideId}/complete`, { allowEmpty: true });
   }
@@ -380,6 +415,7 @@ function parseLessonSlide(data: Record<string, unknown>): LessonSlide {
       asString(slideData.content) ||
       asString(slideData.passage),
     courseId: asInt(data.course_id),
+    fileUrl: asString(data.file_url),
     id: asInt(data.id),
     index: asInt(data.index),
     isHidden: Boolean(data.is_hidden),
@@ -388,6 +424,16 @@ function parseLessonSlide(data: Record<string, unknown>): LessonSlide {
     title: asString(data.title),
     type: asString(data.type)
   };
+}
+
+export function isDownloadableLessonFileUrl(value: string | URL): boolean {
+  try {
+    const url = value instanceof URL ? value : new URL(value);
+    return url.protocol === "https:" &&
+      (url.hostname === "edusercontent.com" || url.hostname.endsWith(".edusercontent.com"));
+  } catch {
+    return false;
+  }
 }
 
 function parseLessonQuestion(data: Record<string, unknown>): LessonQuestion {

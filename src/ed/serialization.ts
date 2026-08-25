@@ -68,6 +68,7 @@ export function serializeLessonSlide(slide: LessonSlide): Record<string, unknown
     title: slide.title,
     type: slide.type,
     content: slide.content,
+    fileUrl: slide.fileUrl,
     index: slide.index,
     status: slide.status,
     isHidden: slide.isHidden
