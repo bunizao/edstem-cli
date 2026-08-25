@@ -10,11 +10,11 @@ describe("update checks", () => {
   });
 
   it("returns a stable npm upgrade command", async () => {
-    const fetch: FetchLike = async () => new Response(JSON.stringify({ version: "0.5.0" }), { status: 200 });
+    const fetch: FetchLike = async () => new Response(JSON.stringify({ version: "0.6.0" }), { status: 200 });
 
     await expect(checkForUpdate(fetch)).resolves.toMatchObject({
-      currentVersion: "0.4.0",
-      latestVersion: "0.5.0",
+      currentVersion: "0.5.0",
+      latestVersion: "0.6.0",
       updateAvailable: true,
       upgradeCommand: "npm install -g edstem-cli@latest",
     });
