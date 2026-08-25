@@ -41,17 +41,18 @@ function makeThread(overrides: Partial<Thread>): Thread {
 }
 
 describe("filterThreads", () => {
-  it("filters by category, type, and answered status", () => {
+  it("filters by category, subcategory, type, and answered status", () => {
     const threads = [
-      makeThread({ id: 1, category: "General", type: "question", isAnswered: false }),
-      makeThread({ id: 2, category: "HW1", type: "post", isAnswered: true }),
-      makeThread({ id: 3, category: "General", type: "question", isAnswered: true })
+      makeThread({ id: 1, category: "General", subcategory: "News", type: "question", isAnswered: false }),
+      makeThread({ id: 2, category: "HW1", subcategory: "MiniTests", type: "post", isAnswered: true }),
+      makeThread({ id: 3, category: "General", subcategory: "MiniTests", type: "question", isAnswered: true })
     ];
 
     const result = filterThreads(threads, {
       answered: true,
-      category: "general",
-      threadType: "question"
+      category: " general ",
+      subcategory: " minitests ",
+      threadType: " question "
     });
 
     expect(result).toHaveLength(1);

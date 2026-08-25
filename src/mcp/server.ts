@@ -4,7 +4,14 @@ import { z } from "zod";
 import { EdApiError, EdAuthExpiredError, type EdClient } from "../ed/client.js";
 import { listLessonFiles } from "../ed/files.js";
 import type { LessonFile } from "../ed/models.js";
-import { listCurrentActivity, listLessons, listThreads, readLessons } from "../ed/operations.js";
+import {
+  EdInputError,
+  listCurrentActivity,
+  listLessons,
+  listThreads,
+  readLessons,
+  resolveCourseId,
+} from "../ed/operations.js";
 import {
   compactActivity,
   projectCourse,
@@ -22,6 +29,10 @@ import { toolDescription } from "./catalog.js";
 const READ_ONLY = { destructiveHint: false, readOnlyHint: true } as const;
 const WRITES_PROGRESS = { destructiveHint: false, readOnlyHint: false } as const;
 const WRITE = { destructiveHint: true, readOnlyHint: false } as const;
+const COURSE_REFERENCE = z.union([
+  z.number().int().positive(),
+  z.string().trim().min(1),
+]).describe('Ed course ID or exact course code, for example 38435 or "FIT2014".');
 
 export interface McpToolContext {
   http?: {
@@ -73,11 +84,19 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       annotations: READ_ONLY,
       description: toolDescription("list_lessons"),
       inputSchema: z.object({
-        courseId: z.number().int().positive(),
-        lessonType: z.string().trim().min(1).optional(),
-        module: z.string().trim().min(1).optional(),
-        state: z.string().trim().min(1).optional(),
-        status: z.string().trim().min(1).optional(),
+        courseId: COURSE_REFERENCE,
+        lessonType: z.string().trim().min(1).optional().describe(
+          'Exact lesson type, for example "general". Use "all" or omit to include every type.'
+        ),
+        module: z.string().trim().min(1).optional().describe(
+          'Module ID or case-insensitive text from the module name, for example "Week 5". Use "all" or omit to include every module.'
+        ),
+        state: z.string().trim().min(1).optional().describe(
+          'Exact availability state, for example "active" or "scheduled". Use "all" or omit to include every state.'
+        ),
+        status: z.string().trim().min(1).optional().describe(
+          'Exact progress status: "unattempted", "attempted", or "completed". Use "all" or omit to include every status.'
+        ),
       }),
     },
     async ({ courseId, lessonType, module, state, status }, extra) =>
@@ -142,16 +161,33 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       description: toolDescription("list_threads"),
       inputSchema: z.object({
         answered: z.boolean().optional(),
-        category: z.string().trim().min(1).optional(),
-        courseId: z.number().int().positive(),
+        category: z.string().trim().min(1).optional().describe(
+          'Exact top-level category, for example "Applied".'
+        ),
+        courseId: COURSE_REFERENCE,
         limit: z.number().int().positive().max(100).optional().default(30),
-        sort: z.enum(["new", "old", "top", "hot"]).optional().default("new"),
-        threadType: z.string().trim().min(1).optional(),
+        sort: z.enum(["new", "old", "top", "hot"]).optional().default("new").describe(
+          'Ed sort order. Defaults to "new"; Ed may keep pinned threads ahead of that order.'
+        ),
+        subcategory: z.string().trim().min(1).optional().describe(
+          'Exact second-level subcategory, for example "MiniTests".'
+        ),
+        threadType: z.string().trim().min(1).optional().describe(
+          'Exact thread type, for example "question" or "post".'
+        ),
       }),
     },
-    async ({ answered, category, courseId, limit, sort, threadType }, extra) =>
+    async ({ answered, category, courseId, limit, sort, subcategory, threadType }, extra) =>
       runTool(runtime, extra, false, async (client) =>
-        (await listThreads(client, { answered, category, courseId, limit, sort, threadType }))
+        (await listThreads(client, {
+          answered,
+          category,
+          courseId,
+          limit,
+          sort,
+          subcategory,
+          threadType,
+        }))
           .map(projectThreadSummary)
       )
   );
@@ -177,14 +213,17 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       annotations: READ_ONLY,
       description: toolDescription("get_course_thread"),
       inputSchema: z.object({
-        courseId: z.number().int().positive(),
+        courseId: COURSE_REFERENCE,
         includeHtml: z.boolean().optional().default(false),
         number: z.number().int().positive(),
       }),
     },
     async ({ courseId, includeHtml, number }, extra) =>
       runTool(runtime, extra, false, async (client) =>
-        projectThreadDetail(await client.fetchCourseThread(courseId, number), { includeHtml })
+        projectThreadDetail(
+          await client.fetchCourseThread(await resolveCourseId(client, courseId), number),
+          { includeHtml }
+        )
       )
   );
 
@@ -194,7 +233,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       annotations: READ_ONLY,
       description: toolDescription("list_activity"),
       inputSchema: z.object({
-        courseId: z.number().int().positive().optional(),
+        courseId: COURSE_REFERENCE.optional(),
         filterType: z.enum(["all", "thread", "answer", "comment"]).optional().default("all"),
         limit: z.number().int().positive().max(50).optional().default(30),
       }),
@@ -210,7 +249,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       annotations: WRITES_PROGRESS,
       description: toolDescription("mark_lessons_read"),
       inputSchema: z.object({
-        courseId: z.number().int().positive(),
+        courseId: COURSE_REFERENCE,
         delaySeconds: z.number().min(0).max(10).optional().default(0),
         queries: z.array(z.string().trim().min(1)).max(10).optional().default([]),
       }),
@@ -272,6 +311,9 @@ async function runTool(
         error.message,
         runtime.authErrorExtra?.(context)
       );
+    }
+    if (error instanceof EdInputError) {
+      return jsonError("INVALID_ARGUMENT", error.message);
     }
     if (error instanceof EdApiError) {
       return jsonError("EDSTEM_API_ERROR", error.message, { statusCode: error.statusCode });

@@ -26,9 +26,21 @@ edstem units
 edstem courses FIT1045
 edstem threads 12345 --max 20 --fields id,number,title
 edstem threads show 12345#42
+edstem threads show FIT2014#42
 edstem threads read 12345#42
 edstem lessons 12345 --module "Week 2"
 edstem lessons show 67890
+```
+
+Every `<unit>` argument accepts either the numeric Ed course ID or the exact course code. MCP tools use the same rule for `courseId`, so `courseId: "FIT2014"` can be called directly without a preceding `list_courses` lookup. If multiple enrolments share a code, use the numeric ID shown by `edstem units --archived` to select the intended year and session.
+
+Lesson filters are case-insensitive. `--module` accepts an ID or part of a module name; `--type`, `--state`, and `--status` use exact values. Common lesson values are `general`, `active` or `scheduled`, and `unattempted`, `attempted`, or `completed`. Pass `all` or omit a filter to include every value. If an unfiltered lesson list is empty, that unit has no Ed Lessons; an invalid filter reports the values available in that unit.
+
+Thread categories are hierarchical: `--category` matches the top level and `--subcategory` matches the second level. Thread sorting defaults to `new`; Ed may keep pinned threads first regardless of the selected order.
+
+```bash
+edstem threads 12345 --category Applied --subcategory MiniTests
+edstem lessons 12345 --module "Week 5" --status all
 ```
 
 Omitted verbs are inferred when the arguments are unambiguous. `read` always emits Markdown and never changes upstream state.

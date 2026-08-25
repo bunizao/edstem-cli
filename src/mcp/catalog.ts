@@ -1,16 +1,22 @@
 export const MCP_TOOL_CATALOG = [
   ["get_user", "Get the current Ed identity and enrolled courses."],
   ["list_courses", "List enrolled courses; archived courses are omitted by default."],
-  ["list_lessons", "List compact lesson summaries for one course."],
+  [
+    "list_lessons",
+    "List compact lesson summaries for one course. courseId accepts a numeric ID or course code. Call without filters first: an empty list means the course has no Ed Lessons. Filters are case-insensitive; use all or omit a filter to include every value.",
+  ],
   ["get_lesson", "Get one lesson with slide content."],
   ["list_lesson_files", "List Ed-hosted downloadable files and direct resource links for one lesson."],
   ["list_slide_questions", "List quiz questions for one lesson slide."],
   ["list_slide_responses", "List saved quiz responses for one lesson slide."],
-  ["list_threads", "List compact thread summaries for one course."],
+  [
+    "list_threads",
+    "List compact thread summaries for one course. courseId accepts a numeric ID or course code. Categories are hierarchical: category is top-level and subcategory is second-level. Sort defaults to new; Ed may keep pinned threads first.",
+  ],
   ["get_thread", "Get a compact thread detail by global thread ID."],
-  ["get_course_thread", "Get a compact thread detail by course ID and course-local number."],
-  ["list_activity", "List compact current-user activity, optionally for one course."],
-  ["mark_lessons_read", "Mark matching lessons and slides as read for the current Ed user."],
+  ["get_course_thread", "Get a compact thread detail by course ID or code and course-local number."],
+  ["list_activity", "List compact current-user activity, optionally filtered by course ID or code."],
+  ["mark_lessons_read", "Mark matching lessons and slides as read using a course ID or code."],
   ["submit_slide_answer", "Submit one-based quiz choices for one question."],
   ["submit_slide", "Submit all saved answers for one quiz slide."],
 ] as const;

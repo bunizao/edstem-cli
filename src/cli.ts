@@ -25,6 +25,7 @@ import {
   listLessons,
   listThreads,
   readLessons,
+  resolveCourse,
   resolveThread,
 } from "./ed/operations.js";
 import {
@@ -44,7 +45,7 @@ import { isMainModule } from "./main.js";
 import { writeGeneratedSkill } from "./skills.js";
 import { VERSION } from "./version.js";
 
-const SORT_OPTIONS = ["new", "old", "top"] as const;
+const SORT_OPTIONS = ["new", "old", "top", "hot"] as const;
 const SLIDE_SECTIONS = ["slide", "questions", "responses", "quiz"] as const;
 
 const NOUNS: readonly NounSpec[] = [
@@ -58,7 +59,17 @@ const NOUNS: readonly NounSpec[] = [
     name: "threads",
     verbs: ["list", "show", "read"],
     defaultByArity: { 1: "list" },
-    valueFlags: ["-n", "--max", "-s", "--sort", "-c", "--category", "-t", "--type"],
+    valueFlags: [
+      "-n",
+      "--max",
+      "-s",
+      "--sort",
+      "-c",
+      "--category",
+      "--subcategory",
+      "-t",
+      "--type",
+    ],
   },
   {
     name: "lessons",
@@ -135,26 +146,25 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
   units.command("show")
     .description("Show one enrolled unit.")
     .argument("<unit>", "Unit ID or code", unitIdentifier)
-    .action(outputAction(runtime, async (client, _command, unit: string) => {
-      const { courses } = await client.fetchUser();
-      const course = courses.find((candidate) =>
-        String(candidate.id) === unit || candidate.code.toLowerCase() === unit.toLowerCase()
-      );
-      if (!course) throw new CliError("not_found", `Unit ${unit} was not found.`);
-      return projectCourse(course);
-    }));
+    .action(outputAction(runtime, async (client, _command, unit: string) =>
+      projectCourse(await resolveCourse(client, unit))
+    ));
 
   const threads = program.command("threads").description("List, show, or read Ed threads.");
   threads.command("list")
     .description("List threads in a unit.")
-    .argument("<unit>", "Unit ID", positiveInteger)
+    .argument("<unit>", "Unit ID or code", unitIdentifier)
     .option("-n, --max <count>", "Maximum threads to fetch", positiveInteger)
-    .addOption(program.createOption("-s, --sort <order>", "Sort order").choices([...SORT_OPTIONS]).default("new"))
-    .option("-c, --category <category>", "Filter by category.")
+    .addOption(program.createOption(
+      "-s, --sort <order>",
+      "Ed sort order; defaults to new and pinned threads may remain first."
+    ).choices([...SORT_OPTIONS]).default("new"))
+    .option("-c, --category <category>", "Filter by exact top-level category.")
+    .option("--subcategory <subcategory>", "Filter by exact second-level subcategory.")
     .option("-t, --type <type>", "Filter by thread type.")
     .option("--answered", "Only answered threads.")
     .option("--unanswered", "Only unanswered threads.")
-    .action(outputAction(runtime, async (client, command, unit: number) => {
+    .action(outputAction(runtime, async (client, command, unit: string) => {
       const options = command.opts();
       if (options.answered && options.unanswered) {
         throw new CliError("usage", "Use only one of --answered or --unanswered.");
@@ -166,13 +176,14 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
         courseId: unit,
         limit,
         sort: options.sort,
+        subcategory: options.subcategory,
         threadType: options.type,
       });
       return values.map(projectThreadSummary);
     }));
   threads.command("show")
-    .description("Show a thread by ID or unit_id#number.")
-    .argument("<reference>", "Thread ID or unit_id#number")
+    .description("Show a thread by ID or unit ID/code plus #number.")
+    .argument("<reference>", "Thread ID or unit ID/code plus #number")
     .option("--include-html", "Include Ed XML content.")
     .action(outputAction(runtime, async (client, command, reference: string) => {
       const thread = await resolveThread(client, reference);
@@ -180,7 +191,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     }));
   threads.command("read")
     .description("Read a thread body as Markdown.")
-    .argument("<reference>", "Thread ID or unit_id#number")
+    .argument("<reference>", "Thread ID or unit ID/code plus #number")
     .action(textAction(runtime, async (client, _command, reference: string) =>
       threadToMarkdown(await resolveThread(client, reference))
     ));
@@ -188,14 +199,20 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
   const lessons = program.command("lessons").description("List, show, or mark lessons as read.");
   lessons.command("list")
     .description("List lessons in a unit.")
-    .argument("<unit>", "Unit ID", positiveInteger)
-    .option("--module <module>", "Filter by module ID or exact module name.")
-    .option("--type <type>", "Filter by lesson type.")
-    .option("--state <state>", "Filter by lesson state.")
-    .option("--status <status>", "Filter by lesson status.")
-    .action(outputAction(runtime, async (client, command, unit: number) =>
-      (await listLessons(client, unit, command.opts())).map(projectLessonSummary)
-    ));
+    .argument("<unit>", "Unit ID or code", unitIdentifier)
+    .option("--module <module>", "Module ID or name text; use all to disable.")
+    .option("--type <type>", "Exact lesson type, such as general; use all to disable.")
+    .option("--state <state>", "Exact state, such as active or scheduled; use all to disable.")
+    .option("--status <status>", "Progress: unattempted, attempted, completed, or all.")
+    .action(outputAction(runtime, async (client, command, unit: string) => {
+      const options = command.opts();
+      return (await listLessons(client, unit, {
+        lessonType: options.type,
+        module: options.module,
+        state: options.state,
+        status: options.status,
+      })).map(projectLessonSummary);
+    }));
   lessons.command("show")
     .description("Show one lesson and its slides.")
     .argument("<lesson>", "Lesson ID", positiveInteger)
@@ -204,14 +221,14 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     ));
   mutating(lessons.command("mark-read")
     .description("Mark matching lessons and slides as read.")
-    .argument("<unit>", "Unit ID", positiveInteger)
+    .argument("<unit>", "Unit ID or code", unitIdentifier)
     .argument("[queries...]", "Words required in lesson or module names")
     .option("--delay <seconds>", "Delay between slide updates", nonNegativeNumber, 0)
     .action(mutationAction(runtime,
-      (command, unit: number, queries: string[]) => ({
+      (command, unit: string, queries: string[]) => ({
         summary: `Mark lessons as read in unit ${unit}${queries.length ? ` matching: ${queries.join(", ")}` : ""}.`,
       }),
-      async (client, command, unit: number, queries: string[]) =>
+      async (client, command, unit: string, queries: string[]) =>
         readLessons(client, unit, queries, command.opts().delay)
     )));
 
@@ -300,10 +317,10 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
 
   program.command("activity")
     .description("List current-user activity.")
-    .argument("[unit]", "Unit ID", positiveInteger)
+    .argument("[unit]", "Unit ID or code", unitIdentifier)
     .option("-n, --max <count>", "Maximum activity items", positiveInteger)
     .option("-f, --filter <type>", "Activity type", "all")
-    .action(outputAction(runtime, async (client, command, unit?: number) => {
+    .action(outputAction(runtime, async (client, command, unit?: string) => {
       const limit = command.opts().max ?? await runtime.defaultFetchCount();
       return compactActivity(await listCurrentActivity(client, {
         courseId: unit,
@@ -422,8 +439,9 @@ function positiveInteger(value: string): number {
 }
 
 function unitIdentifier(value: string): string {
-  if (/^\d+$/.test(value) || /^[a-z]{2,}\d{3,}[a-z0-9_-]*$/i.test(value)) return value;
-  throw new CliError("usage", "Unit must be a numeric ID or unit code.");
+  const normalized = value.trim();
+  if (normalized) return normalized;
+  throw new CliError("usage", "Unit ID or code must not be empty.");
 }
 
 function nonNegativeNumber(value: string): number {
