@@ -32,7 +32,7 @@ const WRITE = { destructiveHint: true, readOnlyHint: false } as const;
 const COURSE_REFERENCE = z.union([
   z.number().int().positive(),
   z.string().trim().min(1),
-]).describe('Ed course ID or exact course code, for example 38435 or "FIT2014".');
+]).describe("Ed course ID, or the course code exactly as Ed shows it (see list_courses). Do not assume a code format.");
 
 export interface McpToolContext {
   http?: {
@@ -89,7 +89,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
           'Exact lesson type, for example "general". Use "all" or omit to include every type.'
         ),
         module: z.string().trim().min(1).optional().describe(
-          'Module ID or case-insensitive text from the module name, for example "Week 5". Use "all" or omit to include every module.'
+          'Module ID or case-insensitive text from the module name as Ed shows it. Use "all" or omit to include every module.'
         ),
         state: z.string().trim().min(1).optional().describe(
           'Exact availability state, for example "active" or "scheduled". Use "all" or omit to include every state.'
@@ -162,7 +162,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       inputSchema: z.object({
         answered: z.boolean().optional(),
         category: z.string().trim().min(1).optional().describe(
-          'Exact top-level category, for example "Applied".'
+          'Exact top-level category as Ed shows it.'
         ),
         courseId: COURSE_REFERENCE,
         limit: z.number().int().positive().max(100).optional().default(30),
@@ -170,7 +170,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
           'Ed sort order. Defaults to "new"; Ed may keep pinned threads ahead of that order.'
         ),
         subcategory: z.string().trim().min(1).optional().describe(
-          'Exact second-level subcategory, for example "MiniTests".'
+          'Exact second-level subcategory as Ed shows it.'
         ),
         threadType: z.string().trim().min(1).optional().describe(
           'Exact thread type, for example "question" or "post".'
