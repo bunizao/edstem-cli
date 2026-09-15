@@ -172,8 +172,36 @@ export function projectThreadDetail(
   return result;
 }
 
-export function compactActivity(items: unknown[]): unknown[] {
-  return items.map(compactValue) as unknown[];
+/**
+ * Activity items arrive as raw Ed payloads, so they are projected like everything
+ * else rather than passed through: the key names here are the CLI's, not whatever
+ * the upstream API happens to send, and the two item shapes are flattened into one.
+ */
+export function projectActivity(items: unknown[]): JsonObject[] {
+  return items.map((item) => {
+    const entry = asRecord(item);
+    const value = asRecord(entry.value);
+    const result: JsonObject = { kind: String(entry.type ?? "") };
+    setPositive(result, "id", Number(value.id ?? 0));
+    setNonEmpty(result, "type", value.type);
+    setNonEmpty(result, "title", value.title ?? value.thread_title);
+    setPositive(result, "courseId", Number(value.course_id ?? 0));
+    setNonEmpty(result, "courseCode", value.course_code);
+    setNonEmpty(result, "courseName", value.course_name);
+    setPositive(result, "threadId", Number(value.thread_id ?? 0));
+    setNonEmpty(result, "category", value.category ?? value.thread_category);
+    setNonEmpty(result, "subcategory", value.subcategory ?? value.thread_subcategory);
+    setNonEmpty(result, "createdAt", normalizeTimestamp(String(value.created_at ?? "")));
+    setNonEmpty(result, "document", value.document);
+    setTrue(result, "private", Boolean(value.is_private));
+    return result;
+  });
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function projectComment(comment: Comment, options: { includeHtml?: boolean }): JsonObject {
@@ -270,20 +298,6 @@ function isStaff(user: User | null): boolean {
 
 function normalizeTimestamp(value: string): string {
   return value.replace(TIMESTAMP_FRACTION, "");
-}
-
-function compactValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(compactValue);
-  }
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-  return Object.fromEntries(
-    Object.entries(value)
-      .map(([key, item]) => [key, compactValue(item)] as const)
-      .filter(([, item]) => item !== "" && item !== null && item !== false)
-  );
 }
 
 function setNonEmpty(target: JsonObject, key: string, value: unknown): void {

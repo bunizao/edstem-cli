@@ -13,7 +13,7 @@ import {
   resolveCourseId,
 } from "../ed/operations.js";
 import {
-  compactActivity,
+  projectActivity,
   projectCourse,
   projectIdentity,
   projectLessonDetail,
@@ -239,7 +239,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       }),
     },
     async ({ courseId, filterType, limit }, extra) => runTool(runtime, extra, false, async (client) =>
-      compactActivity(await listCurrentActivity(client, { courseId, filterType, limit }))
+      projectActivity(await listCurrentActivity(client, { courseId, filterType, limit }))
     )
   );
 

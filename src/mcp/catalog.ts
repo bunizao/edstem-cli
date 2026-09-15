@@ -32,7 +32,7 @@ export const MCP_TOOL_CATALOG = [
   ],
   [
     "list_threads",
-    "Compact thread summaries for one course: id, number, title, category, answered state. Use when the user asks what is being discussed or wants a thread by title. Categories are hierarchical: category is top-level and subcategory is second-level, spelled as Ed shows them. Sort defaults to new; Ed may keep pinned threads first. Not for thread bodies (get_thread) or the user's own posts (list_activity). courseId accepts a numeric ID or course code. Cost: about 150 bytes per thread; use limit.",
+    "Compact thread summaries for one course: id, number, title, category, answered state. Use when the user asks what is being discussed or wants a thread by title. Categories are hierarchical: category is top-level and subcategory is second-level, spelled as Ed shows them. Sort defaults to new; Ed may keep pinned threads first. Not for thread bodies (get_thread) or the user's own posts (list_activity). unit accepts a numeric ID, a unit code, or part of the unit name. Cost: about 150 bytes per thread; use limit.",
   ],
   [
     "get_thread",
@@ -40,15 +40,15 @@ export const MCP_TOOL_CATALOG = [
   ],
   [
     "get_course_thread",
-    "One thread addressed by course and course-local number (the #N Ed shows), compact. Use when the user gives a thread number rather than a global id. courseId accepts a numeric ID or course code. Cost: as get_thread.",
+    "One thread addressed by course and course-local number (the #N Ed shows), compact. Use when the user gives a thread number rather than a global id. unit accepts a numeric ID, a unit code, or part of the unit name. Cost: as get_thread.",
   ],
   [
     "list_activity",
-    "The signed-in user's recent threads, answers and comments, optionally within one course. Use when the user asks what they posted or whether anyone replied. Not for other people's activity (list_threads). courseId is optional and accepts a numeric ID or course code. Cost: small.",
+    "The signed-in user's recent threads, answers and comments, optionally within one course. Use when the user asks what they posted or whether anyone replied. Not for other people's activity (list_threads). unit is optional and accepts a numeric ID, a unit code, or part of the unit name. Cost: small.",
   ],
   [
     "mark_lessons_read",
-    "Mark lessons and their slides as read; writes progress. Use only when the user explicitly asks to mark lessons read or complete. queries are words that must appear in lesson or module names; no queries means every lesson in the course. courseId accepts a numeric ID or course code. Cost: one write per slide.",
+    "Mark lessons and their slides as read; writes progress. Use only when the user explicitly asks to mark lessons read or complete. queries are words that must appear in lesson or module names; no queries means every lesson in the course. unit accepts a numeric ID, a unit code, or part of the unit name. Cost: one write per slide.",
   ],
   [
     "submit_slide_answer",
