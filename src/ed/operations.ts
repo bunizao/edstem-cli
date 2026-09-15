@@ -29,7 +29,7 @@ export class EdCourseNotFoundError extends EdInputError {
 }
 
 export async function listThreads(client: EdClient, options: ThreadListOptions): Promise<Thread[]> {
-  assertPositive(options.limit, "--max");
+  assertPositive(options.limit, "--limit");
   const courseId = await resolveCourseId(client, options.courseId);
   const threads = await client.fetchThreads(courseId, {
     limit: Math.min(options.limit, 100),
@@ -159,7 +159,7 @@ export async function listCurrentActivity(
   client: EdClient,
   options: { courseId?: CourseReference; filterType?: string; limit: number }
 ): Promise<unknown[]> {
-  assertPositive(options.limit, "--max");
+  assertPositive(options.limit, "--limit");
   const { courses, user } = await client.fetchUser();
   const courseId = options.courseId === undefined
     ? undefined
@@ -202,30 +202,52 @@ function resolveCourseIdFromCourses(reference: CourseReference, courses: Course[
   return resolveCourseCode(reference, courses).id;
 }
 
+/**
+ * A reference is matched against the site's own list, never against an assumed code
+ * format. Ed's code often carries the teaching period ("CODE 2026 S2"), so the code a
+ * student actually types is its leading token; the unit name is matched too, because
+ * that is the other name the unit is known by. Tiers are tried in order so an exact
+ * code always beats a substring.
+ */
 function resolveCourseCode(reference: CourseReference, courses: Course[]): Course {
-  const code = String(reference).trim();
-  const matches = courses.filter(
-    (candidate) => candidate.code.toLowerCase() === code.toLowerCase()
-  ).sort((left, right) => left.id - right.id);
-  if (matches.length === 1 && matches[0]) return matches[0];
-  if (matches.length > 1) {
-    const available = matches.map(formatCourseChoice).join(", ");
+  const query = String(reference).trim().toLowerCase();
+  const tiers: ((course: Course) => boolean)[] = [
+    (course) => lower(course.code) === query,
+    (course) => firstToken(course.code) === query,
+    (course) => lower(course.name) === query,
+    (course) => lower(course.code).includes(query) || lower(course.name).includes(query),
+  ];
+
+  for (const matches of tiers.map((tier) => courses.filter(tier))) {
+    if (matches.length === 0) continue;
+    const sorted = [...matches].sort((left, right) => left.id - right.id);
+    if (sorted.length === 1 && sorted[0]) return sorted[0];
     throw new EdInputError(
-      `Course code ${JSON.stringify(code)} is ambiguous. Matching courses: ${available}. ` +
-      "Use a numeric course ID."
+      `Unit ${JSON.stringify(String(reference).trim())} is ambiguous. Matching units: ` +
+      `${sorted.map(formatCourseChoice).join(", ")}. Use a unit ID.`
     );
   }
 
-  const available = [...new Set(courses.map((candidate) => candidate.code).filter(Boolean))]
-    .sort()
-    .join(", ");
-  throw new EdInputError(
-    `Unknown course code ${JSON.stringify(code)}. Available course codes: ${available || "none"}.`
+  const available = courses.map(formatCourseName).filter(Boolean).join(", ");
+  throw new EdCourseNotFoundError(
+    `No unit matches ${JSON.stringify(String(reference).trim())}. Your units: ${available || "none"}.`
   );
 }
 
+function lower(value: string | undefined): string {
+  return (value ?? "").toLowerCase();
+}
+
+function firstToken(code: string | undefined): string {
+  return lower(code).trim().split(/\s+/u)[0] ?? "";
+}
+
+function formatCourseName(course: Course): string {
+  return course.code || course.name || String(course.id);
+}
+
 function formatCourseChoice(course: Course): string {
-  const details = [course.year, course.session, course.status].filter(Boolean).join(", ");
+  const details = [course.code, course.year, course.session, course.status].filter(Boolean).join(", ");
   return details ? `${course.id} (${details})` : String(course.id);
 }
 

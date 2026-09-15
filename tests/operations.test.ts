@@ -81,8 +81,8 @@ describe("resolveCourseId", () => {
     return {
       fetchUser: vi.fn().mockResolvedValue({
         courses: [
-          { id: 100, code: "CS101", session: "Semester 1", status: "active", year: "2026" },
-          { id: 200, code: "MATH201", session: "Semester 2", status: "archived", year: "2025" },
+          { id: 100, code: "CS101", name: "Systems", session: "Semester 1", status: "active", year: "2026" },
+          { id: 200, code: "MATH201", name: "Discrete structures", session: "Semester 2", status: "archived", year: "2025" },
         ],
         user: {},
       }),
@@ -93,9 +93,23 @@ describe("resolveCourseId", () => {
     await expect(resolveCourseId(makeCourseClient(), "cs101")).resolves.toBe(100);
   });
 
-  it("reports the available codes when resolution fails", async () => {
-    await expect(resolveCourseId(makeCourseClient(), "FIT2014")).rejects.toThrow(
-      'Unknown course code "FIT2014". Available course codes: CS101, MATH201.'
+  it("resolves a code that the site suffixes with a teaching period", async () => {
+    const client = makeCourseClient();
+    vi.mocked(client.fetchUser).mockResolvedValue({
+      courses: [{ id: 100, code: "CS101 2026 S1", name: "Systems", session: "Semester 1", status: "active", year: "2026" }],
+      user: {},
+    } as never);
+
+    await expect(resolveCourseId(client, "CS101")).resolves.toBe(100);
+  });
+
+  it("resolves a unit by part of its name", async () => {
+    await expect(resolveCourseId(makeCourseClient(), "discrete")).resolves.toBe(200);
+  });
+
+  it("reports the site's own units when nothing matches", async () => {
+    await expect(resolveCourseId(makeCourseClient(), "nope")).rejects.toThrow(
+      'No unit matches "nope". Your units: CS101, MATH201.'
     );
   });
 
@@ -103,16 +117,16 @@ describe("resolveCourseId", () => {
     const client = makeCourseClient();
     vi.mocked(client.fetchUser).mockResolvedValue({
       courses: [
-        { id: 100, code: "CS101", session: "Semester 1", status: "active", year: "2026" },
-        { id: 101, code: "CS101", session: "Semester 1", status: "archived", year: "2025" },
+        { id: 100, code: "CS101", name: "Systems", session: "Semester 1", status: "active", year: "2026" },
+        { id: 101, code: "CS101", name: "Systems", session: "Semester 1", status: "archived", year: "2025" },
       ],
       user: {},
     } as never);
 
     await expect(resolveCourseId(client, "CS101")).rejects.toThrow(
-      'Course code "CS101" is ambiguous. Matching courses: ' +
-      "100 (2026, Semester 1, active), 101 (2025, Semester 1, archived). " +
-      "Use a numeric course ID."
+      'Unit "CS101" is ambiguous. Matching units: ' +
+      "100 (CS101, 2026, Semester 1, active), 101 (CS101, 2025, Semester 1, archived). " +
+      "Use a unit ID."
     );
   });
 });
