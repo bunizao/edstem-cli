@@ -13,7 +13,7 @@ export const SKILL_DESCRIPTION =
 // UNIT is the unit's Ed course ID or its code exactly as Ed shows it.
 const INTENTS: readonly (readonly [string, string, string])[] = [
   ["which units am I in / how are units named here", "`edstem units`", "shows id, code, name; copy the code as shown"],
-  ["what's being discussed / any questions about X / latest in UNIT", "`edstem threads UNIT --max 20`", "add `--unanswered`, `--category`, `--subcategory`"],
+  ["what's being discussed / any questions about X / latest in UNIT", "`edstem threads UNIT --limit 20`", "add `--unanswered`, `--category`, `--subcategory`"],
   ["what does thread #N say / read that thread", "`edstem threads read UNIT#N`", "a global thread id also works"],
   ["my posts / did anyone reply to me", "`edstem activity [UNIT]`", ""],
   ["which lessons, weeks or modules exist / what's unfinished", "`edstem lessons UNIT`", "then `--status unattempted` or `--module <text>`"],
@@ -83,7 +83,7 @@ edstem units
 
 ${markdownTable(["Command", "Description", "Arguments", "Options", "Mutating"], cliRows)}
 
-Global options: \`--json\`, \`--yaml\`, \`--table\`, \`--fields a,b\`, \`--output FILE\`, \`--quiet\`, \`--verbose\`, \`--no-color\`, \`--yes\`, and \`--dry-run\`.
+Global options: \`--json\`, \`--yaml\`, \`--table\`, \`--fields a,b\`, \`--output FILE\`, \`--verbose\`, \`--no-color\`, \`--yes\`, and \`--dry-run\`.
 
 Run \`edstem commands --json\` for machine-readable metadata, including aliases, enum values, and mutation markers.
 

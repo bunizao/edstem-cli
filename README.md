@@ -24,7 +24,7 @@ Commands follow `edstem <plural-noun> [verb] [scope] [id] [flags]`. The canonica
 ```bash
 edstem units
 edstem courses UNIT
-edstem threads 12345 --max 20 --fields id,number,title
+edstem threads 12345 --limit 20 --fields id,number,title
 edstem threads show 12345#42
 edstem threads show UNIT#42
 edstem threads read 12345#42

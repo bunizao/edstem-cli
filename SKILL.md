@@ -21,7 +21,7 @@ user for numeric ids when a code or a `UNIT#N` thread number will do.
 | The user says | Run | Notes |
 | --- | --- | --- |
 | which units am I in / how are units named here | `edstem units` | shows id, code, name; copy the code as shown |
-| what's being discussed / any questions about X / latest in UNIT | `edstem threads UNIT --max 20` | add `--unanswered`, `--category`, `--subcategory` |
+| what's being discussed / any questions about X / latest in UNIT | `edstem threads UNIT --limit 20` | add `--unanswered`, `--category`, `--subcategory` |
 | what does thread #N say / read that thread | `edstem threads read UNIT#N` | a global thread id also works |
 | my posts / did anyone reply to me | `edstem activity [UNIT]` |  |
 | which lessons, weeks or modules exist / what's unfinished | `edstem lessons UNIT` | then `--status unattempted` or `--module <text>` |
@@ -67,7 +67,7 @@ edstem units
 | edstem units list | List enrolled units. |  | --archived | no |
 | edstem units show | Show one enrolled unit. | <unit> |  | no |
 | edstem threads | List, show, or read Ed threads. |  |  | no |
-| edstem threads list | List threads in a unit. | <unit> | -n, --max <count><br>-s, --sort <order><br>-c, --category <category><br>--subcategory <subcategory><br>-t, --type <type><br>--answered<br>--unanswered | no |
+| edstem threads list | List threads in a unit. | <unit> | -n, --limit <count><br>-s, --sort <order><br>-c, --category <category><br>--subcategory <subcategory><br>-t, --type <type><br>--answered<br>--unanswered | no |
 | edstem threads show | Show a thread by ID or unit ID/code plus #number. | <reference> | --include-html | no |
 | edstem threads read | Read a thread body as Markdown. | <reference> |  | no |
 | edstem lessons | List, show, or mark lessons as read. |  |  | no |
@@ -80,12 +80,12 @@ edstem units
 | edstem files | List or download Ed-hosted lesson files. |  |  | no |
 | edstem files list | List Ed-hosted downloadable files in one lesson. | <lesson> |  | no |
 | edstem files get | Download Ed-hosted files from one lesson. | <lesson> | --dest <directory><br>--slide <slide><br>--force | no |
-| edstem activity | List current-user activity. | [unit] | -n, --max <count><br>-f, --filter <type> | no |
+| edstem activity | List current-user activity. | [unit] | -n, --limit <count><br>-f, --filter <type> | no |
 | edstem commands | Describe the complete command tree. |  |  | no |
 | edstem skills | Generate the agent skill. |  |  | no |
 | edstem skills generate | Regenerate SKILL.md from command metadata. |  |  | no |
 
-Global options: `--json`, `--yaml`, `--table`, `--fields a,b`, `--output FILE`, `--quiet`, `--verbose`, `--no-color`, `--yes`, and `--dry-run`.
+Global options: `--json`, `--yaml`, `--table`, `--fields a,b`, `--output FILE`, `--verbose`, `--no-color`, `--yes`, and `--dry-run`.
 
 Run `edstem commands --json` for machine-readable metadata, including aliases, enum values, and mutation markers.
 
@@ -100,11 +100,11 @@ Run `edstem commands --json` for machine-readable metadata, including aliases, e
 | list_lesson_files | Ed-hosted downloadable files and direct resource links for one lesson, returned as resource links. Use when the user wants slides, PDFs or attachments. Not for external links inside lesson text (get_lesson). lessonId comes from list_lessons. Cost: small. |
 | list_slide_questions | Quiz questions for one lesson slide with one-based choice numbers. Use when the user wants to see or answer a quiz. slideId comes from get_lesson. Then submit_slide_answer per question, then submit_slide. Cost: small. |
 | list_slide_responses | Saved quiz responses for one lesson slide. Use when the user asks what they answered or whether a quiz is submitted. slideId comes from get_lesson. Cost: small. |
-| list_threads | Compact thread summaries for one course: id, number, title, category, answered state. Use when the user asks what is being discussed or wants a thread by title. Categories are hierarchical: category is top-level and subcategory is second-level, spelled as Ed shows them. Sort defaults to new; Ed may keep pinned threads first. Not for thread bodies (get_thread) or the user's own posts (list_activity). courseId accepts a numeric ID or course code. Cost: about 150 bytes per thread; use limit. |
+| list_threads | Compact thread summaries for one course: id, number, title, category, answered state. Use when the user asks what is being discussed or wants a thread by title. Categories are hierarchical: category is top-level and subcategory is second-level, spelled as Ed shows them. Sort defaults to new; Ed may keep pinned threads first. Not for thread bodies (get_thread) or the user's own posts (list_activity). unit accepts a numeric ID, a unit code, or part of the unit name. Cost: about 150 bytes per thread; use limit. |
 | get_thread | One thread with its answers and comments, compact. Use when the user wants what a thread says. threadId is the global id from list_threads or list_activity; for a course-local number such as #42 use get_course_thread. Cost: proportional to replies. |
-| get_course_thread | One thread addressed by course and course-local number (the #N Ed shows), compact. Use when the user gives a thread number rather than a global id. courseId accepts a numeric ID or course code. Cost: as get_thread. |
-| list_activity | The signed-in user's recent threads, answers and comments, optionally within one course. Use when the user asks what they posted or whether anyone replied. Not for other people's activity (list_threads). courseId is optional and accepts a numeric ID or course code. Cost: small. |
-| mark_lessons_read | Mark lessons and their slides as read; writes progress. Use only when the user explicitly asks to mark lessons read or complete. queries are words that must appear in lesson or module names; no queries means every lesson in the course. courseId accepts a numeric ID or course code. Cost: one write per slide. |
+| get_course_thread | One thread addressed by course and course-local number (the #N Ed shows), compact. Use when the user gives a thread number rather than a global id. unit accepts a numeric ID, a unit code, or part of the unit name. Cost: as get_thread. |
+| list_activity | The signed-in user's recent threads, answers and comments, optionally within one course. Use when the user asks what they posted or whether anyone replied. Not for other people's activity (list_threads). unit is optional and accepts a numeric ID, a unit code, or part of the unit name. Cost: small. |
+| mark_lessons_read | Mark lessons and their slides as read; writes progress. Use only when the user explicitly asks to mark lessons read or complete. queries are words that must appear in lesson or module names; no queries means every lesson in the course. unit accepts a numeric ID, a unit code, or part of the unit name. Cost: one write per slide. |
 | submit_slide_answer | Save one-based choices for one quiz question; writes. Use only when the user has chosen the answer. questionId comes from list_slide_questions. Then submit_slide to finalise the slide. Cost: one write. |
 | submit_slide | Submit all saved answers for one quiz slide; writes and is usually final. Use only with explicit user intent after answers are saved. slideId comes from get_lesson. Cost: one write. |
 

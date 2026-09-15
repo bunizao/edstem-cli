@@ -51,6 +51,8 @@ export interface EdClientOptions {
   fetch?: FetchLike;
   token: string;
   timeoutMs?: number;
+  /** Called once per request. The URL never carries the token, which is a header. */
+  trace?: (entry: { method: string; url: string; status: number; ms: number }) => void;
 }
 
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -60,6 +62,7 @@ export class EdClient {
   private readonly fetch: FetchLike;
   private readonly token: string;
   private readonly timeoutMs: number;
+  private readonly trace: EdClientOptions["trace"];
 
   constructor(options: EdClientOptions) {
     this.apiBaseUrl = ensureTrailingSlash(
@@ -68,6 +71,7 @@ export class EdClient {
     this.fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.token = options.token;
     this.timeoutMs = options.timeoutMs ?? 15_000;
+    this.trace = options.trace;
   }
 
   async fetchCourseThread(courseId: number, number: number): Promise<Thread> {
@@ -270,6 +274,7 @@ export class EdClient {
       url.searchParams.set(key, value);
     }
 
+    const startedAt = Date.now();
     let response: Response;
     try {
       response = await this.fetch(url, {
@@ -284,9 +289,11 @@ export class EdClient {
         signal: AbortSignal.timeout(this.timeoutMs)
       });
     } catch (error) {
+      this.trace?.({ method, url: url.toString(), status: 0, ms: Date.now() - startedAt });
       const detail = error instanceof Error ? error.message : String(error);
       throw new EdApiError("network", 0, `Failed to reach the Ed API: ${detail}`);
     }
+    this.trace?.({ method, url: url.toString(), status: response.status, ms: Date.now() - startedAt });
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location") ?? "an unknown location";

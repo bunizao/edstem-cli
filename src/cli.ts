@@ -29,7 +29,7 @@ import {
   resolveThread,
 } from "./ed/operations.js";
 import {
-  compactActivity,
+  projectActivity,
   projectCourse,
   projectIdentity,
   projectLessonDetail,
@@ -61,7 +61,7 @@ const NOUNS: readonly NounSpec[] = [
     defaultByArity: { 1: "list" },
     valueFlags: [
       "-n",
-      "--max",
+      "--limit",
       "-s",
       "--sort",
       "-c",
@@ -96,6 +96,8 @@ export interface CliRuntime {
   defaultFetchCount: () => Promise<number>;
   interactive: boolean;
   isTTY: boolean;
+  /** Terminal width tables have to fit into. A pty without a size reports 0. */
+  columns?: number;
   writeStderr: (text: string) => void;
   writeOutput?: (text: string, output?: string) => Promise<void>;
   writeStdout: (text: string) => void;
@@ -154,7 +156,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
   threads.command("list")
     .description("List threads in a unit.")
     .argument("<unit>", "Unit ID or code", unitIdentifier)
-    .option("-n, --max <count>", "Maximum threads to fetch", positiveInteger)
+    .option("-n, --limit <count>", "Maximum threads to fetch", positiveInteger)
     .addOption(program.createOption(
       "-s, --sort <order>",
       "Ed sort order; defaults to new and pinned threads may remain first."
@@ -169,7 +171,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
       if (options.answered && options.unanswered) {
         throw new CliError("usage", "Use only one of --answered or --unanswered.");
       }
-      const limit = options.max ?? await runtime.defaultFetchCount();
+      const limit = options.limit ?? await runtime.defaultFetchCount();
       const values = await listThreads(client, {
         answered: options.answered ? true : options.unanswered ? false : undefined,
         category: options.category,
@@ -318,11 +320,11 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
   program.command("activity")
     .description("List current-user activity.")
     .argument("[unit]", "Unit ID or code", unitIdentifier)
-    .option("-n, --max <count>", "Maximum activity items", positiveInteger)
+    .option("-n, --limit <count>", "Maximum activity items", positiveInteger)
     .option("-f, --filter <type>", "Activity type", "all")
     .action(outputAction(runtime, async (client, command, unit?: string) => {
-      const limit = command.opts().max ?? await runtime.defaultFetchCount();
-      return compactActivity(await listCurrentActivity(client, {
+      const limit = command.opts().limit ?? await runtime.defaultFetchCount();
+      return projectActivity(await listCurrentActivity(client, {
         courseId: unit,
         filterType: command.opts().filter,
         limit,
@@ -352,13 +354,23 @@ function createDefaultRuntime(): CliRuntime {
   return {
     createClient: () => {
       client ??= Promise.all([loadToken(), loadConfig()]).then(([token, config]) =>
-        new EdClient({ apiBaseUrl: config.apiBaseUrl, token })
+        new EdClient({
+          apiBaseUrl: config.apiBaseUrl,
+          token,
+          // --verbose is the flag you reach for when a command feels slow, so it
+          // reports the requests and their timings. Never the token: it is a header.
+          trace: process.argv.includes("--verbose")
+            ? (entry) => process.stderr.write(`${entry.method} ${entry.url} ${entry.status} ${entry.ms}ms\n`)
+            : undefined,
+        })
       );
       return client;
     },
     defaultFetchCount: async () => (await loadConfig()).fetchCount,
     interactive: Boolean(process.stdin.isTTY),
     isTTY: Boolean(process.stdout.isTTY),
+    // A pty that will not report its size still needs a table narrow enough to read.
+    columns: process.stdout.columns || (process.stdout.isTTY ? 80 : undefined),
     writeStderr: (text) => process.stderr.write(text),
     writeOutput: (text, output) => writeOutput(text, { output }),
     writeStdout: (text) => process.stdout.write(text),
@@ -406,11 +418,42 @@ function mutationAction<Arguments extends unknown[]>(
   };
 }
 
+/**
+ * What a person wants to see per row. Every field stays in --json; a table that
+ * carries eleven columns has to shave them all down to nothing to fit a terminal,
+ * so the human format picks the few that identify the row.
+ */
+const TABLE_COLUMNS: Readonly<Record<string, readonly [string, string][]>> = {
+  "threads list": [["number", "#"], ["title", "title"], ["category", "category"], ["flags", "flags"], ["createdAt", "created"]],
+  "lessons list": [["number", "#"], ["title", "title"], ["moduleName", "module"], ["status", "status"], ["dueAt", "due"]],
+  "units list": [["id", "id"], ["code", "code"], ["name", "name"], ["status", "status"]],
+  activity: [["kind", "kind"], ["courseCode", "unit"], ["title", "title"], ["createdAt", "created"]],
+};
+
+function commandPath(command: Command): string {
+  const names: string[] = [];
+  for (let current: Command | null = command; current?.parent; current = current.parent) {
+    names.unshift(current.name());
+  }
+  return names.join(" ");
+}
+
 async function writeValue(runtime: CliRuntime, command: Command, value: unknown): Promise<void> {
   const options = outputOptions(command);
   const format = resolveFormat(options, runtime.isTTY);
   const fields = options.fields?.split(",").map((field) => field.trim()).filter(Boolean);
-  await writeText(runtime, render(value, { format, fields }), options.output);
+  // Pretty JSON is for a person reading it; a pipe only pays for the whitespace.
+  await writeText(
+    runtime,
+    render(value, {
+      format,
+      fields,
+      columns: fields?.length ? undefined : TABLE_COLUMNS[commandPath(command)],
+      width: runtime.columns,
+      pretty: runtime.isTTY,
+    }),
+    options.output,
+  );
 }
 
 async function writeText(runtime: CliRuntime, text: string, output?: string): Promise<void> {

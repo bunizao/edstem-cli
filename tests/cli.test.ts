@@ -124,7 +124,7 @@ describe("CLI", () => {
     expect(JSON.parse(detail.stdout.join(""))).toHaveProperty("users.67890.name", "Bob TA");
 
     const interleaved = makeRuntime();
-    expect(await run(["node", "edstem", "threads", "--max", "1", "100"], interleaved.runtime)).toBe(0);
+    expect(await run(["node", "edstem", "threads", "--limit", "1", "100"], interleaved.runtime)).toBe(0);
   });
 
   it("emits compact thread summaries and field selection", async () => {
@@ -153,7 +153,7 @@ describe("CLI", () => {
   it("accepts a course code without a separate lookup command", async () => {
     const { fetch, runtime, stdout } = makeRuntime();
 
-    expect(await run(["node", "edstem", "threads", "CS101", "--max", "1"], runtime)).toBe(0);
+    expect(await run(["node", "edstem", "threads", "CS101", "--limit", "1"], runtime)).toBe(0);
 
     expect(JSON.parse(stdout.join(""))).toEqual([
       expect.objectContaining({ id: 5001, courseId: 100 }),
