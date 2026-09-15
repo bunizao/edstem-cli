@@ -56,11 +56,11 @@ const WRITE = {
 const COURSE_REFERENCE = z.union([
   z.number().int().positive(),
   z.string().trim().min(1),
-]).describe('Ed course ID or exact course code, for example 38435 or "FIT2014".');
+]).describe("Ed course ID, or the course code exactly as Ed shows it (see list_courses). Do not assume a code format.");
 const THREAD_LIST_SHAPE = {
   answered: z.boolean().optional().describe("Keep answered threads when true, unanswered when false; omit for both."),
   category: z.string().trim().min(1).optional().describe(
-    'Exact top-level category, for example "Applied".'
+    'Exact top-level category as Ed shows it.'
   ),
   courseId: COURSE_REFERENCE,
   limit: z.number().int().positive().max(100).optional().default(30).describe("Maximum threads to return, capped at 100; defaults to 30."),
@@ -74,7 +74,7 @@ const THREAD_LIST_SHAPE = {
     'Ed sort order. Defaults to "new"; Ed may keep pinned threads ahead of that order.'
   ),
   subcategory: z.string().trim().min(1).optional().describe(
-    'Exact second-level subcategory, for example "MiniTests".'
+    'Exact second-level subcategory as Ed shows it.'
   ),
   threadType: z.string().trim().min(1).optional().describe(
     'Exact thread type, for example "question" or "post".'
@@ -152,7 +152,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
           'Exact lesson type, for example "general". Use "all" or omit to include every type.'
         ),
         module: z.string().trim().min(1).optional().describe(
-          'Module ID or case-insensitive text from the module name, for example "Week 5". Use "all" or omit to include every module.'
+          'Module ID or case-insensitive text from the module name as Ed shows it. Use "all" or omit to include every module.'
         ),
         state: z.string().trim().min(1).optional().describe(
           'Exact availability state, for example "active" or "scheduled". Use "all" or omit to include every state.'
@@ -329,7 +329,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       description: toolDescription("list_activity"),
       inputSchema: z.object({
         courseId: COURSE_REFERENCE.optional().describe(
-          'Ed course ID or exact course code to filter by, for example 38435 or "FIT2014". Omit for every course.'
+          "Ed course ID, or the course code exactly as Ed shows it, to filter by. Omit for every course."
         ),
         filterType: z.enum(["all", "thread", "answer", "comment"]).optional().default("all").describe(
           'Kind of activity to keep. Defaults to "all".'
@@ -482,7 +482,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
           "Post body in Markdown. It is converted to Ed's document format before posting."
         ),
         category: z.string().trim().min(1).optional().describe(
-          'Exact top-level category for the course, for example "Applied".'
+          'Exact top-level category for the course as Ed shows it.'
         ),
         courseId: COURSE_REFERENCE,
         private: z.boolean().optional().default(false).describe(
@@ -576,7 +576,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       argsSchema: z.object({
         courseId: z.string().describe(
-          'Ed course ID or exact course code, for example "38435" or "FIT2014".'
+          "Ed course ID, or the course code exactly as Ed shows it (see list_courses)."
         ),
         limit: z.string().optional().describe(
           "Maximum threads to triage, capped at 100; defaults to 30."

@@ -36,18 +36,18 @@ Commands follow `edstem <plural-noun> [verb] [scope] [id] [flags]`. The canonica
 
 ```bash
 edstem units
-edstem courses FIT1045
+edstem courses UNIT
 edstem threads 12345 --max 20 --fields id,number,title
 edstem threads search 12345 assignment deadline
 edstem threads show 12345#42
-edstem threads show FIT2014#42
+edstem threads show UNIT#42
 edstem threads read 12345#42
 edstem lessons 12345 --module "Week 2"
 edstem lessons show 67890
 edstem lessons read 67890
 ```
 
-Every `<unit>` argument accepts either the numeric Ed course ID or the exact course code. MCP tools use the same rule for `courseId`, so `courseId: "FIT2014"` can be called directly without a preceding `list_courses` lookup. If multiple enrolments share a code, use the numeric ID shown by `edstem units --archived` to select the intended year and session.
+Every `<unit>` argument (`UNIT` above) accepts either the numeric Ed course ID or the course code exactly as Ed shows it; run `edstem units` to see both. The CLI never assumes what a code looks like. MCP tools use the same rule for `courseId`, so a code can be passed directly without a preceding `list_courses` lookup. If multiple enrolments share a code, use the numeric ID shown by `edstem units --archived` to select the intended year and session.
 
 Lesson filters are case-insensitive. `--module` accepts an ID or part of a module name; `--type`, `--state`, and `--status` use exact values. Common lesson values are `general`, `active` or `scheduled`, and `unattempted`, `attempted`, or `completed`. Pass `all` or omit a filter to include every value. If an unfiltered lesson list is empty, that unit has no Ed Lessons; an invalid filter reports the values available in that unit.
 
@@ -56,10 +56,10 @@ Thread categories are hierarchical: `--category` matches the top level and `--su
 Ed applies none of these filters itself, so `--max` is honoured by paging through Ed until enough threads match, up to ten requests. `--offset` skips threads at the start of the unfiltered Ed stream. `--since` keeps threads created at or after an ISO date, an ISO datetime, or a relative offset such as `7d`, `12h`, or `2w`. `threads search` matches every query word, case-insensitively, against the thread title and body, and accepts the same filters as `threads list`.
 
 ```bash
-edstem threads 12345 --category Applied --subcategory MiniTests
+edstem threads 12345 --category "<top-level category>" --subcategory "<second-level>"
 edstem threads 12345 --unanswered --since 7d --max 20
 edstem threads search 12345 assignment deadline --since 2026-09-01
-edstem lessons 12345 --module "Week 5" --status all
+edstem lessons 12345 --module "<part of a module name>" --status all
 ```
 
 Omitted verbs are inferred when the arguments are unambiguous. `read` always emits Markdown and never changes upstream state; it is available for threads, lessons, and slides.
@@ -73,7 +73,7 @@ edstem files list 67890
 edstem files get 67890 --dest ./slides
 edstem files get 67890 --slide 4401 --dest ./slides
 edstem files list thread:5001
-edstem files get thread:FIT1045#42 --dest ./attachments
+edstem files get thread:UNIT#42 --dest ./attachments
 ```
 
 Slide facets use one read-only command so the verb vocabulary stays consistent:
@@ -109,7 +109,7 @@ Posting publishes to the unit forum under your own name and cannot be undone fro
 
 ```bash
 edstem threads send 12345 --title "Week 3 sample solution" --body "Does **Q4** need induction?" --dry-run
-edstem threads send FIT2014 --title "Week 3 sample solution" --body-file ./post.md --type question --category Applied --yes
+edstem threads send UNIT --title "Week 3 sample solution" --body-file ./post.md --type question --category "<top-level category>" --yes
 edstem replies send 12345#42 --body "Fixed by reinstalling." --yes
 edstem replies send 12345#42 --to 88991 --as comment --body-file - --yes
 ```

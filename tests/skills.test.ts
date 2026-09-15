@@ -19,6 +19,8 @@ describe("generated skill", () => {
     expect(markdown).toContain("Successful piped output is JSON by default");
     expect(markdown).toContain("require explicit user intent");
     expect(markdown).toContain("edstem commands --json");
+    expect(markdown).toContain("| The user says | Run | Notes |");
+    expect(markdown).not.toMatch(/\bFIT\d{4}\b/);
     expect(markdown).toContain("| edstem lessons mark-read");
   });
 
