@@ -86,7 +86,7 @@ const NOUNS: readonly NounSpec[] = [
     defaultByArity: { 1: "list" },
     valueFlags: [
       "-n",
-      "--max",
+      "--limit",
       "-s",
       "--sort",
       "-c",
@@ -136,6 +136,8 @@ export interface CliRuntime {
   isTTY: boolean;
   readStdinLine: () => Promise<string>;
   tokenFile: string;
+  /** Terminal width tables have to fit into. A pty without a size reports 0. */
+  columns?: number;
   writeStderr: (text: string) => void;
   writeOutput?: (text: string, output?: string) => Promise<void>;
   writeStdout: (text: string) => void;
@@ -528,10 +530,10 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
   program.command("activity")
     .description("List current-user activity.")
     .argument("[unit]", "Unit ID or code", unitIdentifier)
-    .option("-n, --max <count>", "Maximum activity items", positiveInteger("--max"))
+    .option("-n, --limit <count>", "Maximum activity items", positiveInteger("--limit"))
     .option("-f, --filter <type>", "Activity type", "all")
     .action(outputAction(runtime, async (client, command, unit?: string) => {
-      const limit = command.opts().max ?? await runtime.defaultFetchCount();
+      const limit = command.opts().limit ?? await runtime.defaultFetchCount();
       return projectActivity(await listCurrentActivity(client, {
         courseId: unit,
         filterType: command.opts().filter,
@@ -587,6 +589,11 @@ function createDefaultRuntime(): CliRuntime {
           maxRetries: config.maxRetries,
           retryBaseDelayMs: config.retryBaseDelayMs,
           token,
+          // --verbose is the flag you reach for when a command feels slow, so it
+          // reports the requests and their timings. Never the token: it is a header.
+          trace: process.argv.includes("--verbose")
+            ? (entry) => process.stderr.write(`${entry.method} ${entry.url} ${entry.status} ${entry.ms}ms\n`)
+            : undefined,
         })
       );
       return client;
@@ -598,6 +605,8 @@ function createDefaultRuntime(): CliRuntime {
     isTTY: Boolean(process.stdout.isTTY),
     readStdinLine,
     tokenFile,
+    // A pty that will not report its size still needs a table narrow enough to read.
+    columns: process.stdout.columns || (process.stdout.isTTY ? 80 : undefined),
     writeStderr: (text) => process.stderr.write(text),
     writeOutput: (text, output) => writeOutput(text, { output }),
     writeStdout: (text) => process.stdout.write(text),
@@ -698,11 +707,43 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
+/**
+ * What a person wants to see per row. Every field stays in --json; a table that
+ * carries eleven columns has to shave them all down to nothing to fit a terminal,
+ * so the human format picks the few that identify the row.
+ */
+const TABLE_COLUMNS: Readonly<Record<string, readonly [string, string][]>> = {
+  "threads list": [["number", "#"], ["title", "title"], ["category", "category"], ["flags", "flags"], ["createdAt", "created"]],
+  "threads search": [["number", "#"], ["title", "title"], ["category", "category"], ["flags", "flags"], ["createdAt", "created"]],
+  "lessons list": [["number", "#"], ["title", "title"], ["moduleName", "module"], ["status", "status"], ["dueAt", "due"]],
+  "units list": [["id", "id"], ["code", "code"], ["name", "name"], ["status", "status"]],
+  activity: [["kind", "kind"], ["courseCode", "unit"], ["title", "title"], ["createdAt", "created"]],
+};
+
+function commandPath(command: Command): string {
+  const names: string[] = [];
+  for (let current: Command | null = command; current?.parent; current = current.parent) {
+    names.unshift(current.name());
+  }
+  return names.join(" ");
+}
+
 async function writeValue(runtime: CliRuntime, command: Command, value: unknown): Promise<void> {
   const options = outputOptions(command);
   const format = resolveFormat(options, runtime.isTTY);
   const fields = options.fields?.split(",").map((field) => field.trim()).filter(Boolean);
-  await writeText(runtime, render(value, { format, fields }), options.output);
+  // Pretty JSON is for a person reading it; a pipe only pays for the whitespace.
+  await writeText(
+    runtime,
+    render(value, {
+      format,
+      fields,
+      columns: fields?.length ? undefined : TABLE_COLUMNS[commandPath(command)],
+      width: runtime.columns,
+      pretty: runtime.isTTY,
+    }),
+    options.output,
+  );
 }
 
 async function writeText(runtime: CliRuntime, text: string, output?: string): Promise<void> {
@@ -724,7 +765,7 @@ function outputOptions(command: Command): GlobalOptions {
 
 function withThreadFilters(command: Command): Command {
   return command
-    .option("-n, --max <count>", "Maximum threads to return", positiveInteger("--max"))
+    .option("-n, --limit <count>", "Maximum threads to return", positiveInteger("--limit"))
     .addOption(command.createOption(
       "-s, --sort <order>",
       "Ed sort order; defaults to new and pinned threads may remain first."
@@ -755,7 +796,7 @@ async function threadListOptions(
     answered: options.answered ? true : options.unanswered ? false : undefined,
     category: options.category,
     courseId: unit,
-    limit: options.max ?? await runtime.defaultFetchCount(),
+    limit: options.limit ?? await runtime.defaultFetchCount(),
     offset: options.offset,
     since: options.since,
     sort: options.sort,

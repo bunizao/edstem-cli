@@ -72,6 +72,8 @@ export interface EdClientOptions {
   sleep?: (ms: number) => Promise<void>;
   token: string;
   timeoutMs?: number;
+  /** Called once per request. The URL never carries the token, which is a header. */
+  trace?: (entry: { method: string; url: string; status: number; ms: number }) => void;
 }
 
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -88,6 +90,7 @@ export class EdClient {
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly token: string;
   private readonly timeoutMs: number;
+  private readonly trace: EdClientOptions["trace"];
 
   constructor(options: EdClientOptions) {
     this.apiBaseUrl = ensureTrailingSlash(
@@ -99,6 +102,7 @@ export class EdClient {
     this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.token = options.token;
     this.timeoutMs = options.timeoutMs ?? 15_000;
+    this.trace = options.trace;
   }
 
   async fetchCourseThread(courseId: number, number: number): Promise<Thread> {
@@ -434,8 +438,10 @@ export class EdClient {
     url: URL,
     jsonBody: unknown
   ): Promise<Response> {
+    // Traced per attempt, so --verbose shows each retry.
+    const startedAt = Date.now();
     try {
-      return await this.fetch(url, {
+      const response = await this.fetch(url, {
         body: jsonBody === undefined ? undefined : JSON.stringify(jsonBody),
         headers: {
           Accept: "application/json",
@@ -446,7 +452,10 @@ export class EdClient {
         redirect: "manual",
         signal: AbortSignal.timeout(this.timeoutMs)
       });
+      this.trace?.({ method, url: url.toString(), status: response.status, ms: Date.now() - startedAt });
+      return response;
     } catch (error) {
+      this.trace?.({ method, url: url.toString(), status: 0, ms: Date.now() - startedAt });
       const detail = error instanceof Error ? error.message : String(error);
       throw new EdApiError("network", 0, `Failed to reach the Ed API: ${detail}`);
     }

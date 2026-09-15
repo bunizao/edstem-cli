@@ -37,7 +37,7 @@ Commands follow `edstem <plural-noun> [verb] [scope] [id] [flags]`. The canonica
 ```bash
 edstem units
 edstem courses UNIT
-edstem threads 12345 --max 20 --fields id,number,title
+edstem threads 12345 --limit 20 --fields id,number,title
 edstem threads search 12345 assignment deadline
 edstem threads show 12345#42
 edstem threads show UNIT#42
@@ -53,11 +53,11 @@ Lesson filters are case-insensitive. `--module` accepts an ID or part of a modul
 
 Thread categories are hierarchical: `--category` matches the top level and `--subcategory` matches the second level. Thread sorting defaults to `new`; Ed may keep pinned threads first regardless of the selected order.
 
-Ed applies none of these filters itself, so `--max` is honoured by paging through Ed until enough threads match, up to ten requests. `--offset` skips threads at the start of the unfiltered Ed stream. `--since` keeps threads created at or after an ISO date, an ISO datetime, or a relative offset such as `7d`, `12h`, or `2w`. `threads search` matches every query word, case-insensitively, against the thread title and body, and accepts the same filters as `threads list`.
+Ed applies none of these filters itself, so `--limit` is honoured by paging through Ed until enough threads match, up to ten requests. `--offset` skips threads at the start of the unfiltered Ed stream. `--since` keeps threads created at or after an ISO date, an ISO datetime, or a relative offset such as `7d`, `12h`, or `2w`. `threads search` matches every query word, case-insensitively, against the thread title and body, and accepts the same filters as `threads list`.
 
 ```bash
 edstem threads 12345 --category "<top-level category>" --subcategory "<second-level>"
-edstem threads 12345 --unanswered --since 7d --max 20
+edstem threads 12345 --unanswered --since 7d --limit 20
 edstem threads search 12345 assignment deadline --since 2026-09-01
 edstem lessons 12345 --module "<part of a module name>" --status all
 ```

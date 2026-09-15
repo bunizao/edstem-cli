@@ -35,7 +35,7 @@ export class EdCourseNotFoundError extends EdInputError {
 }
 
 export async function listThreads(client: EdClient, options: ThreadListOptions): Promise<Thread[]> {
-  assertPositive(options.limit, "--max");
+  assertPositive(options.limit, "--limit");
   const offset = options.offset ?? 0;
   assertNonNegative(offset, "--offset");
   const courseId = await resolveCourseId(client, options.courseId);
@@ -227,7 +227,7 @@ export async function listCurrentActivity(
   client: EdClient,
   options: { courseId?: CourseReference; filterType?: string; limit: number }
 ): Promise<unknown[]> {
-  assertPositive(options.limit, "--max");
+  assertPositive(options.limit, "--limit");
   const { courses, user } = await client.fetchUser();
   const courseId = options.courseId === undefined
     ? undefined
