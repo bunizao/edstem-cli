@@ -111,8 +111,8 @@ describe("stdio MCP adapter", () => {
       | Record<string, { description?: string }>
       | undefined;
 
-    expect(lessons?.description).toContain("numeric ID or the course code exactly as Ed shows it");
-    expect(lessonProperties?.courseId?.description).toContain("course code exactly as Ed shows it");
+    expect(lessons?.description).toContain("a unit code, or part of the unit name");
+    expect(lessonProperties?.courseId?.description).toContain("unit code as Ed shows it");
     expect(lessonProperties?.module?.description).toContain("module name as Ed shows it");
     expect(lessonProperties?.state?.description).toContain('"active" or "scheduled"');
     expect(lessonProperties?.status?.description).toContain('"unattempted", "attempted", or "completed"');

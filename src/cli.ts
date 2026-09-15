@@ -43,7 +43,7 @@ import {
   type ThreadListOptions,
 } from "./ed/operations.js";
 import {
-  compactActivity,
+  projectActivity,
   projectComment,
   projectCourse,
   projectIdentity,
@@ -532,7 +532,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     .option("-f, --filter <type>", "Activity type", "all")
     .action(outputAction(runtime, async (client, command, unit?: string) => {
       const limit = command.opts().max ?? await runtime.defaultFetchCount();
-      return compactActivity(await listCurrentActivity(client, {
+      return projectActivity(await listCurrentActivity(client, {
         courseId: unit,
         filterType: command.opts().filter,
         limit,

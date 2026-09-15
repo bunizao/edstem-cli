@@ -17,7 +17,7 @@ import {
   resolveCourseId,
 } from "../ed/operations.js";
 import {
-  compactActivity,
+  projectActivity,
   projectComment,
   projectCourse,
   projectIdentity,
@@ -56,7 +56,7 @@ const WRITE = {
 const COURSE_REFERENCE = z.union([
   z.number().int().positive(),
   z.string().trim().min(1),
-]).describe("Ed course ID, or the course code exactly as Ed shows it (see list_courses). Do not assume a code format.");
+]).describe("Ed course ID, the unit code as Ed shows it, or part of the unit name (see list_courses). Do not assume a code format.");
 const THREAD_LIST_SHAPE = {
   answered: z.boolean().optional().describe("Keep answered threads when true, unanswered when false; omit for both."),
   category: z.string().trim().min(1).optional().describe(
@@ -341,7 +341,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       title: "List my activity",
     },
     async ({ courseId, filterType, limit }, extra) => runTool(runtime, extra, "read", async (client) =>
-      compactActivity(await listCurrentActivity(client, { courseId, filterType, limit }))
+      projectActivity(await listCurrentActivity(client, { courseId, filterType, limit }))
     )
   );
 

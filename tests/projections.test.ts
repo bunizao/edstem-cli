@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { EdClient, type FetchLike } from "../src/ed/client.js";
 import {
+  projectActivity,
   projectLessonDetail,
   projectSlide,
   projectThreadDetail,
@@ -108,5 +109,32 @@ describe("agent projections", () => {
       "content",
       expect.stringContaining("<document")
     );
+  });
+});
+
+describe("projectActivity", () => {
+  it("renames the upstream payload into the CLI's own keys", () => {
+    const [comment, thread] = projectActivity([
+      {
+        type: "comment",
+        value: {
+          id: 1, type: "comment", course_id: 7, course_code: "CS101", course_name: "Systems",
+          thread_id: 42, thread_title: "Week 1", thread_category: "Admin", thread_subcategory: "Setup",
+          created_at: "2026-09-15T17:36:34.123+10:00", document: "hi",
+        },
+      },
+      {
+        type: "thread",
+        value: { id: 2, type: "question", course_id: 7, title: "Why?", category: "Q&A", is_private: true, created_at: "" },
+      },
+    ]);
+
+    expect(comment).toEqual({
+      kind: "comment", id: 1, type: "comment", title: "Week 1", courseId: 7, courseCode: "CS101",
+      courseName: "Systems", threadId: 42, category: "Admin", subcategory: "Setup",
+      createdAt: "2026-09-15T17:36:34+10:00", document: "hi",
+    });
+    expect(thread).toEqual({ kind: "thread", id: 2, type: "question", title: "Why?", courseId: 7, category: "Q&A", private: true });
+    for (const key of Object.keys({ ...comment, ...thread })) expect(key).not.toContain("_");
   });
 });
