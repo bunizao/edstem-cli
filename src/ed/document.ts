@@ -88,14 +88,29 @@ function renderInline(text: string): string {
     .split(/(`[^`]+`)/)
     .map((part) => CODE_SPAN.test(part)
       ? `<code>${escapeText(part.slice(1, -1))}</code>`
-      : renderEmphasis(escapeText(part)))
+      : renderLinks(escapeText(part)))
     .join("");
+}
+
+function renderLinks(text: string): string {
+  const links: string[] = [];
+  let marker = "\u0000";
+  while (text.includes(marker)) marker += "\u0000";
+
+  // Keep link XML out of emphasis matching, including emphasis around a whole link.
+  const placeholders = text.replace(LINK, (_match, label: string, href: string) => {
+    const index = links.length;
+    links.push(`<link href="${escapeAttribute(href)}">${renderEmphasis(label)}</link>`);
+    return `${marker}${index}${marker}`;
+  });
+  return renderEmphasis(placeholders).replace(
+    new RegExp(`${marker}(\\d+)${marker}`, "g"),
+    (match, index: string) => links[Number(index)] ?? match
+  );
 }
 
 function renderEmphasis(text: string): string {
   return text
-    .replace(LINK, (_match, label: string, href: string) =>
-      `<link href="${escapeAttribute(href)}">${label}</link>`)
     .replace(BOLD, "<bold>$1</bold>")
     .replace(ITALIC, "<italic>$1</italic>");
 }

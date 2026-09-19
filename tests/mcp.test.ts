@@ -518,7 +518,13 @@ describe("stdio MCP adapter", () => {
     expect(parseToolResult(result)).toHaveProperty("error.type", "INSUFFICIENT_SCOPE");
   });
 
-  it("creates a thread from Markdown and reports it back", async () => {
+  it.each([
+    ["Help **me**", "<paragraph>Help <bold>me</bold></paragraph>"],
+    [
+      "[search](https://example.org/search?q=*term*)",
+      '<paragraph><link href="https://example.org/search?q=*term*">search</link></paragraph>',
+    ],
+  ])("creates a thread from Markdown and reports it back: %s", async (body, content) => {
     const fetch = vi.fn<FetchLike>().mockImplementation(async () => new Response(
       JSON.stringify({ thread: { course_id: 100, id: 5100, number: 44, title: "Install" } }),
       { status: 200 }
@@ -526,7 +532,7 @@ describe("stdio MCP adapter", () => {
     const client = await connect(new EdClient({ fetch, token: "test-token" }));
 
     const result = await client.callTool({
-      arguments: { body: "Help **me**", courseId: 100, title: "Install", type: "question" },
+      arguments: { body, courseId: 100, title: "Install", type: "question" },
       name: "create_thread",
     });
 
@@ -535,7 +541,7 @@ describe("stdio MCP adapter", () => {
     const [url, init] = fetch.mock.calls[0] ?? [];
     expect(new URL(String(url)).pathname).toBe("/api/courses/100/threads");
     expect(JSON.parse(String(init?.body)).thread).toMatchObject({
-      content: '<document version="2.0"><paragraph>Help <bold>me</bold></paragraph></document>',
+      content: `<document version="2.0">${content}</document>`,
       is_private: false,
       title: "Install",
       type: "question",

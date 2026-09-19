@@ -46,6 +46,14 @@ const CASES: Array<[string, string, string]> = [
     '<paragraph><link href="https://en.wikipedia.org/wiki/Function_(mathematics)">wiki</link></paragraph>',
   ],
   [
+    "preserves emphasis markers in link targets while formatting labels and surrounding text",
+    '**See [*search*](https://example.org/search?q=*term*&mode="all")** and '
+      + '[**docs**](https://example.org/**path**) with *care*.',
+    '<paragraph><bold>See <link href="https://example.org/search?q=*term*&amp;mode=&quot;all&quot;">'
+      + '<italic>search</italic></link></bold> and '
+      + '<link href="https://example.org/**path**"><bold>docs</bold></link> with <italic>care</italic>.</paragraph>',
+  ],
+  [
     "stops a link URL before trailing parenthesised text",
     "See [the docs](https://ed.example/a) (really).",
     '<paragraph>See <link href="https://ed.example/a">the docs</link> (really).</paragraph>',
