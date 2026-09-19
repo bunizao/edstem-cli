@@ -17,6 +17,8 @@ edstem auth status
 
 Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens). The CLI also reads `~/.config/edstem-cli/token` and `~/.config/edstem-cli/config.yaml`.
 
+Run `edstem update --check` to compare the installed version against npm, or `edstem update --yes` to install the latest release.
+
 ## Command model
 
 Commands follow `edstem <plural-noun> [verb] [scope] [id] [flags]`. The canonical enrolment noun is `units`; `courses` and `projects` are equivalent aliases.
@@ -92,6 +94,8 @@ Run `edstem commands --json` for the full machine-readable command tree, includi
 | `EDSTEM_BASE_URL` | Override the Ed JSON API base URL. |
 | `EDSTEM_TOKEN` | Provide the Ed API token. |
 | `EDSTEM_CONFIG` | Override the local config file path. |
+
+`config.yaml` also tunes read retries: `rateLimit.maxRetries` (default `3`) caps how many times a rate-limited or temporarily failing GET is retried, and `rateLimit.retryBaseDelay` (seconds, default `1.0`) sets the exponential backoff base. A longer `Retry-After` header wins. Writes are never retried.
 
 ## MCP
 
