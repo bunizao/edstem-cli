@@ -17,7 +17,8 @@ function makeRuntime(
   status = 200,
   isTTY = false,
   userInfo: unknown = fixture("user_info"),
-  options: { stdinLine?: string; tokenFile?: string } = {}
+  options: { stdinLine?: string; tokenFile?: string } = {},
+  overrides: Record<string, unknown> = {}
 ): {
   fetch: ReturnType<typeof vi.fn<FetchLike>>;
   runtime: CliRuntime;
@@ -73,6 +74,7 @@ function makeRuntime(
         }],
       },
     },
+    ...overrides,
   };
   const fetch = vi.fn<FetchLike>().mockImplementation(async (input) => {
     const url = new URL(String(input));
@@ -337,6 +339,51 @@ describe("CLI", () => {
     } finally {
       await rm(directory, { force: true, recursive: true });
     }
+  });
+
+  it("lists and downloads thread files", async () => {
+    const threadFiles = { "/api/courses/100/threads/1": fixture("thread_files") };
+    const listing = makeRuntime(200, false, fixture("user_info"), {}, threadFiles);
+
+    expect(await run(["node", "edstem", "files", "list", "thread:100#1", "--json"], listing.runtime))
+      .toBe(0);
+    expect(JSON.parse(listing.stdout.join(""))).toEqual([
+      expect.objectContaining({ filename: "starter.zip", source: "thread", threadId: 5001 }),
+      expect.objectContaining({ filename: "solution.pdf", commentId: 9001, source: "comment" }),
+      expect.objectContaining({ filename: "notes.txt", commentId: 9010 }),
+    ]);
+
+    const directory = await mkdtemp(join(tmpdir(), "edstem-cli-thread-download-"));
+    try {
+      const download = makeRuntime(200, false, fixture("user_info"), {}, {
+        "/api/threads/5001": fixture("thread_files"),
+      });
+      expect(await run([
+        "node", "edstem", "files", "get", "thread:5001", "--dest", directory, "--json",
+      ], download.runtime)).toBe(0);
+      expect(JSON.parse(download.stdout.join(""))).toMatchObject({
+        threadId: 5001,
+        downloads: [
+          { filename: "Workshop Slides.pdf" },
+          { filename: "Workshop Slides-2.pdf" },
+          { filename: "Workshop Slides-3.pdf" },
+        ],
+      });
+      expect(await readFile(join(directory, "Workshop Slides.pdf"), "utf8")).toBe("pdf-body");
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
+  });
+
+  it("rejects --slide for thread targets", async () => {
+    const { runtime, stderr } = makeRuntime();
+
+    expect(await run([
+      "node", "edstem", "files", "get", "thread:5001", "--slide", "10", "--json",
+    ], runtime)).toBe(2);
+    expect(JSON.parse(stderr.join(""))).toMatchObject({
+      error: { code: "usage", message: expect.stringContaining("--slide") },
+    });
   });
 
   it("renders structured auth errors with the shared contract", async () => {
