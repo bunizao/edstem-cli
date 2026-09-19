@@ -2,6 +2,7 @@ import type {
   Comment,
   Course,
   Lesson,
+  LessonModule,
   LessonQuestion,
   LessonQuestionResponse,
   LessonSlide,
@@ -45,6 +46,10 @@ export function projectCourse(course: Course): JsonObject {
   setNonEmpty(result, "status", course.status);
   setNonEmpty(result, "role", course.role);
   return result;
+}
+
+export function projectModule(module: LessonModule, lessonCount: number): JsonObject {
+  return { id: module.id, name: module.name, lessonCount };
 }
 
 export function projectLessonSummary(lesson: Lesson): JsonObject {

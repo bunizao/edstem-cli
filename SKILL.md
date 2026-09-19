@@ -93,6 +93,7 @@ Run `edstem commands --json` for machine-readable metadata, including aliases, e
 | read_slide | Read one lesson slide as Markdown. |
 | list_thread_files | List Ed-hosted downloadable files and direct resource links attached to one thread, including its answers and comments. |
 | search_threads | Search threads in one course. Every query word must appear, case-insensitively, in the thread title or body; Ed is paged client-side until limit threads match. Accepts the same filters as list_threads. |
+| list_modules | List the lesson modules of one course with the number of lessons in each. courseId accepts a numeric ID or course code. Use it to pick a module value for list_lessons. |
 
 ## Errors
 

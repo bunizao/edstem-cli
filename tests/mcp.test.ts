@@ -119,6 +119,85 @@ describe("stdio MCP adapter", () => {
     expect(threadProperties?.sort?.description).toContain("pinned threads");
   });
 
+  it("gives every tool a title and every input field a description", async () => {
+    const client = await connect(new EdClient({ fetch: vi.fn<FetchLike>(), token: "test-token" }));
+
+    const { tools } = await client.listTools();
+
+    expect(tools.length).toBeGreaterThan(0);
+    for (const tool of tools) {
+      expect(tool.title, `${tool.name} is missing a title`).toBeTruthy();
+      for (const [field, path] of describableFields(tool.inputSchema)) {
+        expect(field.description, `${tool.name}.${path} is missing a description`).toBeTruthy();
+      }
+    }
+  });
+
+  it("annotates every tool as closed-world and marks write idempotency", async () => {
+    const client = await connect(new EdClient({ fetch: vi.fn<FetchLike>(), token: "test-token" }));
+
+    const { tools } = await client.listTools();
+    const annotations = new Map(tools.map((tool) => [tool.name, tool.annotations]));
+
+    for (const tool of tools) {
+      expect(tool.annotations?.openWorldHint, `${tool.name} is not closed-world`).toBe(false);
+    }
+    expect(annotations.get("list_threads")).toMatchObject({
+      idempotentHint: true,
+      readOnlyHint: true,
+    });
+    expect(annotations.get("mark_lessons_read")).toMatchObject({
+      destructiveHint: false,
+      idempotentHint: true,
+      readOnlyHint: false,
+    });
+    expect(annotations.get("submit_slide")).toMatchObject({ idempotentHint: false });
+    expect(annotations.get("submit_slide_answer")).toMatchObject({ idempotentHint: false });
+  });
+
+  it("lists course modules with their lesson counts", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(JSON.stringify({
+      lessons: [
+        { id: 1, module_id: 7 },
+        { id: 2, module_id: 7 },
+        { id: 3, module_id: 8 },
+      ],
+      modules: [{ id: 7, name: "Week 1" }, { id: 8, name: "Week 2" }, { id: 9, name: "Extras" }],
+    }), { status: 200 }));
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const result = await client.callTool({ arguments: { courseId: 100 }, name: "list_modules" });
+
+    expect(parseToolResult(result)).toEqual([
+      { id: 7, name: "Week 1", lessonCount: 2 },
+      { id: 8, name: "Week 2", lessonCount: 1 },
+      { id: 9, name: "Extras", lessonCount: 0 },
+    ]);
+    expect(fetch.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
+      "/api/courses/100/lessons",
+    ]);
+  });
+
+  it("offers a triage prompt for unanswered threads", async () => {
+    const client = await connect(new EdClient({ fetch: vi.fn<FetchLike>(), token: "test-token" }));
+
+    const { prompts } = await client.listPrompts();
+    const result = await client.getPrompt({
+      arguments: { courseId: "FIT2014", limit: "5" },
+      name: "triage_unanswered",
+    });
+    const [message] = result.messages;
+
+    expect(prompts.map((prompt) => prompt.name)).toContain("triage_unanswered");
+    expect(message?.role).toBe("user");
+    expect(message?.content).toMatchObject({ type: "text" });
+    const text = (message?.content as { text: string }).text;
+    expect(text).toContain("courseId=FIT2014");
+    expect(text).toContain("answered=false");
+    expect(text).toContain("limit=5");
+    expect(text).toContain("get_thread");
+  });
+
   it("resolves a course code inside one MCP tool call", async () => {
     const fetch = vi.fn<FetchLike>().mockImplementation(async (input) => {
       const path = new URL(String(input)).pathname;
@@ -465,5 +544,23 @@ function threadFetch(): ReturnType<typeof vi.fn<FetchLike>> {
       return new Response(JSON.stringify(fixture("user_info")), { status: 200 });
     }
     return new Response(JSON.stringify(fixture("thread_detail")), { status: 200 });
+  });
+}
+
+type JsonSchema = {
+  description?: string;
+  items?: JsonSchema;
+  properties?: Record<string, JsonSchema>;
+};
+
+/** Walk a tool input schema and yield every field that should carry a description. */
+function describableFields(schema: JsonSchema, path = ""): Array<[JsonSchema, string]> {
+  return Object.entries(schema.properties ?? {}).flatMap(([name, field]) => {
+    const fieldPath = path ? `${path}.${name}` : name;
+    return [
+      [field, fieldPath] as [JsonSchema, string],
+      ...describableFields(field, fieldPath),
+      ...(field.items ? describableFields(field.items, `${fieldPath}[]`) : []),
+    ];
   });
 }
