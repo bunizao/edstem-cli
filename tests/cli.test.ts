@@ -48,6 +48,18 @@ function makeRuntime(
         }],
       },
     },
+    "/api/lessons/slides/10": {
+      slide: {
+        content: "<document><paragraph>Bring the starter repository.</paragraph></document>",
+        course_id: 100,
+        id: 10,
+        index: 1,
+        lesson_id: 7001,
+        title: "Workshop Slides",
+        type: "pdf",
+        file_url: "https://static.edusercontent.com/files/slides",
+      },
+    },
     "/api/lessons/7002": {
       lesson: {
         id: 7002,
@@ -235,6 +247,41 @@ describe("CLI", () => {
     expect(stdout.join("")).toContain("# #1 How do I install Python?");
     expect(stdout.join("")).not.toMatch(/^"/);
     expect(fetch.mock.calls.map((call) => call[1]?.method)).toEqual(["GET"]);
+  });
+
+  it("exports lesson and slide Markdown through the read verb", async () => {
+    const lesson = makeRuntime();
+
+    expect(await run(["node", "edstem", "lessons", "read", "7001"], lesson.runtime)).toBe(0);
+    expect(lesson.stdout.join("")).toContain("## Slides");
+    expect(lesson.stdout.join("")).toContain("### 1. Workshop Slides");
+
+    const slide = makeRuntime();
+
+    expect(await run(["node", "edstem", "slides", "read", "10"], slide.runtime)).toBe(0);
+    expect(slide.stdout.join("")).toContain("# Workshop Slides");
+    expect(slide.stdout.join("")).toContain("- **Lesson ID:** 7001");
+    expect(slide.stdout.join("")).toContain(
+      "File: [Workshop Slides](https://static.edusercontent.com/files/slides)"
+    );
+    expect(slide.stdout.join("")).toContain("Bring the starter repository.");
+    expect(slide.fetch.mock.calls.map((call) => call[1]?.method)).toEqual(["GET"]);
+  });
+
+  it("projects slide details instead of returning Ed's raw slide", async () => {
+    const { runtime, stdout } = makeRuntime();
+
+    expect(await run(["node", "edstem", "slides", "show", "10", "--json"], runtime)).toBe(0);
+
+    const payload = JSON.parse(stdout.join(""));
+    expect(payload).toMatchObject({
+      content: expect.stringContaining("<document"),
+      courseId: 100,
+      id: 10,
+      lessonId: 7001,
+      type: "pdf",
+    });
+    expect(payload).not.toHaveProperty("isHidden");
   });
 
   it("lists and downloads lesson files", async () => {
