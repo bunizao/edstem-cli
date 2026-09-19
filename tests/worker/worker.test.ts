@@ -213,6 +213,159 @@ describe("Cloudflare Worker MCP", () => {
   });
 });
 
+describe("Cloudflare Worker token verification cache", () => {
+  const cleanups: Array<() => Promise<void>> = [];
+
+  afterEach(async () => {
+    while (cleanups.length > 0) {
+      await cleanups.pop()?.();
+    }
+  });
+
+  it("verifies a token once and reuses the cached identity", async () => {
+    const fakeEd = await startFakeEdServer([edUser("cache-hit-token")]);
+    cleanups.push(fakeEd.close);
+    const verifications = countUserFetches(cleanups);
+    const env = { ED_API_BASE_URL: fakeEd.baseUrl };
+
+    const first = await fetchWorker(listToolsRequest("cache-hit-token"), env);
+    expect(first.status).toBe(200);
+    expect(verifications.count).toBe(1);
+
+    const second = await fetchWorker(listToolsRequest("cache-hit-token"), env);
+    expect(second.status).toBe(200);
+    expect(verifications.count).toBe(1);
+  });
+
+  it("verifies each distinct token", async () => {
+    const fakeEd = await startFakeEdServer([
+      edUser("distinct-token-a"),
+      edUser("distinct-token-b", 102)
+    ]);
+    cleanups.push(fakeEd.close);
+    const verifications = countUserFetches(cleanups);
+    const env = { ED_API_BASE_URL: fakeEd.baseUrl };
+
+    expect((await fetchWorker(listToolsRequest("distinct-token-a"), env)).status).toBe(200);
+    expect((await fetchWorker(listToolsRequest("distinct-token-b"), env)).status).toBe(200);
+    expect(verifications.count).toBe(2);
+  });
+
+  it("re-verifies once the cached entry expires", async () => {
+    const fakeEd = await startFakeEdServer([edUser("expiring-token")]);
+    cleanups.push(fakeEd.close);
+    const verifications = countUserFetches(cleanups);
+    const env = {
+      ED_API_BASE_URL: fakeEd.baseUrl,
+      MCP_TOKEN_CACHE_TTL_SECONDS: "0.05"
+    };
+
+    expect((await fetchWorker(listToolsRequest("expiring-token"), env)).status).toBe(200);
+    expect(verifications.count).toBe(1);
+
+    await Bun.sleep(80);
+
+    expect((await fetchWorker(listToolsRequest("expiring-token"), env)).status).toBe(200);
+    expect(verifications.count).toBe(2);
+  });
+
+  it("disables caching when the TTL is zero", async () => {
+    const fakeEd = await startFakeEdServer([edUser("uncached-token")]);
+    cleanups.push(fakeEd.close);
+    const verifications = countUserFetches(cleanups);
+    const env = {
+      ED_API_BASE_URL: fakeEd.baseUrl,
+      MCP_TOKEN_CACHE_TTL_SECONDS: "0"
+    };
+
+    expect((await fetchWorker(listToolsRequest("uncached-token"), env)).status).toBe(200);
+    expect((await fetchWorker(listToolsRequest("uncached-token"), env)).status).toBe(200);
+    expect(verifications.count).toBe(2);
+  });
+
+  it("never caches a rejected token", async () => {
+    const fakeEd = await startFakeEdServer([edUser("known-token")]);
+    cleanups.push(fakeEd.close);
+    const verifications = countUserFetches(cleanups);
+    const env = { ED_API_BASE_URL: fakeEd.baseUrl };
+
+    expect((await fetchWorker(listToolsRequest("bogus-token"), env)).status).toBe(401);
+    expect((await fetchWorker(listToolsRequest("bogus-token"), env)).status).toBe(401);
+    expect(verifications.count).toBe(2);
+  });
+
+  it("drops the cached entry when a tool call hits an expired token", async () => {
+    const fakeEd = await startFakeEdServer([edUser("revoked-token")]);
+    cleanups.push(fakeEd.close);
+    const env = { ED_API_BASE_URL: fakeEd.baseUrl };
+
+    expect((await fetchWorker(listToolsRequest("revoked-token"), env)).status).toBe(200);
+
+    fakeEd.revokeToken("revoked-token");
+
+    const toolCall = await fetchWorker(
+      modernRequest(
+        "tools/call",
+        {
+          _meta: CLIENT_META,
+          arguments: { includeArchived: false },
+          name: "list_courses"
+        },
+        {
+          Authorization: "Bearer revoked-token",
+          "Mcp-Name": "list_courses"
+        }
+      ),
+      env
+    );
+    expect(toolCall.status).toBe(200);
+    const toolPayload = await toolCall.json() as any;
+    expect(toolPayload.result.content[0].text).toContain("EDSTEM_REAUTH_REQUIRED");
+
+    const afterEviction = await fetchWorker(listToolsRequest("revoked-token"), env);
+    expect(afterEviction.status).toBe(401);
+  });
+});
+
+function edUser(token: string, id = 101) {
+  return {
+    courses: [],
+    token,
+    user: {
+      avatar: "",
+      course_role: "student",
+      email: `user-${id}@example.com`,
+      id,
+      name: "Ada",
+      role: "student"
+    }
+  };
+}
+
+function listToolsRequest(token: string): Request {
+  return modernRequest(
+    "tools/list",
+    { _meta: CLIENT_META },
+    { Authorization: `Bearer ${token}` }
+  );
+}
+
+function countUserFetches(cleanups: Array<() => Promise<void>>): { count: number } {
+  const counter = { count: 0 };
+  const original = globalThis.fetch;
+  globalThis.fetch = ((input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input?.url ?? String(input);
+    if (url.endsWith("/api/user")) {
+      counter.count += 1;
+    }
+    return original(input, init);
+  }) as typeof fetch;
+  cleanups.push(async () => {
+    globalThis.fetch = original;
+  });
+  return counter;
+}
+
 function modernRequest(
   method: string,
   params: Record<string, unknown>,
