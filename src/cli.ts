@@ -18,7 +18,7 @@ import type { Command } from "commander";
 import { loadToken } from "./auth.js";
 import { loadConfig } from "./config.js";
 import { downloadLessonFiles } from "./download.js";
-import { EdClient } from "./ed/client.js";
+import { EdClient, type FetchLike } from "./ed/client.js";
 import { listLessonFiles } from "./ed/files.js";
 import {
   listCurrentActivity,
@@ -43,6 +43,7 @@ import { normalizeEdError } from "./errors.js";
 import { lessonToMarkdown, threadToMarkdown } from "./markdown.js";
 import { isMainModule } from "./main.js";
 import { writeGeneratedSkill } from "./skills.js";
+import { applyUpdate, checkForUpdate } from "./update.js";
 import { VERSION } from "./version.js";
 
 const SORT_OPTIONS = ["new", "old", "top", "hot"] as const;
@@ -94,6 +95,7 @@ const NOUNS: readonly NounSpec[] = [
 export interface CliRuntime {
   createClient: () => Promise<EdClient>;
   defaultFetchCount: () => Promise<number>;
+  fetch?: FetchLike;
   interactive: boolean;
   isTTY: boolean;
   writeStderr: (text: string) => void;
@@ -237,8 +239,8 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
             : `Mark ALL lessons as read in unit ${unit}.`,
         };
       },
-      async (client, command, unit: string, queries: string[]) =>
-        readLessons(client, unit, queries, {
+      async (command, unit: string, queries: string[]) =>
+        readLessons(await runtime.createClient(), unit, queries, {
           all: Boolean(command.opts().all),
           delaySeconds: command.opts().delay,
         })
@@ -283,7 +285,8 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
             : `Submit all saved answers for slide ${slide}.`,
         };
       },
-      async (client, command, slide: number) => {
+      async (command, slide: number) => {
+        const client = await runtime.createClient();
         const options = command.opts();
         if (options.question !== undefined) {
           return client.submitSlideAnswer(
@@ -342,6 +345,25 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
         filterType: command.opts().filter,
         limit,
       }));
+    }));
+
+  mutating(program.command("update")
+    .description("Report or install the latest edstem-cli release.")
+    .option("--check", "Only report the latest release.")
+    .action(async (_options: unknown, command: Command) => {
+      // The plan summary needs the registry result, so fetch it once and close over it.
+      const info = await checkForUpdate(runtime.fetch);
+      if (command.opts().check || !info.updateAvailable) {
+        await writeValue(runtime, command, info);
+        return;
+      }
+      await mutationAction(runtime,
+        () => ({
+          summary: `Upgrade edstem-cli from ${info.currentVersion} to ${info.latestVersion} ` +
+            `with \`${info.upgradeCommand}\`.`,
+        }),
+        async () => ({ ...info, upgraded: Boolean(applyUpdate()) })
+      )(command);
     }));
 
   program.command("commands")
@@ -405,7 +427,7 @@ function textAction<Arguments extends unknown[]>(
 function mutationAction<Arguments extends unknown[]>(
   runtime: CliRuntime,
   plan: (command: Command, ...args: Arguments) => { summary: string },
-  action: (client: EdClient, command: Command, ...args: Arguments) => Promise<unknown>
+  action: (command: Command, ...args: Arguments) => Promise<unknown>
 ): (...args: [...Arguments, Command]) => Promise<void> {
   return async (...args): Promise<void> => {
     const command = args.at(-1) as Command;
@@ -417,7 +439,7 @@ function mutationAction<Arguments extends unknown[]>(
       interactive: runtime.interactive,
     });
     if (!accepted) return;
-    await writeValue(runtime, command, await action(await runtime.createClient(), command, ...actionArgs));
+    await writeValue(runtime, command, await action(command, ...actionArgs));
   };
 }
 
