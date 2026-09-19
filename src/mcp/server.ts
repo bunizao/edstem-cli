@@ -43,6 +43,9 @@ const THREAD_LIST_SHAPE = {
   ),
   courseId: COURSE_REFERENCE,
   limit: z.number().int().positive().max(100).optional().default(30),
+  offset: z.number().int().min(0).optional().default(0).describe(
+    "Threads to skip in the unfiltered Ed stream before filtering."
+  ),
   since: z.string().trim().min(1).optional().describe(
     'Only threads created at or after this time: an ISO date such as "2026-09-01", an ISO datetime such as "2026-09-01T10:00:00Z", or a relative offset such as "7d", "12h", or "2w".'
   ),
@@ -206,12 +209,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("list_threads"),
-      inputSchema: z.object({
-        ...THREAD_LIST_SHAPE,
-        offset: z.number().int().min(0).optional().default(0).describe(
-          "Threads to skip in the unfiltered Ed stream before filtering."
-        ),
-      }),
+      inputSchema: z.object(THREAD_LIST_SHAPE),
     },
     async ({ since, ...input }, extra) => runTool(runtime, extra, false, async (client) =>
       (await listThreads(client, { ...input, since: since ? parseSinceValue(since) : undefined }))

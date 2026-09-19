@@ -85,9 +85,14 @@ describe("listThreads", () => {
     } as unknown as EdClient;
   }
 
-  function makePage(size: number, unanswered: number, createdAt = "2026-09-18T00:00:00Z"): Thread[] {
+  function makePage(
+    size: number,
+    unanswered: number,
+    createdAt = "2026-09-18T00:00:00Z",
+    isPinned = false
+  ): Thread[] {
     return Array.from({ length: size }, (_, position) =>
-      makeThread({ id: position + 1, createdAt, isAnswered: position >= unanswered })
+      makeThread({ id: position + 1, createdAt, isAnswered: position >= unanswered, isPinned })
     );
   }
 
@@ -158,6 +163,22 @@ describe("listThreads", () => {
 
     expect(result).toEqual([]);
     expect(client.fetchThreads).toHaveBeenCalledOnce();
+  });
+
+  it("keeps paging past a page of old pinned threads", async () => {
+    const client = makeThreadClient((index) => (index === 0
+      ? makePage(30, 30, "2026-01-01T00:00:00Z", true)
+      : makePage(30, 30, "2026-09-18T00:00:00Z")));
+
+    const result = await listThreads(client, {
+      courseId: 100,
+      limit: 30,
+      since: new Date("2026-09-01T00:00:00Z"),
+      sort: "new",
+    });
+
+    expect(result).toHaveLength(30);
+    expect(client.fetchThreads).toHaveBeenCalledTimes(2);
   });
 
   it("keeps paging for other sort orders because they are not time ordered", async () => {

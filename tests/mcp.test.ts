@@ -53,6 +53,20 @@ describe("stdio MCP adapter", () => {
     ]);
   });
 
+  it("forwards offset from search_threads to Ed", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(
+      new Response(JSON.stringify(fixture("course_threads")), { status: 200 })
+    );
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    await client.callTool({
+      arguments: { courseId: 100, offset: 30, query: "python" },
+      name: "search_threads",
+    });
+
+    expect(new URL(String(fetch.mock.calls[0]?.[0])).searchParams.get("offset")).toBe("30");
+  });
+
   it("applies offset and since to list_threads", async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(
       new Response(JSON.stringify(fixture("course_threads")), { status: 200 })
