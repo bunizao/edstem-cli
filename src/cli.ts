@@ -223,13 +223,25 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     .description("Mark matching lessons and slides as read.")
     .argument("<unit>", "Unit ID or code", unitIdentifier)
     .argument("[queries...]", "Words required in lesson or module names")
+    .option("--all", "Mark every lesson in the unit; required when no queries are given")
     .option("--delay <seconds>", "Delay between slide updates", nonNegativeNumber, 0)
     .action(mutationAction(runtime,
-      (command, unit: string, queries: string[]) => ({
-        summary: `Mark lessons as read in unit ${unit}${queries.length ? ` matching: ${queries.join(", ")}` : ""}.`,
-      }),
+      (command, unit: string, queries: string[]) => {
+        const selected = queries.filter((query) => query.trim());
+        if (selected.length === 0 && !command.opts().all) {
+          throw new CliError("usage", "Provide at least one query or pass --all.");
+        }
+        return {
+          summary: selected.length
+            ? `Mark lessons as read in unit ${unit} matching: ${selected.join(", ")}.`
+            : `Mark ALL lessons as read in unit ${unit}.`,
+        };
+      },
       async (client, command, unit: string, queries: string[]) =>
-        readLessons(client, unit, queries, command.opts().delay)
+        readLessons(client, unit, queries, {
+          all: Boolean(command.opts().all),
+          delaySeconds: command.opts().delay,
+        })
     )));
 
   const slides = program.command("slides").description("Inspect or submit lesson slides.");
@@ -261,6 +273,9 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
         }
         if (options.amend && options.question === undefined) {
           throw new CliError("usage", "--amend requires --question.");
+        }
+        if (options.question !== undefined && options.choice.length === 0) {
+          throw new CliError("usage", "--question requires at least one --choice.");
         }
         return {
           summary: options.question

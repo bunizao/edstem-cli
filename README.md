@@ -69,6 +69,9 @@ Mutations are visible in help, print a plan, and prompt with `y/N` in an interac
 edstem lessons mark-read 12345 Pre-Reading --dry-run
 edstem lessons mark-read 12345 Pre-Reading --yes
 
+# Marking the whole unit needs --all; queries alone never match everything.
+edstem lessons mark-read 12345 --all --yes
+
 # Save one answer, then submit all saved answers for the slide.
 edstem slides submit 4401 --question 991 --choice 2 --yes
 edstem slides submit 4401 --yes

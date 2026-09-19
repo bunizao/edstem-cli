@@ -193,7 +193,7 @@ describe("CLI", () => {
     const { fetch, runtime, stderr } = makeRuntime(200, false, duplicateCourseIdentity());
 
     expect(await run([
-      "node", "edstem", "lessons", "mark-read", "CS101", "--yes", "--json",
+      "node", "edstem", "lessons", "mark-read", "CS101", "--all", "--yes", "--json",
     ], runtime)).toBe(2);
 
     expect(JSON.parse(stderr.join(""))).toMatchObject({
@@ -344,7 +344,7 @@ describe("CLI", () => {
   it("rejects non-interactive mutations unless confirmed", async () => {
     const { fetch, runtime, stderr } = makeRuntime();
 
-    expect(await run(["node", "edstem", "lessons", "mark-read", "100"], runtime)).toBe(2);
+    expect(await run(["node", "edstem", "lessons", "mark-read", "100", "--all"], runtime)).toBe(2);
 
     expect(fetch).not.toHaveBeenCalled();
     expect(stderr.join("")).toContain("--yes");
@@ -369,6 +369,59 @@ describe("CLI", () => {
 
     expect(fetch).not.toHaveBeenCalled();
     expect(JSON.parse(stderr.join(""))).toMatchObject({ error: { code: "usage" } });
+  });
+
+  it("requires a choice when submitting an answer for a question", async () => {
+    const { fetch, runtime, stderr } = makeRuntime();
+
+    expect(await run([
+      "node", "edstem", "slides", "submit", "12", "--question", "15", "--dry-run", "--json",
+    ], runtime)).toBe(2);
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(JSON.parse(stderr.join(""))).toMatchObject({
+      error: { code: "usage", message: "--question requires at least one --choice." },
+    });
+  });
+
+  it("refuses to mark every lesson as read without queries or --all", async () => {
+    const { fetch, runtime, stderr } = makeRuntime();
+
+    expect(await run([
+      "node", "edstem", "lessons", "mark-read", "100", "--dry-run", "--json",
+    ], runtime)).toBe(2);
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(JSON.parse(stderr.join(""))).toMatchObject({
+      error: { code: "usage", message: expect.stringContaining("--all") },
+    });
+  });
+
+  it("marks every lesson as read with --all", async () => {
+    const { runtime, stdout } = makeRuntime();
+
+    expect(await run([
+      "node", "edstem", "lessons", "mark-read", "100", "--all", "--yes", "--json",
+    ], runtime)).toBe(0);
+
+    expect(JSON.parse(stdout.join(""))).toEqual([
+      expect.objectContaining({ id: 7001, completedSlides: 1, success: true }),
+      expect.objectContaining({ id: 7002, completedSlides: 1, success: true }),
+    ]);
+  });
+
+  it("announces the full unit in the --all plan", async () => {
+    const { runtime } = makeRuntime();
+    const write = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    try {
+      expect(await run([
+        "node", "edstem", "lessons", "mark-read", "100", "--all", "--dry-run",
+      ], runtime)).toBe(0);
+
+      expect(write).toHaveBeenCalledWith("Mark ALL lessons as read in unit 100.\n");
+    } finally {
+      write.mockRestore();
+    }
   });
 });
 

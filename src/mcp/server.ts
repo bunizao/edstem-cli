@@ -249,13 +249,17 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       annotations: WRITES_PROGRESS,
       description: toolDescription("mark_lessons_read"),
       inputSchema: z.object({
+        all: z.boolean().optional().default(false)
+          .describe("Mark every lesson in the course; required when queries is empty."),
         courseId: COURSE_REFERENCE,
         delaySeconds: z.number().min(0).max(10).optional().default(0),
         queries: z.array(z.string().trim().min(1)).max(10).optional().default([]),
       }),
     },
-    async ({ courseId, delaySeconds, queries }, extra) =>
-      runTool(runtime, extra, true, (client) => readLessons(client, courseId, queries, delaySeconds))
+    async ({ all, courseId, delaySeconds, queries }, extra) =>
+      runTool(runtime, extra, true, (client) =>
+        readLessons(client, courseId, queries, { all, delaySeconds })
+      )
   );
 
   server.registerTool(
@@ -265,7 +269,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       description: toolDescription("submit_slide_answer"),
       inputSchema: z.object({
         amend: z.boolean().optional().default(false),
-        choices: z.array(z.number().int().positive()).optional().default([]),
+        choices: z.array(z.number().int().positive()).min(1),
         questionId: z.number().int().positive(),
       }),
     },

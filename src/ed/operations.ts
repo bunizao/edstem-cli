@@ -264,12 +264,18 @@ export async function readLessons(
   client: EdClient,
   courseId: CourseReference,
   queries: string[],
-  delaySeconds = 0
+  options: { all?: boolean; delaySeconds?: number } = {}
 ): Promise<LessonReadResult[]> {
+  const delaySeconds = options.delaySeconds ?? 0;
   if (delaySeconds < 0) {
     throw new EdInputError("--delay must be greater than or equal to 0");
   }
   const normalizedQueries = queries.map((query) => query.trim().toLowerCase()).filter(Boolean);
+  if (normalizedQueries.length === 0 && !options.all) {
+    throw new EdInputError(
+      "Give at least one query, or ask for all lessons, to mark lessons as read."
+    );
+  }
   const lessons = (await listLessons(client, courseId)).filter((lesson) => {
     const haystack = `${lesson.title} ${lesson.moduleName}`.toLowerCase();
     return normalizedQueries.every((query) => haystack.includes(query));

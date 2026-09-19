@@ -47,7 +47,7 @@ edstem units --fields id,code,name
 | edstem lessons | List, show, or mark lessons as read. |  |  | no |
 | edstem lessons list | List lessons in a unit. | <unit> | --module <module><br>--type <type><br>--state <state><br>--status <status> | no |
 | edstem lessons show | Show one lesson and its slides. | <lesson> |  | no |
-| edstem lessons mark-read | Mark matching lessons and slides as read. | <unit> [queries...] | --delay <seconds> | yes |
+| edstem lessons mark-read | Mark matching lessons and slides as read. | <unit> [queries...] | --all<br>--delay <seconds> | yes |
 | edstem slides | Inspect or submit lesson slides. |  |  | no |
 | edstem slides show | Show slide content, questions, responses, or quiz context. | <slide> | --section <section> | no |
 | edstem slides submit | Save one answer or submit all saved answers for a slide. | <slide> | --question <question><br>--choice <number><br>--amend | yes |
