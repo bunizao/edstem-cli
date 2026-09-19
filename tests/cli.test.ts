@@ -37,6 +37,7 @@ function makeRuntime(
       modules: [{ course_id: 100, id: 1, name: "Week 1" }],
     },
     "/api/threads/5001": fixture("thread_detail"),
+    "/api/threads/5002": { thread: { course_id: 100, id: 5002, number: 2, type: "post" } },
     "/api/lessons/7001": {
       lesson: {
         id: 7001,
@@ -76,9 +77,20 @@ function makeRuntime(
     },
     ...overrides,
   };
-  const fetch = vi.fn<FetchLike>().mockImplementation(async (input) => {
+  const created: Record<string, unknown> = {
+    "/api/courses/100/threads": {
+      thread: { course_id: 100, id: 5100, number: 44, title: "New thread", type: "question" },
+    },
+    "/api/threads/5001/comments": { comment: { id: 9100, type: "answer", user_id: 12345 } },
+    "/api/threads/5002/comments": { comment: { id: 9101, type: "comment", user_id: 12345 } },
+    "/api/comments/9001/comments": { comment: { id: 9102, type: "comment", user_id: 12345 } },
+  };
+  const fetch = vi.fn<FetchLike>().mockImplementation(async (input, init) => {
     const url = new URL(String(input));
     const path = url.pathname;
+    if (init?.method === "POST") {
+      return new Response(JSON.stringify(created[path] ?? {}), { status });
+    }
     if (url.hostname.endsWith("edusercontent.com")) {
       return new Response("pdf-body", {
         headers: {
@@ -493,6 +505,90 @@ describe("CLI", () => {
     ], runtime)).toBe(0);
 
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("prints the thread plan and generated Ed XML without posting on a dry run", async () => {
+    const { fetch, runtime, stderr } = makeRuntime();
+    const write = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    try {
+      expect(await run([
+        "node", "edstem", "threads", "send", "100",
+        "--title", "Install Python", "--body", "Help **me**", "--dry-run",
+      ], runtime)).toBe(0);
+      expect(write.mock.calls.map(([text]) => String(text)).join("")).toContain(
+        'Post a question "Install Python" in unit 100.'
+      );
+    } finally {
+      write.mockRestore();
+    }
+
+    expect(stderr.join("")).toContain(
+      '<document version="2.0"><paragraph>Help <bold>me</bold></paragraph></document>'
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("posts a thread with --yes and prints the created thread", async () => {
+    const { fetch, runtime, stdout } = makeRuntime();
+
+    expect(await run([
+      "node", "edstem", "threads", "send", "CS101", "--title", "Install Python",
+      "--body", "Help", "--category", "General", "--private", "--yes", "--json",
+    ], runtime)).toBe(0);
+
+    expect(JSON.parse(stdout.join(""))).toMatchObject({ id: 5100, number: 44, title: "New thread" });
+    const [url, init] = fetch.mock.calls.at(-1) ?? [];
+    expect(new URL(String(url)).pathname).toBe("/api/courses/100/threads");
+    expect(JSON.parse(String(init?.body)).thread).toMatchObject({
+      category: "General",
+      content: '<document version="2.0"><paragraph>Help</paragraph></document>',
+      is_private: true,
+      title: "Install Python",
+      type: "question",
+    });
+  });
+
+  it("defaults the reply kind to the thread type and targets a comment with --to", async () => {
+    const answer = makeRuntime();
+    expect(await run([
+      "node", "edstem", "replies", "send", "5001", "--body", "Try brew.", "--yes", "--json",
+    ], answer.runtime)).toBe(0);
+    expect(JSON.parse(answer.stdout.join(""))).toMatchObject({ id: 9100, threadId: 5001 });
+    expect(JSON.parse(String(answer.fetch.mock.calls.at(-1)?.[1]?.body)).comment).toMatchObject({
+      content: '<document version="2.0"><paragraph>Try brew.</paragraph></document>',
+      type: "answer",
+    });
+
+    const discussion = makeRuntime();
+    expect(await run([
+      "node", "edstem", "replies", "send", "5002", "--body", "Agreed.", "--yes", "--json",
+    ], discussion.runtime)).toBe(0);
+    expect(JSON.parse(String(discussion.fetch.mock.calls.at(-1)?.[1]?.body)).comment.type).toBe("comment");
+
+    const nested = makeRuntime();
+    expect(await run([
+      "node", "edstem", "replies", "send", "5001", "--to", "9001",
+      "--as", "comment", "--body", "Thanks.", "--yes", "--json",
+    ], nested.runtime)).toBe(0);
+    expect(JSON.parse(nested.stdout.join(""))).toMatchObject({ id: 9102, threadId: 5001 });
+    expect(nested.fetch.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
+      "/api/threads/5001",
+      "/api/comments/9001/comments",
+    ]);
+  });
+
+  it("requires exactly one body source before posting", async () => {
+    const { fetch, runtime, stderr } = makeRuntime();
+
+    expect(await run([
+      "node", "edstem", "threads", "send", "100", "--title", "Hi", "--yes", "--json",
+    ], runtime)).toBe(2);
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(JSON.parse(stderr.join(""))).toMatchObject({
+      error: { code: "usage", message: expect.stringContaining("--body") },
+    });
   });
 
   it("validates mutation syntax before confirmation or authentication", async () => {

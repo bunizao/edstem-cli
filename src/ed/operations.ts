@@ -102,6 +102,11 @@ export async function resolveThread(client: EdClient, reference: string): Promis
   );
 }
 
+/** Ed replies to a question thread default to an answer; other threads take comments. */
+export function defaultReplyType(threadType: string): "answer" | "comment" {
+  return threadType.trim().toLowerCase() === "question" ? "answer" : "comment";
+}
+
 export interface LessonListOptions {
   lessonType?: string;
   module?: string;
