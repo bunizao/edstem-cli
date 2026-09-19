@@ -222,6 +222,66 @@ describe("EdClient", () => {
     expect(sleep).not.toHaveBeenCalled();
   });
 
+  it("creates a thread with the Ed thread envelope", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(
+      jsonResponse({ thread: { id: 5001, number: 42, title: "Install Python", type: "question" } })
+    );
+    const client = new EdClient({ fetch, token: "secret" });
+
+    const thread = await client.createThread(100, {
+      category: "General",
+      content: '<document version="2.0"><paragraph>Help</paragraph></document>',
+      private: true,
+      title: "Install Python",
+      type: "question",
+    });
+
+    expect(thread).toMatchObject({ id: 5001, number: 42, title: "Install Python" });
+    const [url, init] = fetch.mock.calls[0] ?? [];
+    expect(String(url)).toBe("https://edstem.org/api/courses/100/threads");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      thread: {
+        anonymous_comments: false,
+        category: "General",
+        content: '<document version="2.0"><paragraph>Help</paragraph></document>',
+        is_anonymous: false,
+        is_megathread: false,
+        is_pinned: false,
+        is_private: true,
+        subcategory: "",
+        subsubcategory: "",
+        title: "Install Python",
+        type: "question",
+      },
+    });
+  });
+
+  it("posts thread and comment replies to their own endpoints", async () => {
+    const fetch = vi.fn<FetchLike>().mockImplementation(async () =>
+      jsonResponse({ comment: { id: 9001, type: "answer", user_id: 7 } })
+    );
+    const client = new EdClient({ fetch, token: "secret" });
+    const input = {
+      content: '<document version="2.0"><paragraph>Try brew</paragraph></document>',
+      type: "answer" as const,
+    };
+
+    expect(await client.createThreadReply(5001, input)).toMatchObject({ id: 9001, type: "answer" });
+    await client.createCommentReply(9001, { ...input, anonymous: true, type: "comment" });
+
+    expect(fetch.mock.calls.map(([url]) => String(url))).toEqual([
+      "https://edstem.org/api/threads/5001/comments",
+      "https://edstem.org/api/comments/9001/comments",
+    ]);
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({
+      comment: { content: input.content, is_anonymous: false, is_private: false, type: "answer" },
+    });
+    expect(JSON.parse(String(fetch.mock.calls[1]?.[1]?.body))).toEqual({
+      comment: { content: input.content, is_anonymous: true, is_private: false, type: "comment" },
+    });
+  });
+
   it("marks a slide complete with an empty response", async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(null, { status: 204 }));
     const client = new EdClient({ fetch, token: "secret" });
