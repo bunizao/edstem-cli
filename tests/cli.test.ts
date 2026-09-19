@@ -84,6 +84,7 @@ function makeRuntime(
     "/api/threads/5001/comments": { comment: { id: 9100, type: "answer", user_id: 12345 } },
     "/api/threads/5002/comments": { comment: { id: 9101, type: "comment", user_id: 12345 } },
     "/api/comments/9001/comments": { comment: { id: 9102, type: "comment", user_id: 12345 } },
+    "/api/comments/9010/comments": { comment: { id: 9103, type: "comment", user_id: 12345 } },
   };
   const fetch = vi.fn<FetchLike>().mockImplementation(async (input, init) => {
     const url = new URL(String(input));
@@ -576,6 +577,35 @@ describe("CLI", () => {
       "/api/threads/5001",
       "/api/comments/9001/comments",
     ]);
+  });
+
+  it("accepts a nested comment target but rejects one from another thread", async () => {
+    const deep = makeRuntime();
+    expect(await run([
+      "node", "edstem", "replies", "send", "5001", "--to", "9010",
+      "--body", "Same here.", "--yes", "--json",
+    ], deep.runtime)).toBe(0);
+    expect(JSON.parse(deep.stdout.join(""))).toMatchObject({ id: 9103, threadId: 5001 });
+
+    const foreign = makeRuntime();
+    expect(await run([
+      "node", "edstem", "replies", "send", "5001", "--to", "4242",
+      "--body", "Same here.", "--yes", "--json",
+    ], foreign.runtime)).toBe(2);
+    expect(JSON.parse(foreign.stderr.join(""))).toMatchObject({
+      error: {
+        code: "usage",
+        message: "Comment 4242 does not belong to thread 5001.",
+      },
+    });
+    expect(foreign.fetch.mock.calls.map(([, init]) => init?.method)).toEqual(["GET"]);
+
+    const dryRun = makeRuntime();
+    expect(await run([
+      "node", "edstem", "replies", "send", "5001", "--to", "4242",
+      "--body", "Same here.", "--dry-run", "--json",
+    ], dryRun.runtime)).toBe(2);
+    expect(dryRun.fetch.mock.calls.map(([, init]) => init?.method)).toEqual(["GET"]);
   });
 
   it("requires exactly one body source before posting", async () => {

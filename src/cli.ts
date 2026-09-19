@@ -30,6 +30,7 @@ import { EdClient, type FetchLike } from "./ed/client.js";
 import { listLessonFiles, listThreadFiles } from "./ed/files.js";
 import { markdownToEdDocument } from "./ed/document.js";
 import {
+  assertCommentInThread,
   defaultReplyType,
   listCurrentActivity,
   listLessons,
@@ -323,35 +324,45 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
       "--as <kind>",
       "Reply kind; defaults to answer on question threads and comment elsewhere."
     ).choices([...REPLY_TYPES]))
-    .option("--to <commentId>", "Reply to one comment instead of the thread.", positiveInteger("--to"))
+    .option(
+      "--to <commentId>",
+      "Reply to one comment of the thread instead of the thread itself.",
+      positiveInteger("--to")
+    )
     .option("--private", "Post privately to staff.")
     .option("--anonymous", "Post anonymously.")
     .action(mutationAction(runtime,
       async (command, reference: string) => {
         const options = command.opts();
         const document = markdownToEdDocument(await readMarkdownBody(options));
+        const thread = await resolveThread(await runtime.createClient(), reference);
+        if (options.to !== undefined) {
+          assertCommentInThread(thread, options.to);
+        }
+        const type = options.as ?? defaultReplyType(thread.type);
         return {
           details: document,
           document,
           summary: options.to === undefined
-            ? `Post a reply to thread ${reference}.`
-            : `Post a reply to comment ${options.to} on thread ${reference}.`,
+            ? `Post a ${type} on thread ${thread.id}.`
+            : `Post a ${type} under comment ${options.to} on thread ${thread.id}.`,
+          thread,
+          type,
         };
       },
-      async (command, plan, reference: string) => {
+      async (command, plan) => {
         const client = await runtime.createClient();
         const options = command.opts();
-        const thread = await resolveThread(client, reference);
         const input = {
           anonymous: Boolean(options.anonymous),
           content: plan.document,
           private: Boolean(options.private),
-          type: options.as ?? defaultReplyType(thread.type),
+          type: plan.type,
         };
         const comment = options.to === undefined
-          ? await client.createThreadReply(thread.id, input)
+          ? await client.createThreadReply(plan.thread.id, input)
           : await client.createCommentReply(options.to, input);
-        return { ...projectComment(comment), threadId: thread.id };
+        return { ...projectComment(comment), threadId: plan.thread.id };
       }
     )));
 

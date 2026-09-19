@@ -6,7 +6,8 @@ const HEADING = /^(#{1,6})\s+(.*)$/;
 const BULLET_ITEM = /^-\s+(.*)$/;
 const NUMBER_ITEM = /^\d+\.\s+(.*)$/;
 const CODE_SPAN = /^`[^`]+`$/;
-const LINK = /\[([^\]]*)\]\(([^)\s]+)\)/g;
+// Allows one level of balanced parentheses so Wikipedia-style URLs survive.
+const LINK = /\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g;
 const BOLD = /\*\*([^*]+)\*\*/g;
 const ITALIC = /\*([^*]+)\*/g;
 

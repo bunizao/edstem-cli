@@ -41,6 +41,16 @@ const CASES: Array<[string, string, string]> = [
     '<paragraph>See <link href="https://ed.example/a?x=1&amp;y=2">the docs</link>.</paragraph>',
   ],
   [
+    "keeps balanced parentheses inside a link URL",
+    "[wiki](https://en.wikipedia.org/wiki/Function_(mathematics))",
+    '<paragraph><link href="https://en.wikipedia.org/wiki/Function_(mathematics)">wiki</link></paragraph>',
+  ],
+  [
+    "stops a link URL before trailing parenthesised text",
+    "See [the docs](https://ed.example/a) (really).",
+    '<paragraph>See <link href="https://ed.example/a">the docs</link> (really).</paragraph>',
+  ],
+  [
     "renders inline code, bold, and italic",
     "Run `npm < ci` for **real** and *maybe* more.",
     "<paragraph>Run <code>npm &lt; ci</code> for <bold>real</bold> and <italic>maybe</italic> more.</paragraph>",

@@ -6,6 +6,7 @@ import { listLessonFiles, listThreadFiles } from "../ed/files.js";
 import { markdownToEdDocument } from "../ed/document.js";
 import type { LessonFile } from "../ed/models.js";
 import {
+  assertCommentInThread,
   defaultReplyType,
   EdInputError,
   listCurrentActivity,
@@ -530,17 +531,22 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
         ),
         threadId: z.number().int().positive().describe("Global Ed thread ID to reply to."),
         toCommentId: z.number().int().positive().optional().describe(
-          "Reply under this comment of the thread instead of at the top level."
+          "Reply under this comment of the thread instead of at the top level. "
+          + "The comment must belong to threadId."
         ),
       }),
     },
     async ({ anonymous, as, body, private: isPrivate, threadId, toCommentId }, extra) =>
       runTool(runtime, extra, "post", async (client) => {
+        const thread = await client.fetchThread(threadId);
+        if (toCommentId !== undefined) {
+          assertCommentInThread(thread, toCommentId);
+        }
         const input = {
           anonymous,
           content: markdownToEdDocument(body),
           private: isPrivate,
-          type: as ?? defaultReplyType((await client.fetchThread(threadId)).type),
+          type: as ?? defaultReplyType(thread.type),
         };
         const comment = toCommentId === undefined
           ? await client.createThreadReply(threadId, input)

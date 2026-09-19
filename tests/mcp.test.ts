@@ -542,6 +542,28 @@ describe("stdio MCP adapter", () => {
     });
   });
 
+  it("refuses to reply under a comment from another thread", async () => {
+    const fetch = vi.fn<FetchLike>().mockImplementation(async (_input, init) => {
+      if (init?.method === "POST") throw new Error("Unexpected POST");
+      return new Response(JSON.stringify(fixture("thread_detail")), { status: 200 });
+    });
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const result = await client.callTool({
+      arguments: { body: "Same here.", threadId: 5001, toCommentId: 4242 },
+      name: "reply_thread",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseToolResult(result)).toEqual({
+      error: {
+        message: "Comment 4242 does not belong to thread 5001.",
+        type: "INVALID_ARGUMENT",
+      },
+    });
+    expect(fetch.mock.calls.map(([, init]) => init?.method)).toEqual(["GET"]);
+  });
+
   it("gates posting tools behind canPost even when writes are allowed", async () => {
     const fetch = vi.fn<FetchLike>();
     const edClient = new EdClient({ fetch, token: "test-token" });
