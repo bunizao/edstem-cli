@@ -19,6 +19,7 @@ import {
   projectIdentity,
   projectLessonDetail,
   projectLessonSummary,
+  projectModule,
   projectQuestion,
   projectQuestionResponse,
   projectSlide,
@@ -29,20 +30,36 @@ import { lessonToMarkdown, slideToMarkdown, threadToMarkdown } from "../markdown
 import { VERSION } from "../version.js";
 import { toolDescription } from "./catalog.js";
 
-const READ_ONLY = { destructiveHint: false, readOnlyHint: true } as const;
-const WRITES_PROGRESS = { destructiveHint: false, readOnlyHint: false } as const;
-const WRITE = { destructiveHint: true, readOnlyHint: false } as const;
+// This server only talks to Ed, so openWorldHint is false everywhere.
+const READ_ONLY = {
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+  readOnlyHint: true,
+} as const;
+const WRITES_PROGRESS = {
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+  readOnlyHint: false,
+} as const;
+const WRITE = {
+  destructiveHint: true,
+  idempotentHint: false,
+  openWorldHint: false,
+  readOnlyHint: false,
+} as const;
 const COURSE_REFERENCE = z.union([
   z.number().int().positive(),
   z.string().trim().min(1),
 ]).describe('Ed course ID or exact course code, for example 38435 or "FIT2014".');
 const THREAD_LIST_SHAPE = {
-  answered: z.boolean().optional(),
+  answered: z.boolean().optional().describe("Keep answered threads when true, unanswered when false; omit for both."),
   category: z.string().trim().min(1).optional().describe(
     'Exact top-level category, for example "Applied".'
   ),
   courseId: COURSE_REFERENCE,
-  limit: z.number().int().positive().max(100).optional().default(30),
+  limit: z.number().int().positive().max(100).optional().default(30).describe("Maximum threads to return, capped at 100; defaults to 30."),
   offset: z.number().int().min(0).optional().default(0).describe(
     "Threads to skip in the unfiltered Ed stream before filtering."
   ),
@@ -59,6 +76,15 @@ const THREAD_LIST_SHAPE = {
     'Exact thread type, for example "question" or "post".'
   ),
 };
+const INCLUDE_HTML = z.boolean().optional().default(false).describe(
+  "Also return Ed's XML content; the plain-text document is always returned."
+);
+const LESSON_ID = z.number().int().positive().describe(
+  "Ed lesson ID as returned by list_lessons."
+);
+const SLIDE_ID = z.number().int().positive().describe(
+  "Ed slide ID as returned by get_lesson."
+);
 
 export interface McpToolContext {
   http?: {
@@ -82,7 +108,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
 
   server.registerTool(
     "get_user",
-    { annotations: READ_ONLY, description: toolDescription("get_user") },
+    { annotations: READ_ONLY, description: toolDescription("get_user"), title: "Get current user" },
     async (extra) => runTool(runtime, extra, false, async (client) => {
       const identity = projectIdentity(await client.fetchUser());
       return { ...(identity.user as Record<string, unknown>), courses: identity.courses };
@@ -94,7 +120,12 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("list_courses"),
-      inputSchema: z.object({ includeArchived: z.boolean().optional().default(false) }),
+      inputSchema: z.object({
+        includeArchived: z.boolean().optional().default(false).describe(
+          "Also return courses Ed marks as archived; defaults to false."
+        ),
+      }),
+      title: "List courses",
     },
     async ({ includeArchived }, extra) => runTool(runtime, extra, false, async (client) => {
       const { courses } = await client.fetchUser();
@@ -124,6 +155,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
           'Exact progress status: "unattempted", "attempted", or "completed". Use "all" or omit to include every status.'
         ),
       }),
+      title: "List lessons",
     },
     async ({ courseId, lessonType, module, state, status }, extra) =>
       runTool(runtime, extra, false, async (client) =>
@@ -137,7 +169,8 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("get_lesson"),
-      inputSchema: z.object({ lessonId: z.number().int().positive() }),
+      inputSchema: z.object({ lessonId: LESSON_ID }),
+      title: "Get lesson",
     },
     async ({ lessonId }, extra) => runTool(runtime, extra, false, async (client) =>
       projectLessonDetail(await client.fetchLesson(lessonId))
@@ -149,7 +182,8 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("list_lesson_files"),
-      inputSchema: z.object({ lessonId: z.number().int().positive() }),
+      inputSchema: z.object({ lessonId: LESSON_ID }),
+      title: "List lesson files",
     },
     async ({ lessonId }, extra) => runTool(runtime, extra, false, async (client) =>
       fileLinksResult(listLessonFiles(await client.fetchLesson(lessonId)))
@@ -161,7 +195,8 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("list_thread_files"),
-      inputSchema: z.object({ threadId: z.number().int().positive() }),
+      title: "List thread files",
+      inputSchema: z.object({ threadId: z.number().int().positive().describe("Global thread ID as returned by list_threads.") }),
     },
     async ({ threadId }, extra) => runTool(runtime, extra, false, async (client) =>
       fileLinksResult(listThreadFiles(await client.fetchThread(threadId)))
@@ -173,7 +208,8 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("list_slide_questions"),
-      inputSchema: z.object({ slideId: z.number().int().positive() }),
+      inputSchema: z.object({ slideId: SLIDE_ID }),
+      title: "List slide questions",
     },
     async ({ slideId }, extra) => runTool(runtime, extra, false, async (client) =>
       (await client.fetchSlideQuestions(slideId)).map(projectQuestion)
@@ -185,7 +221,8 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("list_slide_responses"),
-      inputSchema: z.object({ slideId: z.number().int().positive() }),
+      inputSchema: z.object({ slideId: SLIDE_ID }),
+      title: "List slide responses",
     },
     async ({ slideId }, extra) => runTool(runtime, extra, false, async (client) =>
       (await client.fetchSlideQuestionResponses(slideId)).map(projectQuestionResponse)
@@ -197,7 +234,8 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("get_slide"),
-      inputSchema: z.object({ slideId: z.number().int().positive() }),
+      title: "Get slide",
+      inputSchema: z.object({ slideId: SLIDE_ID }),
     },
     async ({ slideId }, extra) => runTool(runtime, extra, false, async (client) =>
       projectSlide(await client.fetchSlide(slideId))
@@ -209,6 +247,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("list_threads"),
+      title: "List threads",
       inputSchema: z.object(THREAD_LIST_SHAPE),
     },
     async ({ since, ...input }, extra) => runTool(runtime, extra, false, async (client) =>
@@ -222,6 +261,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("search_threads"),
+      title: "Search threads",
       inputSchema: z.object({
         ...THREAD_LIST_SHAPE,
         query: z.string().trim().min(1).describe(
@@ -241,9 +281,12 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       annotations: READ_ONLY,
       description: toolDescription("get_thread"),
       inputSchema: z.object({
-        includeHtml: z.boolean().optional().default(false),
-        threadId: z.number().int().positive(),
+        includeHtml: INCLUDE_HTML,
+        threadId: z.number().int().positive().describe(
+          "Global Ed thread ID as returned by list_threads; for the number shown inside a course use get_course_thread."
+        ),
       }),
+      title: "Get thread",
     },
     async ({ includeHtml, threadId }, extra) => runTool(runtime, extra, false, async (client) =>
       projectThreadDetail(await client.fetchThread(threadId), { includeHtml })
@@ -257,9 +300,12 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       description: toolDescription("get_course_thread"),
       inputSchema: z.object({
         courseId: COURSE_REFERENCE,
-        includeHtml: z.boolean().optional().default(false),
-        number: z.number().int().positive(),
+        includeHtml: INCLUDE_HTML,
+        number: z.number().int().positive().describe(
+          "One-based thread number as shown inside the course, the #N in the Ed thread list."
+        ),
       }),
+      title: "Get thread by course number",
     },
     async ({ courseId, includeHtml, number }, extra) =>
       runTool(runtime, extra, false, async (client) =>
@@ -276,10 +322,17 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       annotations: READ_ONLY,
       description: toolDescription("list_activity"),
       inputSchema: z.object({
-        courseId: COURSE_REFERENCE.optional(),
-        filterType: z.enum(["all", "thread", "answer", "comment"]).optional().default("all"),
-        limit: z.number().int().positive().max(50).optional().default(30),
+        courseId: COURSE_REFERENCE.optional().describe(
+          'Ed course ID or exact course code to filter by, for example 38435 or "FIT2014". Omit for every course.'
+        ),
+        filterType: z.enum(["all", "thread", "answer", "comment"]).optional().default("all").describe(
+          'Kind of activity to keep. Defaults to "all".'
+        ),
+        limit: z.number().int().positive().max(50).optional().default(30).describe(
+          "Maximum items, capped at 50; defaults to 30."
+        ),
       }),
+      title: "List my activity",
     },
     async ({ courseId, filterType, limit }, extra) => runTool(runtime, extra, false, async (client) =>
       compactActivity(await listCurrentActivity(client, { courseId, filterType, limit }))
@@ -291,6 +344,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("read_thread"),
+      title: "Read thread",
       inputSchema: z.object({
         courseId: COURSE_REFERENCE.optional(),
         number: z.number().int().positive().optional().describe(
@@ -321,6 +375,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("read_lesson"),
+      title: "Read lesson",
       inputSchema: z.object({
         lessonId: z.number().int().positive().describe("Ed lesson ID."),
       }),
@@ -335,6 +390,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("read_slide"),
+      title: "Read slide",
       inputSchema: z.object({
         slideId: z.number().int().positive().describe("Ed lesson slide ID."),
       }),
@@ -353,9 +409,14 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
         all: z.boolean().optional().default(false)
           .describe("Mark every lesson in the course; required when queries is empty."),
         courseId: COURSE_REFERENCE,
-        delaySeconds: z.number().min(0).max(10).optional().default(0),
-        queries: z.array(z.string().trim().min(1)).max(10).optional().default([]),
+        delaySeconds: z.number().min(0).max(10).optional().default(0).describe(
+          "Seconds to pause after each slide, 0 to 10; defaults to 0. Raise it to go easy on Ed."
+        ),
+        queries: z.array(z.string().trim().min(1)).max(10).optional().default([]).describe(
+          "Case-insensitive substrings that must all appear in the lesson title or module name; at most 10. When queries is empty, all must be true to mark every lesson of the course."
+        ),
       }),
+      title: "Mark lessons read",
     },
     async ({ all, courseId, delaySeconds, queries }, extra) =>
       runTool(runtime, extra, true, (client) =>
@@ -369,10 +430,17 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       annotations: WRITE,
       description: toolDescription("submit_slide_answer"),
       inputSchema: z.object({
-        amend: z.boolean().optional().default(false),
-        choices: z.array(z.number().int().positive()).min(1),
-        questionId: z.number().int().positive(),
+        amend: z.boolean().optional().default(false).describe(
+          "Overwrite an answer already saved for this question; defaults to false."
+        ),
+        choices: z.array(z.number().int().positive()).min(1).describe(
+          "One-based answer indexes as shown by list_slide_questions; pass several for multiple-selection questions."
+        ),
+        questionId: z.number().int().positive().describe(
+          "Ed question ID as returned by list_slide_questions."
+        ),
       }),
+      title: "Submit slide answer",
     },
     async ({ amend, choices, questionId }, extra) => runTool(runtime, extra, true, (client) =>
       client.submitSlideAnswer(questionId, choices.map((choice) => choice - 1), { amend })
@@ -384,12 +452,71 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: WRITE,
       description: toolDescription("submit_slide"),
-      inputSchema: z.object({ slideId: z.number().int().positive() }),
+      inputSchema: z.object({
+        slideId: SLIDE_ID.describe(
+          "Ed slide ID whose saved answers are submitted, as returned by get_lesson."
+        ),
+      }),
+      title: "Submit slide",
     },
     async ({ slideId }, extra) => runTool(runtime, extra, true, (client) => client.submitSlide(slideId))
   );
 
+  server.registerTool(
+    "list_modules",
+    {
+      annotations: READ_ONLY,
+      description: toolDescription("list_modules"),
+      inputSchema: z.object({ courseId: COURSE_REFERENCE }),
+      title: "List lesson modules",
+    },
+    async ({ courseId }, extra) => runTool(runtime, extra, false, async (client) => {
+      const { lessons, modules } = await client.fetchLessons(await resolveCourseId(client, courseId));
+      return modules.map((module) =>
+        projectModule(module, lessons.filter((lesson) => lesson.moduleId === module.id).length)
+      );
+    })
+  );
+
+  server.registerPrompt(
+    "triage_unanswered",
+    {
+      argsSchema: z.object({
+        courseId: z.string().describe(
+          'Ed course ID or exact course code, for example "38435" or "FIT2014".'
+        ),
+        limit: z.string().optional().describe(
+          "Maximum threads to triage, capped at 100; defaults to 30."
+        ),
+      }),
+      description: "Triage the unanswered threads of one course into a table of next steps.",
+      title: "Triage unanswered threads",
+    },
+    ({ courseId, limit }) => ({
+      messages: [{
+        content: { text: triagePrompt(courseId, limit), type: "text" as const },
+        role: "user" as const,
+      }],
+    })
+  );
+
   return server;
+}
+
+function triagePrompt(courseId: string, limit: string | undefined): string {
+  return [
+    `Triage the unanswered Ed threads of course ${courseId}.`,
+    "",
+    `1. Call list_threads with courseId=${courseId}, answered=false, sort="new"`
+      + `, limit=${limit ?? "30"}.`,
+    "2. Call get_thread on every thread returned, using its id.",
+    "3. Produce a Markdown table with one row per thread and these columns:",
+    "   thread number, title, age (how long since createdAt), staff replied"
+      + " (yes or no, from endorsement.hasStaffAnswer), suggested next step.",
+    "",
+    "Order the rows oldest first, keep each suggested next step to one short sentence,"
+      + " and say so plainly if nothing needs attention.",
+  ].join("\n");
 }
 
 async function runTool(
