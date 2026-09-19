@@ -168,6 +168,43 @@ describe("CLI", () => {
     ]);
   });
 
+  it("searches thread titles and bodies for every query word", async () => {
+    const { runtime, stdout } = makeRuntime();
+
+    expect(await run([
+      "node", "edstem", "threads", "search", "100", "python", "MACOS", "--json",
+    ], runtime)).toBe(0);
+
+    expect(JSON.parse(stdout.join(""))).toEqual([
+      expect.objectContaining({ id: 5001, title: "How do I install Python?" }),
+    ]);
+  });
+
+  it("filters threads by --since and forwards --offset to Ed", async () => {
+    const { fetch, runtime, stdout } = makeRuntime();
+
+    expect(await run([
+      "node", "edstem", "threads", "100", "--since", "2026-01-16", "--offset", "5", "--json",
+    ], runtime)).toBe(0);
+
+    expect(JSON.parse(stdout.join(""))).toEqual([
+      expect.objectContaining({ id: 5002 }),
+    ]);
+    expect(new URL(String(fetch.mock.calls[0]?.[0])).searchParams.get("offset")).toBe("5");
+  });
+
+  it("rejects a --since value that is neither a timestamp nor an offset", async () => {
+    const { runtime, stderr } = makeRuntime();
+
+    expect(await run([
+      "node", "edstem", "threads", "100", "--since", "last tuesday", "--json",
+    ], runtime)).toBe(2);
+
+    expect(JSON.parse(stderr.join(""))).toMatchObject({
+      error: { code: "usage", message: expect.stringContaining('Invalid time value "last tuesday"') },
+    });
+  });
+
   it("accepts a course code without a separate lookup command", async () => {
     const { fetch, runtime, stdout } = makeRuntime();
 

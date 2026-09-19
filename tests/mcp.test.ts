@@ -37,6 +37,51 @@ describe("stdio MCP adapter", () => {
     expect(JSON.stringify(result)).not.toContain("\n  ");
   });
 
+  it("searches threads client-side across the title and body", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(
+      new Response(JSON.stringify(fixture("course_threads")), { status: 200 })
+    );
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const result = await client.callTool({
+      arguments: { courseId: 100, query: "python MACOS" },
+      name: "search_threads",
+    });
+
+    expect(parseToolResult(result)).toEqual([
+      expect.objectContaining({ id: 5001, title: "How do I install Python?" }),
+    ]);
+  });
+
+  it("applies offset and since to list_threads", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(
+      new Response(JSON.stringify(fixture("course_threads")), { status: 200 })
+    );
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const result = await client.callTool({
+      arguments: { courseId: 100, offset: 5, since: "2026-01-16" },
+      name: "list_threads",
+    });
+
+    expect(parseToolResult(result)).toEqual([expect.objectContaining({ id: 5002 })]);
+    expect(new URL(String(fetch.mock.calls[0]?.[0])).searchParams.get("offset")).toBe("5");
+  });
+
+  it("reports an unparsable since value as an invalid argument", async () => {
+    const client = await connect(new EdClient({ fetch: vi.fn<FetchLike>(), token: "test-token" }));
+
+    const result = await client.callTool({
+      arguments: { courseId: 100, since: "last tuesday" },
+      name: "list_threads",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseToolResult(result)).toMatchObject({
+      error: { message: expect.stringContaining("Invalid time value"), type: "INVALID_ARGUMENT" },
+    });
+  });
+
   it("describes dynamic lesson filters and thread category levels", async () => {
     const client = await connect(new EdClient({ fetch: vi.fn<FetchLike>(), token: "test-token" }));
 
