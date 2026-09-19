@@ -10,7 +10,12 @@ import { createEdMcpServer } from "./mcp/server.js";
 
 export async function startStdioServer(): Promise<void> {
   const [token, config] = await Promise.all([loadToken(), loadConfig()]);
-  const client = new EdClient({ apiBaseUrl: config.apiBaseUrl, token });
+  const client = new EdClient({
+    apiBaseUrl: config.apiBaseUrl,
+    maxRetries: config.maxRetries,
+    retryBaseDelayMs: config.retryBaseDelayMs,
+    token,
+  });
   const server = createEdMcpServer({
     canWrite: () => true,
     getClient: () => client,

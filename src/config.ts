@@ -7,11 +7,15 @@ import { parse } from "yaml";
 export interface EdstemConfig {
   apiBaseUrl: string;
   fetchCount: number;
+  maxRetries: number;
+  retryBaseDelayMs: number;
 }
 
 const DEFAULT_CONFIG: EdstemConfig = {
   apiBaseUrl: "https://edstem.org/api/",
   fetchCount: 30,
+  maxRetries: 3,
+  retryBaseDelayMs: 1_000,
 };
 
 export async function loadConfig(
@@ -34,8 +38,17 @@ export async function loadConfig(
   const fetchCount = Number.isInteger(configuredCount) && configuredCount > 0
     ? configuredCount
     : DEFAULT_CONFIG.fetchCount;
+  const rateLimit = asRecord(config.rateLimit);
+  const configuredRetries = Number(rateLimit.maxRetries);
+  const maxRetries = Number.isInteger(configuredRetries) && configuredRetries >= 0
+    ? configuredRetries
+    : DEFAULT_CONFIG.maxRetries;
+  const configuredBaseDelay = Number(rateLimit.retryBaseDelay);
+  const retryBaseDelayMs = Number.isFinite(configuredBaseDelay) && configuredBaseDelay > 0
+    ? Math.round(configuredBaseDelay * 1000)
+    : DEFAULT_CONFIG.retryBaseDelayMs;
   const apiBaseUrl = process.env.EDSTEM_BASE_URL?.trim() || DEFAULT_CONFIG.apiBaseUrl;
-  return { apiBaseUrl, fetchCount };
+  return { apiBaseUrl, fetchCount, maxRetries, retryBaseDelayMs };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

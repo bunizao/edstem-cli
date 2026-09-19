@@ -49,15 +49,23 @@ export interface SlideSubmitResult {
 export interface EdClientOptions {
   apiBaseUrl?: string;
   fetch?: FetchLike;
+  maxRetries?: number;
+  retryBaseDelayMs?: number;
+  sleep?: (ms: number) => Promise<void>;
   token: string;
   timeoutMs?: number;
 }
 
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
+const RETRYABLE_STATUS = new Set([429, 502, 503, 504]);
+
 export class EdClient {
   private readonly apiBaseUrl: string;
   private readonly fetch: FetchLike;
+  private readonly maxRetries: number;
+  private readonly retryBaseDelayMs: number;
+  private readonly sleep: (ms: number) => Promise<void>;
   private readonly token: string;
   private readonly timeoutMs: number;
 
@@ -66,6 +74,9 @@ export class EdClient {
       options.apiBaseUrl ?? readEnvironmentValue("EDSTEM_BASE_URL") ?? "https://edstem.org/api/"
     );
     this.fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
+    this.maxRetries = options.maxRetries ?? 3;
+    this.retryBaseDelayMs = options.retryBaseDelayMs ?? 1_000;
+    this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.token = options.token;
     this.timeoutMs = options.timeoutMs ?? 15_000;
   }
@@ -270,22 +281,15 @@ export class EdClient {
       url.searchParams.set(key, value);
     }
 
-    let response: Response;
-    try {
-      response = await this.fetch(url, {
-        body: options.jsonBody === undefined ? undefined : JSON.stringify(options.jsonBody),
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${this.token}`,
-          ...(options.jsonBody === undefined ? {} : { "Content-Type": "application/json" })
-        },
-        method,
-        redirect: "manual",
-        signal: AbortSignal.timeout(this.timeoutMs)
-      });
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      throw new EdApiError("network", 0, `Failed to reach the Ed API: ${detail}`);
+    let response = await this.send(method, url, options.jsonBody);
+    // Only reads are safe to repeat; a retried write could duplicate the mutation.
+    for (
+      let attempt = 0;
+      method === "GET" && attempt < this.maxRetries && RETRYABLE_STATUS.has(response.status);
+      attempt += 1
+    ) {
+      await this.sleep(retryDelayMs(response, attempt, this.retryBaseDelayMs));
+      response = await this.send(method, url, options.jsonBody);
     }
 
     if (response.status >= 300 && response.status < 400) {
@@ -342,6 +346,38 @@ export class EdClient {
 
     return payload;
   }
+
+  private async send(
+    method: "GET" | "POST" | "PUT",
+    url: URL,
+    jsonBody: unknown
+  ): Promise<Response> {
+    try {
+      return await this.fetch(url, {
+        body: jsonBody === undefined ? undefined : JSON.stringify(jsonBody),
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${this.token}`,
+          ...(jsonBody === undefined ? {} : { "Content-Type": "application/json" })
+        },
+        method,
+        redirect: "manual",
+        signal: AbortSignal.timeout(this.timeoutMs)
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new EdApiError("network", 0, `Failed to reach the Ed API: ${detail}`);
+    }
+  }
+}
+
+function retryDelayMs(response: Response, attempt: number, baseDelayMs: number): number {
+  const backoffMs = baseDelayMs * 2 ** attempt;
+  const retryAfterSeconds = Number(response.headers.get("retry-after"));
+  const retryAfterMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+    ? retryAfterSeconds * 1000
+    : 0;
+  return Math.max(backoffMs, retryAfterMs);
 }
 
 function readEnvironmentValue(name: string): string | undefined {

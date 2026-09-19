@@ -389,7 +389,12 @@ function createDefaultRuntime(): CliRuntime {
   return {
     createClient: () => {
       client ??= Promise.all([loadToken(), loadConfig()]).then(([token, config]) =>
-        new EdClient({ apiBaseUrl: config.apiBaseUrl, token })
+        new EdClient({
+          apiBaseUrl: config.apiBaseUrl,
+          maxRetries: config.maxRetries,
+          retryBaseDelayMs: config.retryBaseDelayMs,
+          token,
+        })
       );
       return client;
     },

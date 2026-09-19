@@ -43,6 +43,22 @@ describe("auth, config, and output", () => {
     expect(await loadConfig(configFile)).toMatchObject({ fetchCount: 12 });
   });
 
+  it("reads the rate-limit retry settings", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "edstem-config-"));
+    const configFile = join(directory, "config.yaml");
+    await writeFile(configFile, "rateLimit:\n  maxRetries: 5\n  retryBaseDelay: 2.5\n", "utf8");
+
+    expect(await loadConfig(configFile)).toMatchObject({ maxRetries: 5, retryBaseDelayMs: 2500 });
+  });
+
+  it("falls back to default retry settings for invalid values", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "edstem-config-"));
+    const configFile = join(directory, "config.yaml");
+    await writeFile(configFile, "rateLimit:\n  maxRetries: nope\n  retryBaseDelay: -1\n", "utf8");
+
+    expect(await loadConfig(configFile)).toMatchObject({ maxRetries: 3, retryBaseDelayMs: 1000 });
+  });
+
   it("uses the normalized base URL even when the config file is absent", async () => {
     vi.stubEnv("EDSTEM_BASE_URL", "https://example.test/api/");
     try {

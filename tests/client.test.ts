@@ -125,6 +125,65 @@ describe("EdClient", () => {
     await expect(client.fetchUser()).rejects.not.toThrow(/never-print-this/);
   });
 
+  it("retries a rate-limited read with exponential backoff", async () => {
+    const fetch = vi.fn<FetchLike>()
+      .mockResolvedValueOnce(jsonResponse({ message: "slow down" }, 429))
+      .mockResolvedValueOnce(jsonResponse({ message: "gateway" }, 503))
+      .mockResolvedValueOnce(jsonResponse(fixture("user_info")));
+    const delays: number[] = [];
+    const client = new EdClient({
+      fetch,
+      retryBaseDelayMs: 10,
+      sleep: async (ms) => { delays.push(ms); },
+      token: "secret",
+    });
+
+    await expect(client.fetchUser()).resolves.toMatchObject({ user: { id: 12345 } });
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(delays).toEqual([10, 20]);
+  });
+
+  it("waits for a longer Retry-After header", async () => {
+    const fetch = vi.fn<FetchLike>()
+      .mockResolvedValueOnce(new Response("{}", { headers: { "retry-after": "5" }, status: 429 }))
+      .mockResolvedValueOnce(jsonResponse(fixture("user_info")));
+    const delays: number[] = [];
+    const client = new EdClient({
+      fetch,
+      retryBaseDelayMs: 10,
+      sleep: async (ms) => { delays.push(ms); },
+      token: "secret",
+    });
+
+    await client.fetchUser();
+
+    expect(delays).toEqual([5000]);
+  });
+
+  it("gives up after the configured retry count", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(jsonResponse({ message: "slow down" }, 429));
+    const client = new EdClient({
+      fetch,
+      maxRetries: 2,
+      retryBaseDelayMs: 10,
+      sleep: async () => undefined,
+      token: "secret",
+    });
+
+    await expect(client.fetchUser()).rejects.toThrow("HTTP 429");
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("never retries a write", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(jsonResponse({ message: "slow down" }, 429));
+    const sleep = vi.fn(async () => undefined);
+    const client = new EdClient({ fetch, sleep, token: "secret" });
+
+    await expect(client.submitSlide(42)).rejects.toThrow("HTTP 429");
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
   it("marks a slide complete with an empty response", async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(null, { status: 204 }));
     const client = new EdClient({ fetch, token: "secret" });
