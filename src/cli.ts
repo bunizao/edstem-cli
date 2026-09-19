@@ -154,7 +154,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
   threads.command("list")
     .description("List threads in a unit.")
     .argument("<unit>", "Unit ID or code", unitIdentifier)
-    .option("-n, --max <count>", "Maximum threads to fetch", positiveInteger)
+    .option("-n, --max <count>", "Maximum threads to fetch", positiveInteger("--max"))
     .addOption(program.createOption(
       "-s, --sort <order>",
       "Ed sort order; defaults to new and pinned threads may remain first."
@@ -215,7 +215,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     }));
   lessons.command("show")
     .description("Show one lesson and its slides.")
-    .argument("<lesson>", "Lesson ID", positiveInteger)
+    .argument("<lesson>", "Lesson ID", positiveInteger("<lesson>"))
     .action(outputAction(runtime, async (client, _command, lesson: number) =>
       projectLessonDetail(await client.fetchLesson(lesson))
     ));
@@ -224,7 +224,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     .argument("<unit>", "Unit ID or code", unitIdentifier)
     .argument("[queries...]", "Words required in lesson or module names")
     .option("--all", "Mark every lesson in the unit; required when no queries are given")
-    .option("--delay <seconds>", "Delay between slide updates", nonNegativeNumber, 0)
+    .option("--delay <seconds>", "Delay between slide updates", nonNegativeNumber("--delay"), 0)
     .action(mutationAction(runtime,
       (command, unit: string, queries: string[]) => {
         const selected = queries.filter((query) => query.trim());
@@ -247,7 +247,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
   const slides = program.command("slides").description("Inspect or submit lesson slides.");
   slides.command("show")
     .description("Show slide content, questions, responses, or quiz context.")
-    .argument("<slide>", "Slide ID", positiveInteger)
+    .argument("<slide>", "Slide ID", positiveInteger("<slide>"))
     .addOption(program.createOption("--section <section>", "Slide section").choices([...SLIDE_SECTIONS]).default("slide"))
     .action(outputAction(runtime, async (client, command, slide: number) => {
       const section = command.opts().section as typeof SLIDE_SECTIONS[number];
@@ -261,9 +261,9 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     }));
   mutating(slides.command("submit")
     .description("Save one answer or submit all saved answers for a slide.")
-    .argument("<slide>", "Slide ID", positiveInteger)
-    .option("--question <question>", "Question ID to answer", positiveInteger)
-    .option("--choice <number>", "One-based choice; repeat for multi-select", collectPositiveInteger, [])
+    .argument("<slide>", "Slide ID", positiveInteger("<slide>"))
+    .option("--question <question>", "Question ID to answer", positiveInteger("--question"))
+    .option("--choice <number>", "One-based choice; repeat for multi-select", collectPositiveInteger("--choice"), [])
     .option("--amend", "Amend an existing response.")
     .action(mutationAction(runtime,
       (command, slide: number) => {
@@ -299,15 +299,15 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
   const files = program.command("files").description("List or download Ed-hosted lesson files.");
   files.command("list")
     .description("List Ed-hosted downloadable files in one lesson.")
-    .argument("<lesson>", "Lesson ID", positiveInteger)
+    .argument("<lesson>", "Lesson ID", positiveInteger("<lesson>"))
     .action(outputAction(runtime, async (client, _command, lesson: number) =>
       listLessonFiles(await client.fetchLesson(lesson))
     ));
   files.command("get")
     .description("Download Ed-hosted files from one lesson.")
-    .argument("<lesson>", "Lesson ID", positiveInteger)
+    .argument("<lesson>", "Lesson ID", positiveInteger("<lesson>"))
     .option("--dest <directory>", "Destination directory", ".")
-    .option("--slide <slide>", "Download only one slide file", positiveInteger)
+    .option("--slide <slide>", "Download only one slide file", positiveInteger("--slide"))
     .option("--force", "Replace existing files.")
     .action(outputAction(runtime, async (client, command, lessonId: number) => {
       const options = command.opts();
@@ -333,7 +333,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
   program.command("activity")
     .description("List current-user activity.")
     .argument("[unit]", "Unit ID or code", unitIdentifier)
-    .option("-n, --max <count>", "Maximum activity items", positiveInteger)
+    .option("-n, --max <count>", "Maximum activity items", positiveInteger("--max"))
     .option("-f, --filter <type>", "Activity type", "all")
     .action(outputAction(runtime, async (client, command, unit?: string) => {
       const limit = command.opts().max ?? await runtime.defaultFetchCount();
@@ -445,12 +445,14 @@ function outputOptions(command: Command): GlobalOptions {
   return command.optsWithGlobals() as GlobalOptions;
 }
 
-function positiveInteger(value: string): number {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new CliError("usage", "Value must be a positive integer.");
-  }
-  return parsed;
+function positiveInteger(name: string): (value: string) => number {
+  return (value) => {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      throw new CliError("usage", `${name} must be a positive integer.`);
+    }
+    return parsed;
+  };
 }
 
 function unitIdentifier(value: string): string {
@@ -459,16 +461,19 @@ function unitIdentifier(value: string): string {
   throw new CliError("usage", "Unit ID or code must not be empty.");
 }
 
-function nonNegativeNumber(value: string): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    throw new CliError("usage", "Value must be greater than or equal to 0.");
-  }
-  return parsed;
+function nonNegativeNumber(name: string): (value: string) => number {
+  return (value) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      throw new CliError("usage", `${name} must be greater than or equal to 0.`);
+    }
+    return parsed;
+  };
 }
 
-function collectPositiveInteger(value: string, previous: number[]): number[] {
-  return [...previous, positiveInteger(value)];
+function collectPositiveInteger(name: string): (value: string, previous: number[]) => number[] {
+  const parse = positiveInteger(name);
+  return (value, previous) => [...previous, parse(value)];
 }
 
 export async function run(argv = process.argv, runtime?: CliRuntime): Promise<number> {

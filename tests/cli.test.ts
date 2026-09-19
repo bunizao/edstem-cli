@@ -423,6 +423,30 @@ describe("CLI", () => {
       write.mockRestore();
     }
   });
+
+  it("names the argument in validation errors", async () => {
+    const lesson = makeRuntime();
+    expect(await run(["node", "edstem", "lessons", "show", "abc", "--json"], lesson.runtime)).toBe(2);
+    expect(JSON.parse(lesson.stderr.join(""))).toMatchObject({
+      error: { code: "usage", message: "<lesson> must be a positive integer." },
+    });
+
+    const delay = makeRuntime();
+    expect(await run([
+      "node", "edstem", "lessons", "mark-read", "100", "--all", "--delay=-1", "--json",
+    ], delay.runtime)).toBe(2);
+    expect(JSON.parse(delay.stderr.join(""))).toMatchObject({
+      error: { code: "usage", message: "--delay must be greater than or equal to 0." },
+    });
+
+    const choice = makeRuntime();
+    expect(await run([
+      "node", "edstem", "slides", "submit", "12", "--question", "15", "--choice", "0", "--json",
+    ], choice.runtime)).toBe(2);
+    expect(JSON.parse(choice.stderr.join(""))).toMatchObject({
+      error: { code: "usage", message: "--choice must be a positive integer." },
+    });
+  });
 });
 
 function duplicateCourseIdentity(): unknown {
