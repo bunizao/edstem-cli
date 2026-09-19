@@ -6,7 +6,7 @@ import {
   parseSince,
   type ThreadFilterOptions,
 } from "./filter.js";
-import type { Course, Lesson, Thread } from "./models.js";
+import type { Comment, Course, Lesson, Thread } from "./models.js";
 
 /** Hard cap on Ed requests per filtered thread listing. */
 const THREAD_PAGE_CAP = 10;
@@ -99,6 +99,27 @@ export async function resolveThread(client: EdClient, reference: string): Promis
 
   throw new EdInputError(
     "Thread reference must be a thread ID or course ID/code followed by #number"
+  );
+}
+
+/** Ed replies to a question thread default to an answer; other threads take comments. */
+export function defaultReplyType(threadType: string): "answer" | "comment" {
+  return threadType.trim().toLowerCase() === "question" ? "answer" : "comment";
+}
+
+/**
+ * Ed accepts a reply under any comment ID, so a mismatched ID would post to another
+ * thread while we report the requested one.
+ */
+export function assertCommentInThread(thread: Thread, commentId: number): void {
+  if (!containsComment(thread.answers, commentId) && !containsComment(thread.comments, commentId)) {
+    throw new EdInputError(`Comment ${commentId} does not belong to thread ${thread.id}.`);
+  }
+}
+
+function containsComment(comments: Comment[], commentId: number): boolean {
+  return comments.some(
+    (comment) => comment.id === commentId || containsComment(comment.comments, commentId)
   );
 }
 

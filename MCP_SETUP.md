@@ -41,9 +41,12 @@ For production, add these Worker variables in the Cloudflare dashboard:
 MCP_ALLOWED_HOSTNAMES=<worker-host>
 MCP_ALLOWED_ORIGIN_HOSTNAMES=chatgpt.com,claude.ai
 MCP_TOKEN_CACHE_TTL_SECONDS=300
+MCP_ALLOW_POSTING=0
 ```
 
 `MCP_TOKEN_CACHE_TTL_SECONDS` controls how long a verified token stays cached in memory per isolate. It defaults to 300 seconds; set it to `0` to verify every request against Ed.
+
+`MCP_ALLOW_POSTING=1` enables the `create_thread` and `reply_thread` tools. They publish to the course forum under the token owner's name, so leave them disabled unless a client needs them.
 
 ## Choose the right connection
 

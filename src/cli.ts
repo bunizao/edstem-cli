@@ -14,6 +14,7 @@ import {
   type OutputFormat,
 } from "@bunizao/cli-kit";
 import type { Command } from "commander";
+import { readFile } from "node:fs/promises";
 
 import {
   defaultTokenFile,
@@ -27,18 +28,23 @@ import { loadConfig } from "./config.js";
 import { downloadLessonFiles } from "./download.js";
 import { EdClient, type FetchLike } from "./ed/client.js";
 import { listLessonFiles, listThreadFiles } from "./ed/files.js";
+import { markdownToEdDocument } from "./ed/document.js";
 import {
+  assertCommentInThread,
+  defaultReplyType,
   listCurrentActivity,
   listLessons,
   listThreads,
   parseSinceValue,
   readLessons,
   resolveCourse,
+  resolveCourseId,
   resolveThread,
   type ThreadListOptions,
 } from "./ed/operations.js";
 import {
   compactActivity,
+  projectComment,
   projectCourse,
   projectIdentity,
   projectLessonDetail,
@@ -64,6 +70,8 @@ const FILE_TARGET_HELP =
 export type FileTarget =
   | { kind: "lesson"; id: number }
   | { kind: "thread"; reference: string };
+const THREAD_TYPES = ["question", "post"] as const;
+const REPLY_TYPES = ["answer", "comment"] as const;
 
 const NOUNS: readonly NounSpec[] = [
   {
@@ -74,7 +82,7 @@ const NOUNS: readonly NounSpec[] = [
   },
   {
     name: "threads",
-    verbs: ["list", "search", "show", "read"],
+    verbs: ["list", "search", "show", "read", "send"],
     defaultByArity: { 1: "list" },
     valueFlags: [
       "-n",
@@ -88,7 +96,16 @@ const NOUNS: readonly NounSpec[] = [
       "--type",
       "--offset",
       "--since",
+      "--title",
+      "--body",
+      "--body-file",
     ],
+  },
+  {
+    name: "replies",
+    verbs: ["send"],
+    defaultByArity: {},
+    valueFlags: ["--body", "--body-file", "--as", "--to"],
   },
   {
     name: "lessons",
@@ -261,6 +278,94 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
       threadToMarkdown(await resolveThread(client, reference))
     ));
 
+  mutating(threads.command("send")
+    .description("Post a new thread in a unit.")
+    .argument("<unit>", "Unit ID or code", unitIdentifier)
+    .requiredOption("--title <title>", "Thread title.")
+    .option("--body <markdown>", "Thread body as Markdown.")
+    .option("--body-file <path>", "Read the Markdown body from a file, or - for stdin.")
+    .addOption(program.createOption("--type <type>", "Thread type.")
+      .choices([...THREAD_TYPES]).default("question"))
+    .option("-c, --category <category>", "Ed category for the thread.")
+    .option("--private", "Post privately to staff.")
+    .option("--anonymous", "Post anonymously.")
+    .action(mutationAction(runtime,
+      async (command, unit: string) => {
+        const options = command.opts();
+        const document = markdownToEdDocument(await readMarkdownBody(options));
+        return {
+          details: document,
+          document,
+          summary: `Post a ${options.type} ${JSON.stringify(options.title)} in unit ${unit}.`,
+        };
+      },
+      async (command, plan, unit: string) => {
+        const client = await runtime.createClient();
+        const options = command.opts();
+        const courseId = await resolveCourseId(client, unit);
+        return projectThreadDetail(await client.createThread(courseId, {
+          anonymous: Boolean(options.anonymous),
+          category: options.category,
+          content: plan.document,
+          private: Boolean(options.private),
+          title: options.title,
+          type: options.type,
+        }));
+      }
+    )));
+
+  const replies = program.command("replies").description("Post replies to Ed threads.");
+  mutating(replies.command("send")
+    .description("Post a reply to a thread or to one of its comments.")
+    .argument("<reference>", "Thread ID or unit ID/code plus #number")
+    .option("--body <markdown>", "Reply body as Markdown.")
+    .option("--body-file <path>", "Read the Markdown body from a file, or - for stdin.")
+    .addOption(program.createOption(
+      "--as <kind>",
+      "Reply kind; defaults to answer on question threads and comment elsewhere."
+    ).choices([...REPLY_TYPES]))
+    .option(
+      "--to <commentId>",
+      "Reply to one comment of the thread instead of the thread itself.",
+      positiveInteger("--to")
+    )
+    .option("--private", "Post privately to staff.")
+    .option("--anonymous", "Post anonymously.")
+    .action(mutationAction(runtime,
+      async (command, reference: string) => {
+        const options = command.opts();
+        const document = markdownToEdDocument(await readMarkdownBody(options));
+        const thread = await resolveThread(await runtime.createClient(), reference);
+        if (options.to !== undefined) {
+          assertCommentInThread(thread, options.to);
+        }
+        const type = options.as ?? defaultReplyType(thread.type);
+        return {
+          details: document,
+          document,
+          summary: options.to === undefined
+            ? `Post a ${type} on thread ${thread.id}.`
+            : `Post a ${type} under comment ${options.to} on thread ${thread.id}.`,
+          thread,
+          type,
+        };
+      },
+      async (command, plan) => {
+        const client = await runtime.createClient();
+        const options = command.opts();
+        const input = {
+          anonymous: Boolean(options.anonymous),
+          content: plan.document,
+          private: Boolean(options.private),
+          type: plan.type,
+        };
+        const comment = options.to === undefined
+          ? await client.createThreadReply(plan.thread.id, input)
+          : await client.createCommentReply(options.to, input);
+        return { ...projectComment(comment), threadId: plan.thread.id };
+      }
+    )));
+
   const lessons = program.command("lessons").description("List, show, read, or mark lessons as read.");
   lessons.command("list")
     .description("List lessons in a unit.")
@@ -308,7 +413,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
             : `Mark ALL lessons as read in unit ${unit}.`,
         };
       },
-      async (command, unit: string, queries: string[]) =>
+      async (command, _plan, unit: string, queries: string[]) =>
         readLessons(await runtime.createClient(), unit, queries, {
           all: Boolean(command.opts().all),
           delaySeconds: command.opts().delay,
@@ -360,7 +465,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
             : `Submit all saved answers for slide ${slide}.`,
         };
       },
-      async (command, slide: number) => {
+      async (command, _plan, slide: number) => {
         const options = command.opts();
         const client = await runtime.createClient();
         if (options.question !== undefined) {
@@ -532,24 +637,65 @@ function textAction<Arguments extends unknown[]>(
   };
 }
 
-/** Confirms the plan first; the action decides whether it needs an Ed client. */
-function mutationAction<Arguments extends unknown[]>(
+interface MutationPlan {
+  /** Extra context printed on stderr for --dry-run, such as generated Ed XML. */
+  details?: string;
+  summary: string;
+}
+
+function mutationAction<Plan extends MutationPlan, Arguments extends unknown[]>(
   runtime: CliRuntime,
-  plan: (command: Command, ...args: Arguments) => { summary: string },
-  action: (command: Command, ...args: Arguments) => Promise<unknown>
+  plan: (command: Command, ...args: Arguments) => Plan | Promise<Plan>,
+  action: (
+    command: Command,
+    plan: Plan,
+    ...args: Arguments
+  ) => Promise<unknown>
 ): (...args: [...Arguments, Command]) => Promise<void> {
   return async (...args): Promise<void> => {
     const command = args.at(-1) as Command;
     const actionArgs = args.slice(0, -1) as Arguments;
     const options = outputOptions(command);
-    const accepted = await confirm(plan(command, ...actionArgs), {
+    const prepared = await plan(command, ...actionArgs);
+    const accepted = await confirm(prepared, {
       yes: Boolean(options.yes),
       dryRun: Boolean(options.dryRun),
       interactive: runtime.interactive,
     });
+    if (options.dryRun && prepared.details) {
+      runtime.writeStderr(`${prepared.details}\n`);
+    }
     if (!accepted) return;
-    await writeValue(runtime, command, await action(command, ...actionArgs));
+    await writeValue(
+      runtime,
+      command,
+      await action(command, prepared, ...actionArgs)
+    );
   };
+}
+
+async function readMarkdownBody(options: { body?: string; bodyFile?: string }): Promise<string> {
+  if (options.body !== undefined && options.bodyFile !== undefined) {
+    throw new CliError("usage", "Use only one of --body or --body-file.");
+  }
+  if (options.body === undefined && options.bodyFile === undefined) {
+    throw new CliError("usage", "Provide the post body with --body or --body-file.");
+  }
+  const body = options.body ?? (options.bodyFile === "-"
+    ? await readStdin()
+    : await readFile(options.bodyFile as string, "utf8"));
+  if (!body.trim()) {
+    throw new CliError("usage", "The post body must not be empty.");
+  }
+  return body;
+}
+
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 async function writeValue(runtime: CliRuntime, command: Command, value: unknown): Promise<void> {

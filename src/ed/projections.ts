@@ -193,7 +193,10 @@ export function compactActivity(items: unknown[]): unknown[] {
   return items.map(compactValue) as unknown[];
 }
 
-function projectComment(comment: Comment, options: { includeHtml?: boolean }): JsonObject {
+export function projectComment(
+  comment: Comment,
+  options: { includeHtml?: boolean } = {}
+): JsonObject {
   const result: JsonObject = {
     id: comment.id,
     userId: comment.userId,

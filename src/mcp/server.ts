@@ -3,8 +3,11 @@ import { z } from "zod";
 
 import { EdApiError, EdAuthExpiredError, type EdClient } from "../ed/client.js";
 import { listLessonFiles, listThreadFiles } from "../ed/files.js";
+import { markdownToEdDocument } from "../ed/document.js";
 import type { LessonFile } from "../ed/models.js";
 import {
+  assertCommentInThread,
+  defaultReplyType,
   EdInputError,
   listCurrentActivity,
   listLessons,
@@ -15,6 +18,7 @@ import {
 } from "../ed/operations.js";
 import {
   compactActivity,
+  projectComment,
   projectCourse,
   projectIdentity,
   projectLessonDetail,
@@ -94,6 +98,8 @@ export interface McpToolContext {
 
 export interface EdMcpRuntime {
   authErrorExtra?: (context: McpToolContext) => Record<string, unknown>;
+  /** Gate for tools that publish content to a course; defaults to canWrite. */
+  canPost?: (context: McpToolContext) => boolean;
   canWrite: (context: McpToolContext) => boolean;
   getClient: (context: McpToolContext) => EdClient | Promise<EdClient>;
   mapError?: (
@@ -109,7 +115,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
   server.registerTool(
     "get_user",
     { annotations: READ_ONLY, description: toolDescription("get_user"), title: "Get current user" },
-    async (extra) => runTool(runtime, extra, false, async (client) => {
+    async (extra) => runTool(runtime, extra, "read", async (client) => {
       const identity = projectIdentity(await client.fetchUser());
       return { ...(identity.user as Record<string, unknown>), courses: identity.courses };
     })
@@ -127,7 +133,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       }),
       title: "List courses",
     },
-    async ({ includeArchived }, extra) => runTool(runtime, extra, false, async (client) => {
+    async ({ includeArchived }, extra) => runTool(runtime, extra, "read", async (client) => {
       const { courses } = await client.fetchUser();
       return courses
         .filter((course) => includeArchived || course.status.toLowerCase() !== "archived")
@@ -158,7 +164,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       title: "List lessons",
     },
     async ({ courseId, lessonType, module, state, status }, extra) =>
-      runTool(runtime, extra, false, async (client) =>
+      runTool(runtime, extra, "read", async (client) =>
         (await listLessons(client, courseId, { lessonType, module, state, status }))
           .map(projectLessonSummary)
       )
@@ -172,7 +178,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       inputSchema: z.object({ lessonId: LESSON_ID }),
       title: "Get lesson",
     },
-    async ({ lessonId }, extra) => runTool(runtime, extra, false, async (client) =>
+    async ({ lessonId }, extra) => runTool(runtime, extra, "read", async (client) =>
       projectLessonDetail(await client.fetchLesson(lessonId))
     )
   );
@@ -185,7 +191,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       inputSchema: z.object({ lessonId: LESSON_ID }),
       title: "List lesson files",
     },
-    async ({ lessonId }, extra) => runTool(runtime, extra, false, async (client) =>
+    async ({ lessonId }, extra) => runTool(runtime, extra, "read", async (client) =>
       fileLinksResult(listLessonFiles(await client.fetchLesson(lessonId)))
     )
   );
@@ -198,7 +204,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       title: "List thread files",
       inputSchema: z.object({ threadId: z.number().int().positive().describe("Global thread ID as returned by list_threads.") }),
     },
-    async ({ threadId }, extra) => runTool(runtime, extra, false, async (client) =>
+    async ({ threadId }, extra) => runTool(runtime, extra, "read", async (client) =>
       fileLinksResult(listThreadFiles(await client.fetchThread(threadId)))
     )
   );
@@ -211,7 +217,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       inputSchema: z.object({ slideId: SLIDE_ID }),
       title: "List slide questions",
     },
-    async ({ slideId }, extra) => runTool(runtime, extra, false, async (client) =>
+    async ({ slideId }, extra) => runTool(runtime, extra, "read", async (client) =>
       (await client.fetchSlideQuestions(slideId)).map(projectQuestion)
     )
   );
@@ -224,7 +230,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       inputSchema: z.object({ slideId: SLIDE_ID }),
       title: "List slide responses",
     },
-    async ({ slideId }, extra) => runTool(runtime, extra, false, async (client) =>
+    async ({ slideId }, extra) => runTool(runtime, extra, "read", async (client) =>
       (await client.fetchSlideQuestionResponses(slideId)).map(projectQuestionResponse)
     )
   );
@@ -237,7 +243,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       title: "Get slide",
       inputSchema: z.object({ slideId: SLIDE_ID }),
     },
-    async ({ slideId }, extra) => runTool(runtime, extra, false, async (client) =>
+    async ({ slideId }, extra) => runTool(runtime, extra, "read", async (client) =>
       projectSlide(await client.fetchSlide(slideId))
     )
   );
@@ -250,7 +256,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       title: "List threads",
       inputSchema: z.object(THREAD_LIST_SHAPE),
     },
-    async ({ since, ...input }, extra) => runTool(runtime, extra, false, async (client) =>
+    async ({ since, ...input }, extra) => runTool(runtime, extra, "read", async (client) =>
       (await listThreads(client, { ...input, since: since ? parseSinceValue(since) : undefined }))
         .map(projectThreadSummary)
     )
@@ -269,7 +275,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
         ),
       }),
     },
-    async ({ since, ...input }, extra) => runTool(runtime, extra, false, async (client) =>
+    async ({ since, ...input }, extra) => runTool(runtime, extra, "read", async (client) =>
       (await listThreads(client, { ...input, since: since ? parseSinceValue(since) : undefined }))
         .map(projectThreadSummary)
     )
@@ -288,7 +294,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       }),
       title: "Get thread",
     },
-    async ({ includeHtml, threadId }, extra) => runTool(runtime, extra, false, async (client) =>
+    async ({ includeHtml, threadId }, extra) => runTool(runtime, extra, "read", async (client) =>
       projectThreadDetail(await client.fetchThread(threadId), { includeHtml })
     )
   );
@@ -308,7 +314,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       title: "Get thread by course number",
     },
     async ({ courseId, includeHtml, number }, extra) =>
-      runTool(runtime, extra, false, async (client) =>
+      runTool(runtime, extra, "read", async (client) =>
         projectThreadDetail(
           await client.fetchCourseThread(await resolveCourseId(client, courseId), number),
           { includeHtml }
@@ -334,7 +340,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       }),
       title: "List my activity",
     },
-    async ({ courseId, filterType, limit }, extra) => runTool(runtime, extra, false, async (client) =>
+    async ({ courseId, filterType, limit }, extra) => runTool(runtime, extra, "read", async (client) =>
       compactActivity(await listCurrentActivity(client, { courseId, filterType, limit }))
     )
   );
@@ -361,7 +367,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       ),
     },
     async ({ courseId, number, threadId }, extra) =>
-      runTool(runtime, extra, false, async (client) => {
+      runTool(runtime, extra, "read", async (client) => {
         // The schema refinement guarantees exactly one of the two lookup forms.
         const thread = courseId !== undefined && number !== undefined
           ? await client.fetchCourseThread(await resolveCourseId(client, courseId), number)
@@ -380,7 +386,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
         lessonId: z.number().int().positive().describe("Ed lesson ID."),
       }),
     },
-    async ({ lessonId }, extra) => runTool(runtime, extra, false, async (client) =>
+    async ({ lessonId }, extra) => runTool(runtime, extra, "read", async (client) =>
       textResult(lessonToMarkdown(await client.fetchLesson(lessonId)))
     )
   );
@@ -395,7 +401,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
         slideId: z.number().int().positive().describe("Ed lesson slide ID."),
       }),
     },
-    async ({ slideId }, extra) => runTool(runtime, extra, false, async (client) =>
+    async ({ slideId }, extra) => runTool(runtime, extra, "read", async (client) =>
       textResult(slideToMarkdown(await client.fetchSlide(slideId)))
     )
   );
@@ -419,7 +425,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       title: "Mark lessons read",
     },
     async ({ all, courseId, delaySeconds, queries }, extra) =>
-      runTool(runtime, extra, true, (client) =>
+      runTool(runtime, extra, "write", (client) =>
         readLessons(client, courseId, queries, { all, delaySeconds })
       )
   );
@@ -442,7 +448,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       }),
       title: "Submit slide answer",
     },
-    async ({ amend, choices, questionId }, extra) => runTool(runtime, extra, true, (client) =>
+    async ({ amend, choices, questionId }, extra) => runTool(runtime, extra, "write", (client) =>
       client.submitSlideAnswer(questionId, choices.map((choice) => choice - 1), { amend })
     )
   );
@@ -459,7 +465,94 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       }),
       title: "Submit slide",
     },
-    async ({ slideId }, extra) => runTool(runtime, extra, true, (client) => client.submitSlide(slideId))
+    async ({ slideId }, extra) => runTool(runtime, extra, "write", (client) => client.submitSlide(slideId))
+  );
+
+  server.registerTool(
+    "create_thread",
+    {
+      annotations: WRITE,
+      description: toolDescription("create_thread"),
+      title: "Create thread",
+      inputSchema: z.object({
+        anonymous: z.boolean().optional().default(false).describe(
+          "Hide the author name from other students. Staff can still see it."
+        ),
+        body: z.string().trim().min(1).describe(
+          "Post body in Markdown. It is converted to Ed's document format before posting."
+        ),
+        category: z.string().trim().min(1).optional().describe(
+          'Exact top-level category for the course, for example "Applied".'
+        ),
+        courseId: COURSE_REFERENCE,
+        private: z.boolean().optional().default(false).describe(
+          "Post privately to course staff instead of the whole course."
+        ),
+        title: z.string().trim().min(1).describe("Thread title shown in the course thread list."),
+        type: z.enum(["question", "post", "announcement"]).describe(
+          'Ed thread type. Use "question" to ask, "post" to discuss; "announcement" needs staff rights.'
+        ),
+      }),
+    },
+    async ({ anonymous, body, category, courseId, private: isPrivate, title, type }, extra) =>
+      runTool(runtime, extra, "post", async (client) =>
+        projectThreadDetail(await client.createThread(
+          await resolveCourseId(client, courseId),
+          {
+            anonymous,
+            category,
+            content: markdownToEdDocument(body),
+            private: isPrivate,
+            title,
+            type,
+          }
+        ))
+      )
+  );
+
+  server.registerTool(
+    "reply_thread",
+    {
+      annotations: WRITE,
+      description: toolDescription("reply_thread"),
+      title: "Reply to thread",
+      inputSchema: z.object({
+        anonymous: z.boolean().optional().default(false).describe(
+          "Hide the author name from other students. Staff can still see it."
+        ),
+        as: z.enum(["answer", "comment"]).optional().describe(
+          'Reply kind. Defaults to "answer" on question threads and "comment" elsewhere.'
+        ),
+        body: z.string().trim().min(1).describe(
+          "Reply body in Markdown. It is converted to Ed's document format before posting."
+        ),
+        private: z.boolean().optional().default(false).describe(
+          "Post privately to course staff instead of the whole course."
+        ),
+        threadId: z.number().int().positive().describe("Global Ed thread ID to reply to."),
+        toCommentId: z.number().int().positive().optional().describe(
+          "Reply under this comment of the thread instead of at the top level. "
+          + "The comment must belong to threadId."
+        ),
+      }),
+    },
+    async ({ anonymous, as, body, private: isPrivate, threadId, toCommentId }, extra) =>
+      runTool(runtime, extra, "post", async (client) => {
+        const thread = await client.fetchThread(threadId);
+        if (toCommentId !== undefined) {
+          assertCommentInThread(thread, toCommentId);
+        }
+        const input = {
+          anonymous,
+          content: markdownToEdDocument(body),
+          private: isPrivate,
+          type: as ?? defaultReplyType(thread.type),
+        };
+        const comment = toCommentId === undefined
+          ? await client.createThreadReply(threadId, input)
+          : await client.createCommentReply(toCommentId, input);
+        return { ...projectComment(comment), threadId };
+      })
   );
 
   server.registerTool(
@@ -470,7 +563,7 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
       inputSchema: z.object({ courseId: COURSE_REFERENCE }),
       title: "List lesson modules",
     },
-    async ({ courseId }, extra) => runTool(runtime, extra, false, async (client) => {
+    async ({ courseId }, extra) => runTool(runtime, extra, "read", async (client) => {
       const { lessons, modules } = await client.fetchLessons(await resolveCourseId(client, courseId));
       return modules.map((module) =>
         projectModule(module, lessons.filter((lesson) => lesson.moduleId === module.id).length)
@@ -522,11 +615,17 @@ function triagePrompt(courseId: string, limit: string | undefined): string {
 async function runTool(
   runtime: EdMcpRuntime,
   context: McpToolContext,
-  writes: boolean,
+  mode: ToolMode,
   action: (client: EdClient) => Promise<unknown>
 ): Promise<ToolResult> {
-  if (writes && !runtime.canWrite(context)) {
+  if (mode !== "read" && !runtime.canWrite(context)) {
     return jsonError("INSUFFICIENT_SCOPE", "Write access is required for this tool.");
+  }
+  if (mode === "post" && !(runtime.canPost ?? runtime.canWrite)(context)) {
+    return jsonError(
+      "INSUFFICIENT_SCOPE",
+      "Posting is disabled; set EDSTEM_ALLOW_POSTING=1 for edstem-mcp."
+    );
   }
   try {
     const result = await action(await runtime.getClient(context));
@@ -554,6 +653,8 @@ async function runTool(
     return jsonError("EDSTEM_UPSTREAM_ERROR", message);
   }
 }
+
+type ToolMode = "read" | "write" | "post";
 
 type ToolResult = {
   content: Array<

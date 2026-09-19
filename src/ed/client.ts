@@ -46,6 +46,24 @@ export interface SlideSubmitResult {
   submitted: boolean;
 }
 
+export interface ThreadCreateInput {
+  anonymous?: boolean;
+  category?: string;
+  /** Ed document XML, as produced by markdownToEdDocument. */
+  content: string;
+  private?: boolean;
+  title: string;
+  type: string;
+}
+
+export interface CommentCreateInput {
+  anonymous?: boolean;
+  /** Ed document XML, as produced by markdownToEdDocument. */
+  content: string;
+  private?: boolean;
+  type: "answer" | "comment";
+}
+
 export interface EdClientOptions {
   apiBaseUrl?: string;
   fetch?: FetchLike;
@@ -138,6 +156,38 @@ export class EdClient {
       );
     }
     return response;
+  }
+
+  async createThread(courseId: number, input: ThreadCreateInput): Promise<Thread> {
+    const data = await this.post(`courses/${courseId}/threads`, {
+      jsonBody: {
+        thread: {
+          anonymous_comments: false,
+          category: input.category ?? "",
+          content: input.content,
+          is_anonymous: Boolean(input.anonymous),
+          is_megathread: false,
+          is_pinned: false,
+          is_private: Boolean(input.private),
+          subcategory: "",
+          subsubcategory: "",
+          title: input.title,
+          type: input.type
+        }
+      }
+    });
+    if (!data) {
+      throw new EdApiError("upstream", 0, "Ed API returned an empty response.");
+    }
+    return parseThread(asRecord(data.thread ?? data));
+  }
+
+  async createThreadReply(threadId: number, input: CommentCreateInput): Promise<Comment> {
+    return this.createComment(`threads/${threadId}/comments`, input);
+  }
+
+  async createCommentReply(commentId: number, input: CommentCreateInput): Promise<Comment> {
+    return this.createComment(`comments/${commentId}/comments`, input);
   }
 
   async completeSlide(slideId: number): Promise<void> {
@@ -261,6 +311,23 @@ export class EdClient {
       return parseCourse(course, asString(role.role));
     });
     return { courses, user };
+  }
+
+  private async createComment(path: string, input: CommentCreateInput): Promise<Comment> {
+    const data = await this.post(path, {
+      jsonBody: {
+        comment: {
+          content: input.content,
+          is_anonymous: Boolean(input.anonymous),
+          is_private: Boolean(input.private),
+          type: input.type
+        }
+      }
+    });
+    if (!data) {
+      throw new EdApiError("upstream", 0, "Ed API returned an empty response.");
+    }
+    return parseComment(asRecord(data.comment ?? data));
   }
 
   private async get(

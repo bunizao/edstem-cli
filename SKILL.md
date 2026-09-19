@@ -47,6 +47,9 @@ edstem units --fields id,code,name
 | edstem threads search | Search threads in a unit by words in the title and body. | <unit> <query...> | -n, --max <count><br>-s, --sort <order><br>-c, --category <category><br>--subcategory <subcategory><br>-t, --type <type><br>--answered<br>--unanswered<br>--offset <count><br>--since <when> | no |
 | edstem threads show | Show a thread by ID or unit ID/code plus #number. | <reference> | --include-html | no |
 | edstem threads read | Read a thread body as Markdown. | <reference> |  | no |
+| edstem threads send | Post a new thread in a unit. | <unit> | --title <title><br>--body <markdown><br>--body-file <path><br>--type <type><br>-c, --category <category><br>--private<br>--anonymous | yes |
+| edstem replies | Post replies to Ed threads. |  |  | no |
+| edstem replies send | Post a reply to a thread or to one of its comments. | <reference> | --body <markdown><br>--body-file <path><br>--as <kind><br>--to <commentId><br>--private<br>--anonymous | yes |
 | edstem lessons | List, show, read, or mark lessons as read. |  |  | no |
 | edstem lessons list | List lessons in a unit. | <unit> | --module <module><br>--type <type><br>--state <state><br>--status <status> | no |
 | edstem lessons show | Show one lesson and its slides. | <lesson> |  | no |
@@ -94,6 +97,8 @@ Run `edstem commands --json` for machine-readable metadata, including aliases, e
 | list_thread_files | List Ed-hosted downloadable files and direct resource links attached to one thread, including its answers and comments. |
 | search_threads | Search threads in one course. Every query word must appear, case-insensitively, in the thread title or body; Ed is paged client-side until limit threads match. Accepts the same filters as list_threads. |
 | list_modules | List the lesson modules of one course with the number of lessons in each. courseId accepts a numeric ID or course code. Use it to pick a module value for list_lessons. |
+| create_thread | Create a thread in one course. body is Markdown and is converted to Ed's document format. The thread is posted publicly to the course as the token owner and cannot be removed from here; ask the user before calling it. |
+| reply_thread | Reply to one thread, or to one comment inside it. body is Markdown and is converted to Ed's document format. The reply is posted publicly as the token owner and cannot be removed from here; ask the user before calling it. |
 
 ## Errors
 
