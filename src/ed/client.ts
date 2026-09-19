@@ -59,8 +59,10 @@ export interface EdClientOptions {
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 const RETRYABLE_STATUS = new Set([429, 502, 503, 504]);
+const USER_CACHE_TTL_MS = 60_000;
 
 export class EdClient {
+  private cachedUser?: { expiresAt: number; value: Promise<UserWithCourses> };
   private readonly apiBaseUrl: string;
   private readonly fetch: FetchLike;
   private readonly maxRetries: number;
@@ -184,16 +186,16 @@ export class EdClient {
   }
 
   async fetchUser(): Promise<UserWithCourses> {
-    const data = await this.get("user");
-    const userData = asRecord(data.user);
-    const user = parseUser(userData);
-    const courses = asArray(data.courses).map((enrollment) => {
-      const record = asRecord(enrollment);
-      const course = asRecord(record.course);
-      const role = asRecord(record.role);
-      return parseCourse(course, asString(role.role));
+    if (this.cachedUser && this.cachedUser.expiresAt > Date.now()) {
+      return this.cachedUser.value;
+    }
+    const value = this.requestUser();
+    this.cachedUser = { expiresAt: Date.now() + USER_CACHE_TTL_MS, value };
+    // A failed lookup must not be cached, but an in-flight one is shared.
+    value.catch(() => {
+      if (this.cachedUser?.value === value) this.cachedUser = undefined;
     });
-    return { courses, user };
+    return value;
   }
 
   async fetchUserActivity(
@@ -246,6 +248,19 @@ export class EdClient {
       slideCompleted: Boolean(data.slide_completed),
       solution: data.solution ?? null
     };
+  }
+
+  private async requestUser(): Promise<UserWithCourses> {
+    const data = await this.get("user");
+    const userData = asRecord(data.user);
+    const user = parseUser(userData);
+    const courses = asArray(data.courses).map((enrollment) => {
+      const record = asRecord(enrollment);
+      const course = asRecord(record.course);
+      const role = asRecord(record.role);
+      return parseCourse(course, asString(role.role));
+    });
+    return { courses, user };
   }
 
   private async get(

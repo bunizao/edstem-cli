@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { EdAuthExpiredError, EdClient, type FetchLike } from "../src/ed/client.js";
 
@@ -16,6 +16,10 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe("EdClient", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("fetches identity with one authenticated request", async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(jsonResponse(fixture("user_info")));
     const client = new EdClient({ apiBaseUrl: "https://ed.example/api", fetch, token: "secret" });
@@ -123,6 +127,40 @@ describe("EdClient", () => {
 
     await expect(client.fetchUser()).rejects.toBeInstanceOf(EdAuthExpiredError);
     await expect(client.fetchUser()).rejects.not.toThrow(/never-print-this/);
+  });
+
+  it("serves a repeated identity lookup from the memo", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(jsonResponse(fixture("user_info")));
+    const client = new EdClient({ fetch, token: "secret" });
+
+    const [first, second] = await Promise.all([client.fetchUser(), client.fetchUser()]);
+    await client.fetchUser();
+
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(first).toBe(second);
+  });
+
+  it("refetches the identity after the memo expires", async () => {
+    vi.useFakeTimers();
+    const fetch = vi.fn<FetchLike>().mockImplementation(async () => jsonResponse(fixture("user_info")));
+    const client = new EdClient({ fetch, token: "secret" });
+
+    await client.fetchUser();
+    vi.advanceTimersByTime(61_000);
+    await client.fetchUser();
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not memoize a failed identity lookup", async () => {
+    const fetch = vi.fn<FetchLike>()
+      .mockResolvedValueOnce(jsonResponse({ code: "bad_token" }, 401))
+      .mockResolvedValueOnce(jsonResponse(fixture("user_info")));
+    const client = new EdClient({ fetch, token: "secret" });
+
+    await expect(client.fetchUser()).rejects.toBeInstanceOf(EdAuthExpiredError);
+    await expect(client.fetchUser()).resolves.toMatchObject({ user: { id: 12345 } });
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("retries a rate-limited read with exponential backoff", async () => {
