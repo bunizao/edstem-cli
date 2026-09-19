@@ -103,6 +103,8 @@ edstem slides submit 4401 --yes
 
 ### Posting
 
+Posting request and response formats have been checked with mocked Ed responses only; they have not been verified against the live Ed API. `--dry-run` previews the generated document and plan, but does not validate the live API contract.
+
 Posting publishes to the unit forum under your own name and cannot be undone from this tool. Review the plan first with `--dry-run`, which also prints the Ed XML that will be sent.
 
 ```bash

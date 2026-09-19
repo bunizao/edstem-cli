@@ -222,6 +222,20 @@ describe("EdClient", () => {
     expect(sleep).not.toHaveBeenCalled();
   });
 
+  it.each([429, 503])("does not retry a new thread after HTTP %s", async (status) => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(jsonResponse({ message: "try later" }, status));
+    const sleep = vi.fn(async () => undefined);
+    const client = new EdClient({ fetch, sleep, token: "test-token" });
+
+    await expect(client.createThread(100, {
+      content: "<document><paragraph>Mock post</paragraph></document>",
+      title: "Mock post",
+      type: "post",
+    })).rejects.toThrow(`HTTP ${status}`);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
   it("creates a thread with the Ed thread envelope", async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(
       jsonResponse({ thread: { id: 5001, number: 42, title: "Install Python", type: "question" } })
