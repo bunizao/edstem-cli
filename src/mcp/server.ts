@@ -20,9 +20,11 @@ import {
   projectLessonSummary,
   projectQuestion,
   projectQuestionResponse,
+  projectSlide,
   projectThreadDetail,
   projectThreadSummary,
 } from "../ed/projections.js";
+import { lessonToMarkdown, slideToMarkdown, threadToMarkdown } from "../markdown.js";
 import { VERSION } from "../version.js";
 import { toolDescription } from "./catalog.js";
 
@@ -155,6 +157,18 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
   );
 
   server.registerTool(
+    "get_slide",
+    {
+      annotations: READ_ONLY,
+      description: toolDescription("get_slide"),
+      inputSchema: z.object({ slideId: z.number().int().positive() }),
+    },
+    async ({ slideId }, extra) => runTool(runtime, extra, false, async (client) =>
+      projectSlide(await client.fetchSlide(slideId))
+    )
+  );
+
+  server.registerTool(
     "list_threads",
     {
       annotations: READ_ONLY,
@@ -240,6 +254,64 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     },
     async ({ courseId, filterType, limit }, extra) => runTool(runtime, extra, false, async (client) =>
       compactActivity(await listCurrentActivity(client, { courseId, filterType, limit }))
+    )
+  );
+
+  server.registerTool(
+    "read_thread",
+    {
+      annotations: READ_ONLY,
+      description: toolDescription("read_thread"),
+      inputSchema: z.object({
+        courseId: COURSE_REFERENCE.optional(),
+        number: z.number().int().positive().optional().describe(
+          "Course-local thread number; requires courseId."
+        ),
+        threadId: z.number().int().positive().optional().describe(
+          "Global Ed thread ID; use instead of courseId and number."
+        ),
+      }).refine(
+        ({ courseId, number, threadId }) => threadId === undefined
+          ? courseId !== undefined && number !== undefined
+          : courseId === undefined && number === undefined,
+        { message: "Provide either threadId, or both courseId and number." }
+      ),
+    },
+    async ({ courseId, number, threadId }, extra) =>
+      runTool(runtime, extra, false, async (client) => {
+        // The schema refinement guarantees exactly one of the two lookup forms.
+        const thread = courseId !== undefined && number !== undefined
+          ? await client.fetchCourseThread(await resolveCourseId(client, courseId), number)
+          : await client.fetchThread(threadId!);
+        return textResult(threadToMarkdown(thread));
+      })
+  );
+
+  server.registerTool(
+    "read_lesson",
+    {
+      annotations: READ_ONLY,
+      description: toolDescription("read_lesson"),
+      inputSchema: z.object({
+        lessonId: z.number().int().positive().describe("Ed lesson ID."),
+      }),
+    },
+    async ({ lessonId }, extra) => runTool(runtime, extra, false, async (client) =>
+      textResult(lessonToMarkdown(await client.fetchLesson(lessonId)))
+    )
+  );
+
+  server.registerTool(
+    "read_slide",
+    {
+      annotations: READ_ONLY,
+      description: toolDescription("read_slide"),
+      inputSchema: z.object({
+        slideId: z.number().int().positive().describe("Ed lesson slide ID."),
+      }),
+    },
+    async ({ slideId }, extra) => runTool(runtime, extra, false, async (client) =>
+      textResult(slideToMarkdown(await client.fetchSlide(slideId)))
     )
   );
 
@@ -343,6 +415,10 @@ type ToolResult = {
 
 function jsonResult(payload: unknown): ToolResult {
   return { content: [{ type: "text", text: JSON.stringify(payload) }] };
+}
+
+function textResult(text: string): ToolResult {
+  return { content: [{ type: "text", text }] };
 }
 
 function jsonError(type: string, message: string, extra: Record<string, unknown> = {}): ToolResult {

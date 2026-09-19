@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { lessonToMarkdown, threadToMarkdown } from "../src/markdown.js";
+import { lessonToMarkdown, slideToMarkdown, threadToMarkdown } from "../src/markdown.js";
 import type { Comment, Lesson, LessonSlide, Thread, User } from "../src/ed/models.js";
 
 const staff: User = {
@@ -63,6 +63,37 @@ describe("Markdown export", () => {
     expect(output).toContain("#### Checklist");
     expect(output).toContain("[spec](https://example.com/spec)");
     expect(output).toContain("File: [starter.zip](https://example.com/starter.zip)");
+  });
+
+  it("renders one slide with its own heading and metadata", () => {
+    const output = slideToMarkdown(slide({
+      content: '<document><paragraph>Read the <link href="https://example.com/spec">spec</link></paragraph></document>',
+      index: 3,
+      title: "Recap",
+    }));
+
+    expect(output).toContain("# Recap");
+    expect(output).toContain("- **Slide ID:** 10");
+    expect(output).toContain("- **Lesson ID:** 7001");
+    expect(output).toContain("- **Course ID:** 100");
+    expect(output).toContain("- **Index:** 3");
+    expect(output).toContain("[spec](https://example.com/spec)");
+  });
+
+  it("links the file of a pdf slide", () => {
+    const output = slideToMarkdown(slide({
+      content: "",
+      fileUrl: "https://static.edusercontent.com/files/slides",
+      title: "Workshop Slides",
+      type: "pdf",
+    }));
+
+    expect(output).toContain("- **Type:** pdf");
+    expect(output).toContain("File: [Workshop Slides](https://static.edusercontent.com/files/slides)");
+  });
+
+  it("falls back to the slide index when a slide has no title", () => {
+    expect(slideToMarkdown(slide({ index: 4, title: "" }))).toContain("# Slide 4");
   });
 
   it("preserves literal angle brackets and malformed XML", () => {

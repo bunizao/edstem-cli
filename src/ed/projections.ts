@@ -4,6 +4,7 @@ import type {
   Lesson,
   LessonQuestion,
   LessonQuestionResponse,
+  LessonSlide,
   Thread,
   ThreadMetrics,
   User,
@@ -77,17 +78,28 @@ export function projectLessonDetail(lesson: Lesson): JsonObject {
   setNonEmpty(result, "createdAt", normalizeTimestamp(lesson.createdAt));
   setNonEmpty(result, "updatedAt", normalizeTimestamp(lesson.updatedAt));
   if (lesson.slides.length > 0) {
-    result.slides = lesson.slides.map((slide) => {
-      const projected: JsonObject = { id: slide.id, index: slide.index };
-      setNonEmpty(projected, "title", slide.title);
-      setNonEmpty(projected, "type", slide.type);
-      setNonEmpty(projected, "status", slide.status);
-      setNonEmpty(projected, "content", slide.content);
-      setNonEmpty(projected, "fileUrl", slide.fileUrl);
-      setTrue(projected, "hidden", slide.isHidden);
-      return projected;
-    });
+    result.slides = lesson.slides.map((slide) => projectSlide(slide, { omitParents: true }));
   }
+  return result;
+}
+
+// Lesson detail nests slides under their lesson, so it drops the redundant parent IDs.
+export function projectSlide(
+  slide: LessonSlide,
+  options: { omitParents?: boolean } = {}
+): JsonObject {
+  const result: JsonObject = { id: slide.id };
+  if (!options.omitParents) {
+    setPositive(result, "lessonId", slide.lessonId);
+    setPositive(result, "courseId", slide.courseId);
+  }
+  result.index = slide.index;
+  setNonEmpty(result, "title", slide.title);
+  setNonEmpty(result, "type", slide.type);
+  setNonEmpty(result, "status", slide.status);
+  setNonEmpty(result, "content", slide.content);
+  setNonEmpty(result, "fileUrl", slide.fileUrl);
+  setTrue(result, "hidden", slide.isHidden);
   return result;
 }
 

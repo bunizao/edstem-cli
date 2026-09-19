@@ -230,6 +230,113 @@ describe("stdio MCP adapter", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("projects a single slide instead of returning Ed's raw slide", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(JSON.stringify({
+      slide: {
+        content: "<document><paragraph>Recap</paragraph></document>",
+        course_id: 100,
+        id: 10,
+        index: 1,
+        is_hidden: false,
+        lesson_id: 7001,
+        title: "Recap",
+        type: "document",
+      },
+    }), { status: 200 }));
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const result = await client.callTool({ arguments: { slideId: 10 }, name: "get_slide" });
+
+    expect(parseToolResult(result)).toEqual({
+      content: "<document><paragraph>Recap</paragraph></document>",
+      courseId: 100,
+      id: 10,
+      index: 1,
+      lessonId: 7001,
+      title: "Recap",
+      type: "document",
+    });
+  });
+
+  it("returns thread Markdown for both read_thread lookup forms", async () => {
+    const byId = await connect(new EdClient({ fetch: threadFetch(), token: "test-token" }));
+
+    const direct = await byId.callTool({ arguments: { threadId: 5001 }, name: "read_thread" });
+
+    expect(direct.isError).not.toBe(true);
+    expect(toolText(direct)).toContain("# #1 How do I install Python?");
+
+    const fetch = threadFetch();
+    const byNumber = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const resolved = await byNumber.callTool({
+      arguments: { courseId: "CS101", number: 1 },
+      name: "read_thread",
+    });
+
+    expect(toolText(resolved)).toContain("# #1 How do I install Python?");
+    expect(fetch.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
+      "/api/user",
+      "/api/courses/100/threads/1",
+    ]);
+  });
+
+  it("rejects read_thread arguments that mix both lookup forms", async () => {
+    const fetch = threadFetch();
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const mixed = await client.callTool({
+      arguments: { courseId: 100, number: 1, threadId: 5001 },
+      name: "read_thread",
+    });
+    const incomplete = await client.callTool({
+      arguments: { courseId: 100 },
+      name: "read_thread",
+    });
+
+    expect(mixed.isError).toBe(true);
+    expect(toolText(mixed)).toContain("Provide either threadId, or both courseId and number.");
+    expect(incomplete.isError).toBe(true);
+    expect(toolText(incomplete)).toContain("Provide either threadId, or both courseId and number.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("returns lesson and slide Markdown as plain text", async () => {
+    const fetch = vi.fn<FetchLike>().mockImplementation(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === "/api/lessons/7001") {
+        return new Response(JSON.stringify({
+          lesson: {
+            id: 7001,
+            slides: [{ id: 10, index: 1, title: "Workshop Slides", type: "pdf" }],
+            title: "Workshop",
+          },
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        slide: {
+          file_url: "https://static.edusercontent.com/files/slides",
+          id: 10,
+          index: 1,
+          lesson_id: 7001,
+          title: "Workshop Slides",
+          type: "pdf",
+        },
+      }), { status: 200 });
+    });
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const lesson = await client.callTool({ arguments: { lessonId: 7001 }, name: "read_lesson" });
+    const slide = await client.callTool({ arguments: { slideId: 10 }, name: "read_slide" });
+
+    expect(toolText(lesson)).toContain("# Workshop");
+    expect(toolText(lesson)).toContain("### 1. Workshop Slides");
+    expect(toolText(slide)).toContain("# Workshop Slides");
+    expect(toolText(slide)).toContain(
+      "File: [Workshop Slides](https://static.edusercontent.com/files/slides)"
+    );
+  });
+
   it("enforces write scope at the MCP seam", async () => {
     const edClient = new EdClient({ fetch: vi.fn<FetchLike>(), token: "test-token" });
     const server = createEdMcpServer({ canWrite: () => false, getClient: () => edClient });
@@ -258,6 +365,20 @@ describe("stdio MCP adapter", () => {
 });
 
 function parseToolResult(result: Awaited<ReturnType<Client["callTool"]>>): unknown {
+  return JSON.parse(toolText(result)) as unknown;
+}
+
+function toolText(result: Awaited<ReturnType<Client["callTool"]>>): string {
   const content = result.content as Array<{ text?: string; type: string }>;
-  return JSON.parse(content[0]?.text ?? "null") as unknown;
+  return content[0]?.text ?? "null";
+}
+
+function threadFetch(): ReturnType<typeof vi.fn<FetchLike>> {
+  return vi.fn<FetchLike>().mockImplementation(async (input) => {
+    const path = new URL(String(input)).pathname;
+    if (path === "/api/user") {
+      return new Response(JSON.stringify(fixture("user_info")), { status: 200 });
+    }
+    return new Response(JSON.stringify(fixture("thread_detail")), { status: 200 });
+  });
 }

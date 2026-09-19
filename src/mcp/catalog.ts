@@ -19,6 +19,13 @@ export const MCP_TOOL_CATALOG = [
   ["mark_lessons_read", "Mark matching lessons and slides as read using a course ID or code."],
   ["submit_slide_answer", "Submit one-based quiz choices for one question."],
   ["submit_slide", "Submit all saved answers for one quiz slide."],
+  ["get_slide", "Get one lesson slide with its content."],
+  [
+    "read_thread",
+    "Read one thread as Markdown. Pass either threadId, or courseId plus the course-local number.",
+  ],
+  ["read_lesson", "Read one lesson and its slides as Markdown."],
+  ["read_slide", "Read one lesson slide as Markdown."],
 ] as const;
 
 export type McpToolName = typeof MCP_TOOL_CATALOG[number][0];

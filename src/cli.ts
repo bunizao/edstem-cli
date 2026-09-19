@@ -43,11 +43,12 @@ import {
   projectLessonSummary,
   projectQuestion,
   projectQuestionResponse,
+  projectSlide,
   projectThreadDetail,
   projectThreadSummary,
 } from "./ed/projections.js";
 import { normalizeEdError } from "./errors.js";
-import { lessonToMarkdown, threadToMarkdown } from "./markdown.js";
+import { lessonToMarkdown, slideToMarkdown, threadToMarkdown } from "./markdown.js";
 import { isMainModule } from "./main.js";
 import { writeGeneratedSkill } from "./skills.js";
 import { applyUpdate, checkForUpdate } from "./update.js";
@@ -81,13 +82,13 @@ const NOUNS: readonly NounSpec[] = [
   },
   {
     name: "lessons",
-    verbs: ["list", "show", "mark-read"],
+    verbs: ["list", "show", "read", "mark-read"],
     defaultByArity: { 1: "list" },
     valueFlags: ["--module", "--type", "--state", "--status", "--delay"],
   },
   {
     name: "slides",
-    verbs: ["show", "submit"],
+    verbs: ["show", "read", "submit"],
     defaultByArity: { 1: "show" },
     valueFlags: ["--section", "--question", "--choice"],
   },
@@ -260,7 +261,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
       threadToMarkdown(await resolveThread(client, reference))
     ));
 
-  const lessons = program.command("lessons").description("List, show, or mark lessons as read.");
+  const lessons = program.command("lessons").description("List, show, read, or mark lessons as read.");
   lessons.command("list")
     .description("List lessons in a unit.")
     .argument("<unit>", "Unit ID or code", unitIdentifier)
@@ -282,6 +283,12 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     .argument("<lesson>", "Lesson ID", positiveInteger("<lesson>"))
     .action(outputAction(runtime, async (client, _command, lesson: number) =>
       projectLessonDetail(await client.fetchLesson(lesson))
+    ));
+  lessons.command("read")
+    .description("Read a lesson and its slides as Markdown.")
+    .argument("<lesson>", "Lesson ID", positiveInteger("<lesson>"))
+    .action(textAction(runtime, async (client, _command, lesson: number) =>
+      lessonToMarkdown(await client.fetchLesson(lesson))
     ));
   mutating(lessons.command("mark-read")
     .description("Mark matching lessons and slides as read.")
@@ -308,7 +315,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
         })
     )));
 
-  const slides = program.command("slides").description("Inspect or submit lesson slides.");
+  const slides = program.command("slides").description("Show, read, or submit lesson slides.");
   slides.command("show")
     .description("Show slide content, questions, responses, or quiz context.")
     .argument("<slide>", "Slide ID", positiveInteger("<slide>"))
@@ -321,8 +328,14 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
       if (section === "responses") {
         return (await client.fetchSlideQuestionResponses(slide)).map(projectQuestionResponse);
       }
-      return client.fetchSlide(slide);
+      return projectSlide(await client.fetchSlide(slide));
     }));
+  slides.command("read")
+    .description("Read one slide as Markdown.")
+    .argument("<slide>", "Slide ID", positiveInteger("<slide>"))
+    .action(textAction(runtime, async (client, _command, slide: number) =>
+      slideToMarkdown(await client.fetchSlide(slide))
+    ));
   mutating(slides.command("submit")
     .description("Save one answer or submit all saved answers for a slide.")
     .argument("<slide>", "Slide ID", positiveInteger("<slide>"))

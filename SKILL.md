@@ -46,12 +46,14 @@ edstem units --fields id,code,name
 | edstem threads list | List threads in a unit. | <unit> | -n, --max <count><br>-s, --sort <order><br>-c, --category <category><br>--subcategory <subcategory><br>-t, --type <type><br>--answered<br>--unanswered | no |
 | edstem threads show | Show a thread by ID or unit ID/code plus #number. | <reference> | --include-html | no |
 | edstem threads read | Read a thread body as Markdown. | <reference> |  | no |
-| edstem lessons | List, show, or mark lessons as read. |  |  | no |
+| edstem lessons | List, show, read, or mark lessons as read. |  |  | no |
 | edstem lessons list | List lessons in a unit. | <unit> | --module <module><br>--type <type><br>--state <state><br>--status <status> | no |
 | edstem lessons show | Show one lesson and its slides. | <lesson> |  | no |
+| edstem lessons read | Read a lesson and its slides as Markdown. | <lesson> |  | no |
 | edstem lessons mark-read | Mark matching lessons and slides as read. | <unit> [queries...] | --all<br>--delay <seconds> | yes |
-| edstem slides | Inspect or submit lesson slides. |  |  | no |
+| edstem slides | Show, read, or submit lesson slides. |  |  | no |
 | edstem slides show | Show slide content, questions, responses, or quiz context. | <slide> | --section <section> | no |
+| edstem slides read | Read one slide as Markdown. | <slide> |  | no |
 | edstem slides submit | Save one answer or submit all saved answers for a slide. | <slide> | --question <question><br>--choice <number><br>--amend | yes |
 | edstem files | List or download Ed-hosted lesson files. |  |  | no |
 | edstem files list | List Ed-hosted downloadable files in one lesson. | <lesson> |  | no |
@@ -84,6 +86,10 @@ Run `edstem commands --json` for machine-readable metadata, including aliases, e
 | mark_lessons_read | Mark matching lessons and slides as read using a course ID or code. |
 | submit_slide_answer | Submit one-based quiz choices for one question. |
 | submit_slide | Submit all saved answers for one quiz slide. |
+| get_slide | Get one lesson slide with its content. |
+| read_thread | Read one thread as Markdown. Pass either threadId, or courseId plus the course-local number. |
+| read_lesson | Read one lesson and its slides as Markdown. |
+| read_slide | Read one lesson slide as Markdown. |
 
 ## Errors
 
