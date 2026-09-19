@@ -362,7 +362,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
           summary: `Upgrade edstem-cli from ${info.currentVersion} to ${info.latestVersion} ` +
             `with \`${info.upgradeCommand}\`.`,
         }),
-        async () => ({ ...info, upgraded: Boolean(applyUpdate()) })
+        async () => ({ ...info, ranCommand: applyUpdate() })
       )(command);
     }));
 

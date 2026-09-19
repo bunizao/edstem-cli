@@ -90,4 +90,21 @@ describe("edstem update", () => {
     expect(stdout).toEqual([]);
     expect(spawnSync).not.toHaveBeenCalled();
   });
+
+  it("installs the release once the mutation is confirmed", async () => {
+    const { runtime, stdout } = makeRuntime("9.9.9");
+    spawnSync.mockReturnValue({ status: 0 });
+
+    expect(await run(["node", "edstem", "update", "--yes", "--json"], runtime)).toBe(0);
+
+    expect(spawnSync).toHaveBeenCalledWith(
+      "npm",
+      ["install", "-g", "edstem-cli@latest"],
+      { stdio: "inherit" }
+    );
+    expect(JSON.parse(stdout.join(""))).toMatchObject({
+      latestVersion: "9.9.9",
+      ranCommand: "npm install -g edstem-cli@latest",
+    });
+  });
 });
