@@ -3,7 +3,12 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 
 import { EdClient, type FetchLike } from "../src/ed/client.js";
-import { projectThreadDetail, projectThreadSummary } from "../src/ed/projections.js";
+import {
+  projectLessonDetail,
+  projectSlide,
+  projectThreadDetail,
+  projectThreadSummary,
+} from "../src/ed/projections.js";
 
 function fixture(name: string): unknown {
   return JSON.parse(readFileSync(new URL(`fixtures/${name}.json`, import.meta.url), "utf8"));
@@ -37,6 +42,60 @@ describe("agent projections", () => {
     expect(result).toHaveProperty("answers.0.byStaff", true);
     expect(result).toHaveProperty("endorsement.staffReplyCount", 1);
     expect(JSON.stringify(result)).not.toContain("<document");
+  });
+
+  it("projects a slide with its parent IDs and drops Ed's raw flag names", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(JSON.stringify({
+      slide: {
+        content: "<document><paragraph>Recap</paragraph></document>",
+        course_id: 100,
+        id: 10,
+        index: 2,
+        is_hidden: true,
+        lesson_id: 7001,
+        status: "completed",
+        title: "Recap",
+        type: "document",
+      },
+    }), { status: 200 }));
+    const slide = await new EdClient({ fetch, token: "secret" }).fetchSlide(10);
+
+    expect(projectSlide(slide)).toEqual({
+      content: "<document><paragraph>Recap</paragraph></document>",
+      courseId: 100,
+      hidden: true,
+      id: 10,
+      index: 2,
+      lessonId: 7001,
+      status: "completed",
+      title: "Recap",
+      type: "document",
+    });
+  });
+
+  it("omits the redundant parent IDs from slides nested in lesson detail", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(JSON.stringify({
+      lesson: {
+        course_id: 100,
+        id: 7001,
+        module_id: 1,
+        slides: [{
+          content: "Recap",
+          course_id: 100,
+          id: 10,
+          index: 1,
+          lesson_id: 7001,
+          title: "Recap",
+          type: "document",
+        }],
+        title: "Workshop",
+      },
+    }), { status: 200 }));
+    const lesson = await new EdClient({ fetch, token: "secret" }).fetchLesson(7001);
+
+    expect(projectLessonDetail(lesson).slides).toEqual([
+      { content: "Recap", id: 10, index: 1, title: "Recap", type: "document" },
+    ]);
   });
 
   it("includes source HTML only when requested", async () => {

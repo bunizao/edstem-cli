@@ -1,6 +1,6 @@
 import { HTMLElement, type Node, parse } from "node-html-parser";
 
-import type { Comment, Lesson, Thread, User } from "./ed/models.js";
+import type { Comment, Lesson, LessonSlide, Thread, User } from "./ed/models.js";
 
 const ED_XML_TAG = /<(?:document|paragraph|heading|list|list-item|link|file|break|code|pre)\b/i;
 
@@ -31,13 +31,30 @@ export function lessonToMarkdown(lesson: Lesson): string {
   }
   lines.push("", "## Slides", "");
   for (const slide of lesson.slides) {
-    lines.push(`### ${slide.index || 1}. ${slide.title || `Slide ${slide.index || 1}`}`, "");
+    lines.push(`### ${slide.index || 1}. ${slideTitle(slide)}`, "");
     addMetadata(lines, "Slide ID", slide.id);
     addMetadata(lines, "Type", slide.type);
     addMetadata(lines, "Status", slide.status);
     if (slide.content) {
       lines.push("", renderEdText(slide.content, 2), "");
     }
+  }
+  return `${lines.join("\n").trimEnd()}\n`;
+}
+
+export function slideToMarkdown(slide: LessonSlide): string {
+  const lines = [`# ${slideTitle(slide)}`, ""];
+  addMetadata(lines, "Slide ID", slide.id);
+  addMetadata(lines, "Lesson ID", slide.lessonId);
+  addMetadata(lines, "Course ID", slide.courseId);
+  addMetadata(lines, "Index", slide.index);
+  addMetadata(lines, "Type", slide.type);
+  addMetadata(lines, "Status", slide.status);
+  if (slide.fileUrl) {
+    lines.push("", `File: [${slideTitle(slide)}](${slide.fileUrl})`);
+  }
+  if (slide.content) {
+    lines.push("", renderEdText(slide.content));
   }
   return `${lines.join("\n").trimEnd()}\n`;
 }
@@ -138,6 +155,10 @@ function addMetadata(lines: string[], label: string, value: string | number): vo
   if (value !== "" && value !== 0) {
     lines.push(`- **${label}:** ${value}`);
   }
+}
+
+function slideTitle(slide: LessonSlide): string {
+  return slide.title || `Slide ${slide.index || 1}`;
 }
 
 function authorName(user: User | null, anonymous: boolean): string {
