@@ -9,6 +9,7 @@ import {
   listCurrentActivity,
   listLessons,
   listThreads,
+  parseSinceValue,
   readLessons,
   resolveCourseId,
 } from "../ed/operations.js";
@@ -35,6 +36,29 @@ const COURSE_REFERENCE = z.union([
   z.number().int().positive(),
   z.string().trim().min(1),
 ]).describe('Ed course ID or exact course code, for example 38435 or "FIT2014".');
+const THREAD_LIST_SHAPE = {
+  answered: z.boolean().optional(),
+  category: z.string().trim().min(1).optional().describe(
+    'Exact top-level category, for example "Applied".'
+  ),
+  courseId: COURSE_REFERENCE,
+  limit: z.number().int().positive().max(100).optional().default(30),
+  offset: z.number().int().min(0).optional().default(0).describe(
+    "Threads to skip in the unfiltered Ed stream before filtering."
+  ),
+  since: z.string().trim().min(1).optional().describe(
+    'Only threads created at or after this time: an ISO date such as "2026-09-01", an ISO datetime such as "2026-09-01T10:00:00Z", or a relative offset such as "7d", "12h", or "2w".'
+  ),
+  sort: z.enum(["new", "old", "top", "hot"]).optional().default("new").describe(
+    'Ed sort order. Defaults to "new"; Ed may keep pinned threads ahead of that order.'
+  ),
+  subcategory: z.string().trim().min(1).optional().describe(
+    'Exact second-level subcategory, for example "MiniTests".'
+  ),
+  threadType: z.string().trim().min(1).optional().describe(
+    'Exact thread type, for example "question" or "post".'
+  ),
+};
 
 export interface McpToolContext {
   http?: {
@@ -185,37 +209,30 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     {
       annotations: READ_ONLY,
       description: toolDescription("list_threads"),
+      inputSchema: z.object(THREAD_LIST_SHAPE),
+    },
+    async ({ since, ...input }, extra) => runTool(runtime, extra, false, async (client) =>
+      (await listThreads(client, { ...input, since: since ? parseSinceValue(since) : undefined }))
+        .map(projectThreadSummary)
+    )
+  );
+
+  server.registerTool(
+    "search_threads",
+    {
+      annotations: READ_ONLY,
+      description: toolDescription("search_threads"),
       inputSchema: z.object({
-        answered: z.boolean().optional(),
-        category: z.string().trim().min(1).optional().describe(
-          'Exact top-level category, for example "Applied".'
-        ),
-        courseId: COURSE_REFERENCE,
-        limit: z.number().int().positive().max(100).optional().default(30),
-        sort: z.enum(["new", "old", "top", "hot"]).optional().default("new").describe(
-          'Ed sort order. Defaults to "new"; Ed may keep pinned threads ahead of that order.'
-        ),
-        subcategory: z.string().trim().min(1).optional().describe(
-          'Exact second-level subcategory, for example "MiniTests".'
-        ),
-        threadType: z.string().trim().min(1).optional().describe(
-          'Exact thread type, for example "question" or "post".'
+        ...THREAD_LIST_SHAPE,
+        query: z.string().trim().min(1).describe(
+          "Words that must all appear, case-insensitively, in the thread title or body."
         ),
       }),
     },
-    async ({ answered, category, courseId, limit, sort, subcategory, threadType }, extra) =>
-      runTool(runtime, extra, false, async (client) =>
-        (await listThreads(client, {
-          answered,
-          category,
-          courseId,
-          limit,
-          sort,
-          subcategory,
-          threadType,
-        }))
-          .map(projectThreadSummary)
-      )
+    async ({ since, ...input }, extra) => runTool(runtime, extra, false, async (client) =>
+      (await listThreads(client, { ...input, since: since ? parseSinceValue(since) : undefined }))
+        .map(projectThreadSummary)
+    )
   );
 
   server.registerTool(

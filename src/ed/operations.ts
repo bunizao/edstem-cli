@@ -1,17 +1,23 @@
 import type { EdClient } from "./client.js";
-import { filterThreads } from "./filter.js";
+import {
+  filterThreads,
+  hasThreadFilters,
+  isThreadOlderThan,
+  parseSince,
+  type ThreadFilterOptions,
+} from "./filter.js";
 import type { Course, Lesson, Thread } from "./models.js";
+
+/** Hard cap on Ed requests per filtered thread listing. */
+const THREAD_PAGE_CAP = 10;
 
 export type CourseReference = number | string;
 
-export interface ThreadListOptions {
-  answered?: boolean;
-  category?: string;
+export interface ThreadListOptions extends ThreadFilterOptions {
   courseId: CourseReference;
   limit: number;
+  offset?: number;
   sort: string;
-  subcategory?: string;
-  threadType?: string;
 }
 
 export class EdInputError extends Error {
@@ -30,12 +36,53 @@ export class EdCourseNotFoundError extends EdInputError {
 
 export async function listThreads(client: EdClient, options: ThreadListOptions): Promise<Thread[]> {
   assertPositive(options.limit, "--max");
+  const offset = options.offset ?? 0;
+  assertNonNegative(offset, "--offset");
   const courseId = await resolveCourseId(client, options.courseId);
-  const threads = await client.fetchThreads(courseId, {
-    limit: Math.min(options.limit, 100),
-    sort: options.sort,
-  });
-  return filterThreads(threads, options);
+  if (!hasThreadFilters(options)) {
+    return client.fetchThreads(courseId, {
+      limit: Math.min(options.limit, 100),
+      offset,
+      sort: options.sort,
+    });
+  }
+
+  // Ed applies none of these filters, so page until enough threads match.
+  const pageSize = Math.min(100, Math.max(options.limit, 30));
+  const matches: Thread[] = [];
+  for (let page = 0; page < THREAD_PAGE_CAP; page += 1) {
+    const threads = await client.fetchThreads(courseId, {
+      limit: pageSize,
+      offset: offset + page * pageSize,
+      sort: options.sort,
+    });
+    matches.push(...filterThreads(threads, options));
+    if (matches.length >= options.limit || threads.length < pageSize) {
+      break;
+    }
+    if (options.sort === "new" && passedSince(threads, options.since)) {
+      break;
+    }
+  }
+  return matches.slice(0, options.limit);
+}
+
+/** Parse a --since / since value into a cutoff, reporting failures as usage errors. */
+export function parseSinceValue(value: string): Date {
+  try {
+    return parseSince(value);
+  } catch (error) {
+    throw new EdInputError(error instanceof Error ? error.message : String(error));
+  }
+}
+
+/**
+ * On a newest-first page, an older last thread means every later page is older too.
+ * Ed keeps pinned threads first whatever their date, so they never end the walk.
+ */
+function passedSince(threads: Thread[], since: Date | undefined): boolean {
+  const oldest = threads.filter((thread) => !thread.isPinned).at(-1);
+  return Boolean(since && oldest && isThreadOlderThan(oldest, since));
 }
 
 export async function resolveThread(client: EdClient, reference: string): Promise<Thread> {
@@ -338,6 +385,12 @@ function lessonReadResult(
 function assertPositive(value: number, label: string): void {
   if (!Number.isInteger(value) || value <= 0) {
     throw new EdInputError(`${label} must be greater than 0`);
+  }
+}
+
+function assertNonNegative(value: number, label: string): void {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new EdInputError(`${label} must be greater than or equal to 0`);
   }
 }
 

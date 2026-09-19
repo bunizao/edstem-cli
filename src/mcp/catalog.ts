@@ -30,6 +30,10 @@ export const MCP_TOOL_CATALOG = [
     "list_thread_files",
     "List Ed-hosted downloadable files and direct resource links attached to one thread, including its answers and comments.",
   ],
+  [
+    "search_threads",
+    "Search threads in one course. Every query word must appear, case-insensitively, in the thread title or body; Ed is paged client-side until limit threads match. Accepts the same filters as list_threads.",
+  ],
 ] as const;
 
 export type McpToolName = typeof MCP_TOOL_CATALOG[number][0];

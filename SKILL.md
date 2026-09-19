@@ -42,8 +42,9 @@ edstem units --fields id,code,name
 | edstem units | List or show enrolled units. |  |  | no |
 | edstem units list | List enrolled units. |  | --archived | no |
 | edstem units show | Show one enrolled unit. | <unit> |  | no |
-| edstem threads | List, show, or read Ed threads. |  |  | no |
-| edstem threads list | List threads in a unit. | <unit> | -n, --max <count><br>-s, --sort <order><br>-c, --category <category><br>--subcategory <subcategory><br>-t, --type <type><br>--answered<br>--unanswered | no |
+| edstem threads | List, search, show, or read Ed threads. |  |  | no |
+| edstem threads list | List threads in a unit. | <unit> | -n, --max <count><br>-s, --sort <order><br>-c, --category <category><br>--subcategory <subcategory><br>-t, --type <type><br>--answered<br>--unanswered<br>--offset <count><br>--since <when> | no |
+| edstem threads search | Search threads in a unit by words in the title and body. | <unit> <query...> | -n, --max <count><br>-s, --sort <order><br>-c, --category <category><br>--subcategory <subcategory><br>-t, --type <type><br>--answered<br>--unanswered<br>--offset <count><br>--since <when> | no |
 | edstem threads show | Show a thread by ID or unit ID/code plus #number. | <reference> | --include-html | no |
 | edstem threads read | Read a thread body as Markdown. | <reference> |  | no |
 | edstem lessons | List, show, read, or mark lessons as read. |  |  | no |
@@ -91,6 +92,7 @@ Run `edstem commands --json` for machine-readable metadata, including aliases, e
 | read_lesson | Read one lesson and its slides as Markdown. |
 | read_slide | Read one lesson slide as Markdown. |
 | list_thread_files | List Ed-hosted downloadable files and direct resource links attached to one thread, including its answers and comments. |
+| search_threads | Search threads in one course. Every query word must appear, case-insensitively, in the thread title or body; Ed is paged client-side until limit threads match. Accepts the same filters as list_threads. |
 
 ## Errors
 
