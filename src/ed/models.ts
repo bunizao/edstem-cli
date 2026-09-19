@@ -40,14 +40,16 @@ export interface LessonSlide {
 }
 
 export interface LessonFile {
-  lessonId: number;
+  lessonId?: number;
   slideId?: number;
   slideIndex?: number;
   slideTitle?: string;
+  threadId?: number;
+  commentId?: number;
   filename: string;
   url: string;
   mediaType?: string;
-  source: "slide" | "content";
+  source: "slide" | "content" | "thread" | "comment";
 }
 
 export interface Lesson {
