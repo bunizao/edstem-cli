@@ -16,17 +16,29 @@ import {
 const DEFAULT_ED_API_BASE_URL = "https://edstem.org/api/";
 const READ_SCOPE = "mcp:tools.read";
 const WRITE_SCOPE = "mcp:tools.write";
+const TOKEN_CACHE_TTL_MS = 5 * 60 * 1000;
+const TOKEN_CACHE_MAX_ENTRIES = 1000;
 const handlers = new WeakMap<object, StatelessMcpHandler>();
+
+// Verified tokens, keyed by SHA-256 so the raw token never lives in the map.
+// The cache is per-isolate and best-effort: a cold isolate just verifies again.
+const verifiedTokens = new Map<string, CachedIdentity>();
 
 export interface WorkerEnv {
   ED_API_BASE_URL?: string;
   MCP_ALLOWED_HOSTNAMES?: string;
   MCP_ALLOWED_ORIGIN_HOSTNAMES?: string;
+  MCP_TOKEN_CACHE_TTL_SECONDS?: string;
 }
 
 type Credential = {
   source: "api-key" | "bearer";
   token: string;
+};
+
+type CachedIdentity = {
+  edUserId: number;
+  expiresAt: number;
 };
 
 const worker = {
@@ -80,10 +92,14 @@ function getHandler(env: WorkerEnv): StatelessMcpHandler {
         throw new Error("Verified MCP auth context is missing a token.");
       }
 
-      const client = new EdClient({ apiBaseUrl, token: authInfo.token });
+      const token = authInfo.token;
+      const client = new EdClient({ apiBaseUrl, token });
       return createEdMcpServer({
         canWrite: () => true,
-        getClient: () => client
+        getClient: () => client,
+        onAuthExpired: async () => {
+          verifiedTokens.delete(await hashToken(token));
+        }
       });
     },
     {
@@ -140,20 +156,24 @@ async function verifyCredential(
   credential: Credential,
   env: WorkerEnv
 ): Promise<AuthInfo | Response> {
+  const ttlMs = tokenCacheTtlMs(env);
+  const cacheKey = ttlMs > 0 ? await hashToken(credential.token) : undefined;
+  if (cacheKey) {
+    const cached = readCachedIdentity(cacheKey);
+    if (cached) {
+      return buildAuthInfo(credential, cached.edUserId);
+    }
+  }
+
   try {
     const identity = await verifyEdToken(
       credential.token,
       normalizeApiBaseUrl(env.ED_API_BASE_URL)
     );
-    return {
-      clientId: `ed:${identity.edUserId}`,
-      extra: {
-        authMethod: credential.source,
-        edUserId: identity.edUserId
-      },
-      scopes: [READ_SCOPE, WRITE_SCOPE],
-      token: credential.token
-    };
+    if (cacheKey) {
+      cacheIdentity(cacheKey, identity.edUserId, ttlMs);
+    }
+    return buildAuthInfo(credential, identity.edUserId);
   } catch (error) {
     if (error instanceof EdTokenInvalidError) {
       return unauthorizedResponse(
@@ -173,6 +193,55 @@ async function verifyCredential(
     }
     throw error;
   }
+}
+
+function buildAuthInfo(credential: Credential, edUserId: number): AuthInfo {
+  return {
+    clientId: `ed:${edUserId}`,
+    extra: {
+      authMethod: credential.source,
+      edUserId
+    },
+    scopes: [READ_SCOPE, WRITE_SCOPE],
+    token: credential.token
+  };
+}
+
+function readCachedIdentity(cacheKey: string): CachedIdentity | undefined {
+  const cached = verifiedTokens.get(cacheKey);
+  if (!cached) {
+    return undefined;
+  }
+  if (cached.expiresAt <= Date.now()) {
+    verifiedTokens.delete(cacheKey);
+    return undefined;
+  }
+  return cached;
+}
+
+function cacheIdentity(cacheKey: string, edUserId: number, ttlMs: number): void {
+  verifiedTokens.delete(cacheKey);
+  if (verifiedTokens.size >= TOKEN_CACHE_MAX_ENTRIES) {
+    const oldest = verifiedTokens.keys().next();
+    if (!oldest.done) {
+      verifiedTokens.delete(oldest.value);
+    }
+  }
+  verifiedTokens.set(cacheKey, { edUserId, expiresAt: Date.now() + ttlMs });
+}
+
+function tokenCacheTtlMs(env: WorkerEnv): number {
+  const raw = env.MCP_TOKEN_CACHE_TTL_SECONDS?.trim();
+  if (!raw) {
+    return TOKEN_CACHE_TTL_MS;
+  }
+  const seconds = Number(raw);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : TOKEN_CACHE_TTL_MS;
+}
+
+async function hashToken(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function normalizeApiBaseUrl(value: string | undefined): string {
