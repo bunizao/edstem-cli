@@ -3,15 +3,24 @@ import {
   commandsJson,
   confirm,
   createProgram as createCliProgram,
+  createUi,
+  detectAudience,
+  examples,
+  formatFromArgv,
+  helpSection,
   insertDefaultVerb,
+  isInformationalExit,
   mutating,
+  parseWithPrompts,
   render,
   reportError,
   resolveFormat,
   writeOutput,
+  type ArgumentFiller,
   type FormatOptions,
   type NounSpec,
   type OutputFormat,
+  type Ui,
 } from "@bunizao/cli-kit";
 import type { Command } from "commander";
 import { readFile } from "node:fs/promises";
@@ -83,7 +92,7 @@ const NOUNS: readonly NounSpec[] = [
   {
     name: "threads",
     verbs: ["list", "search", "show", "read", "send"],
-    defaultByArity: { 1: "list" },
+    defaultByArity: { 0: "list", 1: "list" },
     valueFlags: [
       "-n",
       "--max",
@@ -110,7 +119,7 @@ const NOUNS: readonly NounSpec[] = [
   {
     name: "lessons",
     verbs: ["list", "show", "read", "mark-read"],
-    defaultByArity: { 1: "list" },
+    defaultByArity: { 0: "list", 1: "list" },
     valueFlags: ["--module", "--type", "--state", "--status", "--delay"],
   },
   {
@@ -126,6 +135,12 @@ const NOUNS: readonly NounSpec[] = [
     valueFlags: ["--dest", "--slide"],
   },
 ];
+
+const HELP_SECTIONS: Readonly<Record<string, readonly string[]>> = {
+  Reading: ["user", "units", "threads", "lessons", "slides", "files", "activity"],
+  Writing: ["replies"],
+  Setup: ["auth", "update", "commands", "skills"],
+};
 
 export interface CliRuntime {
   createClient: () => Promise<EdClient>;
@@ -147,7 +162,7 @@ interface GlobalOptions extends FormatOptions {
   yes?: boolean;
 }
 
-export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Command {
+export function createProgram(runtime: CliRuntime = createDefaultRuntime(), ui: Ui = createUi({ interactive: false })): Command {
   const program = createCliProgram({
     name: "edstem",
     version: VERSION,
@@ -292,7 +307,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     .action(mutationAction(runtime,
       async (command, unit: string) => {
         const options = command.opts();
-        const document = markdownToEdDocument(await readMarkdownBody(options));
+        const document = markdownToEdDocument(await readMarkdownBody(options, ui));
         return {
           details: document,
           document,
@@ -334,7 +349,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     .action(mutationAction(runtime,
       async (command, reference: string) => {
         const options = command.opts();
-        const document = markdownToEdDocument(await readMarkdownBody(options));
+        const document = markdownToEdDocument(await readMarkdownBody(options, ui));
         const thread = await resolveThread(await runtime.createClient(), reference);
         if (options.to !== undefined) {
           assertCommentInThread(thread, options.to);
@@ -573,6 +588,17 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
       await writeValue(runtime, command, { generated: "SKILL.md" });
     });
 
+  for (const [title, names] of Object.entries(HELP_SECTIONS)) {
+    for (const command of program.commands) if (names.includes(command.name())) helpSection(command, title);
+  }
+  examples(program, [
+    "edstem threads UNIT  # latest threads in a unit",
+    "edstem threads search UNIT \"lab 3\"",
+    "edstem threads read UNIT#42",
+    "edstem threads send UNIT --title \"Week 3 question\"  # asks for the body in $EDITOR",
+    "edstem replies send UNIT#42 --body-file reply.md",
+    "edstem lessons UNIT --json",
+  ]);
   return program as Command;
 }
 
@@ -674,16 +700,19 @@ function mutationAction<Plan extends MutationPlan, Arguments extends unknown[]>(
   };
 }
 
-async function readMarkdownBody(options: { body?: string; bodyFile?: string }): Promise<string> {
+async function readMarkdownBody(options: { body?: string; bodyFile?: string }, ui: Ui): Promise<string> {
   if (options.body !== undefined && options.bodyFile !== undefined) {
     throw new CliError("usage", "Use only one of --body or --body-file.");
   }
-  if (options.body === undefined && options.bodyFile === undefined) {
+  if (options.body === undefined && options.bodyFile === undefined && !ui.interactive) {
     throw new CliError("usage", "Provide the post body with --body or --body-file.");
   }
-  const body = options.body ?? (options.bodyFile === "-"
-    ? await readStdin()
-    : await readFile(options.bodyFile as string, "utf8"));
+  // A person at a terminal writes the body in their editor, as they would a commit message.
+  const body = options.body ?? (options.bodyFile === undefined
+    ? await ui.editor("Post body (Markdown)")
+    : options.bodyFile === "-"
+      ? await readStdin()
+      : await readFile(options.bodyFile, "utf8"));
   if (!body.trim()) {
     throw new CliError("usage", "The post body must not be empty.");
   }
@@ -818,12 +847,21 @@ function collectPositiveInteger(name: string): (value: string, previous: number[
 export async function run(argv = process.argv, runtime?: CliRuntime): Promise<number> {
   const selectedRuntime = runtime ?? createDefaultRuntime();
   const args = insertDefaultVerb(argv.slice(2), NOUNS);
-  const program = createProgram(selectedRuntime);
+  // One rule for who is on the other end: a person at a terminal reading a table gets
+  // asked for what they left out; a pipe, --json or an agent's shell gets the usage error.
+  const human = detectAudience({
+    stdin: { isTTY: selectedRuntime.interactive },
+    stdout: { isTTY: selectedRuntime.isTTY },
+    env: process.env,
+    format: formatFromArgv(args, selectedRuntime.isTTY),
+  }) === "human";
+  const ui = createUi({ input: process.stdin, output: process.stderr, interactive: human });
+  let program = createProgram(selectedRuntime, ui);
   try {
-    await program.parseAsync(args, { from: "user" });
+    await parseWithPrompts(() => (program = createProgram(selectedRuntime, ui)), args, { ui, fillers: { unit: pickUnit(selectedRuntime, ui) } });
     return 0;
   } catch (error) {
-    if (isCommanderSuccess(error)) return 0;
+    if (isInformationalExit(error)) return 0;
     const normalized = normalizeEdError(error);
     const format = safeErrorFormat(program, selectedRuntime.isTTY);
     const reported = reportError(normalized, format);
@@ -832,9 +870,13 @@ export async function run(argv = process.argv, runtime?: CliRuntime): Promise<nu
   }
 }
 
-function isCommanderSuccess(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  return (error as { exitCode?: unknown }).exitCode === 0;
+// A person who typed `edstem threads` is shown their units rather than a usage error.
+function pickUnit(runtime: CliRuntime, ui: Ui): ArgumentFiller {
+  return async () => {
+    const { courses } = await (await runtime.createClient()).fetchUser();
+    const active = courses.filter((course) => course.status.toLowerCase() !== "archived");
+    return ui.select("Which unit?", active.map((course) => ({ value: String(course.id), label: course.name, hint: course.code })));
+  };
 }
 
 function safeErrorFormat(program: Command, isTTY: boolean): OutputFormat {
