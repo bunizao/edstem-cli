@@ -269,7 +269,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime(), ui: 
   ));
   withThreadFilters(
     threads.command("search")
-      .description("Search threads in a unit by words in the title and body.")
+      .description("Search threads in a unit by words in the title and body.").summary("Search threads in a unit")
       .argument("<unit>", "Unit ID or code", unitIdentifier)
       .argument("<query...>", "Words that must all appear in the title or body")
   ).action(outputAction(runtime, async (client, command, unit: string, query: string[]) =>
@@ -279,7 +279,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime(), ui: 
     })).map(projectThreadSummary)
   ));
   threads.command("show")
-    .description("Show a thread by ID or unit ID/code plus #number.")
+    .description("Show a thread by ID or unit ID/code plus #number.").summary("Show a thread")
     .argument("<reference>", "Thread ID or unit ID/code plus #number")
     .option("--include-html", "Include Ed XML content.")
     .action(outputAction(runtime, async (client, command, reference: string) => {
