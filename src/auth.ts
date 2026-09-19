@@ -2,6 +2,7 @@ import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
+import { createUi } from "@bunizao/cli-kit";
 import { CliError } from "./errors.js";
 
 const TOKEN_HELP_URL = "https://edstem.org/settings/api-tokens";
@@ -83,43 +84,11 @@ export async function removeToken(tokenFile = defaultTokenFile()): Promise<boole
 }
 
 export async function promptHiddenToken(): Promise<string> {
-  process.stderr.write(`Create a token at ${TOKEN_HELP_URL}.\nPaste your Ed token: `);
-  const stdin = process.stdin;
-  if (!stdin.isTTY || typeof stdin.setRawMode !== "function") {
-    throw new CliError("auth", "Interactive token input requires a terminal");
-  }
-
-  return new Promise((resolve, reject) => {
-    let token = "";
-    const finish = (error?: Error): void => {
-      stdin.off("data", onData);
-      stdin.setRawMode(false);
-      stdin.pause();
-      process.stderr.write("\n");
-      if (error) reject(error);
-      else resolve(token);
-    };
-    const onData = (chunk: Buffer): void => {
-      for (const byte of chunk) {
-        if (byte === 3) {
-          finish(new CliError("auth", "Token input cancelled"));
-          return;
-        }
-        if (byte === 10 || byte === 13) {
-          finish();
-          return;
-        }
-        if (byte === 8 || byte === 127) {
-          token = token.slice(0, -1);
-          continue;
-        }
-        if (byte >= 32 && byte <= 126) {
-          token += String.fromCharCode(byte);
-        }
-      }
-    };
-    stdin.setRawMode(true);
-    stdin.resume();
-    stdin.on("data", onData);
+  const ui = createUi({ input: process.stdin, output: process.stderr });
+  if (!ui.interactive) throw new CliError("auth", "Interactive token input requires a terminal");
+  ui.info(`Create a token at ${TOKEN_HELP_URL}.`);
+  const token = await ui.password("Paste your Ed token").catch((error: unknown) => {
+    throw error instanceof CliError && error.code === "cancelled" ? new CliError("auth", "Token input cancelled") : error;
   });
+  return token;
 }
