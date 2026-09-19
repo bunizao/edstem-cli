@@ -184,6 +184,52 @@ describe("stdio MCP adapter", () => {
     expect(JSON.stringify(result)).not.toContain("example.com");
   });
 
+  it("refuses to mark every lesson as read without queries or all", async () => {
+    const fetch = vi.fn<FetchLike>();
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const result = await client.callTool({
+      arguments: { courseId: 100 },
+      name: "mark_lessons_read",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseToolResult(result)).toMatchObject({
+      error: { message: expect.stringContaining("all"), type: "INVALID_ARGUMENT" },
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("marks lessons as read when all is set", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(
+      new Response(JSON.stringify({ lessons: [], modules: [] }), { status: 200 })
+    );
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const result = await client.callTool({
+      arguments: { all: true, courseId: 100 },
+      name: "mark_lessons_read",
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(parseToolResult(result)).toEqual([]);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it("requires at least one choice to submit an answer", async () => {
+    const fetch = vi.fn<FetchLike>();
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const result = await client.callTool({
+      arguments: { choices: [], questionId: 2 },
+      name: "submit_slide_answer",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("choices");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("enforces write scope at the MCP seam", async () => {
     const edClient = new EdClient({ fetch: vi.fn<FetchLike>(), token: "test-token" });
     const server = createEdMcpServer({ canWrite: () => false, getClient: () => edClient });
