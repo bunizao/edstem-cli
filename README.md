@@ -101,6 +101,21 @@ edstem slides submit 4401 --question 991 --choice 2 --yes
 edstem slides submit 4401 --yes
 ```
 
+### Posting
+
+Posting publishes to the unit forum under your own name and cannot be undone from this tool. Review the plan first with `--dry-run`, which also prints the Ed XML that will be sent.
+
+```bash
+edstem threads send 12345 --title "Week 3 sample solution" --body "Does **Q4** need induction?" --dry-run
+edstem threads send FIT2014 --title "Week 3 sample solution" --body-file ./post.md --type question --category Applied --yes
+edstem replies send 12345#42 --body "Fixed by reinstalling." --yes
+edstem replies send 12345#42 --to 88991 --as comment --body-file - --yes
+```
+
+The body is Markdown and is converted to Ed's document format: paragraphs, headings, fenced code, inline code, bold, italic, links, and bullet or numbered lists. `--body-file -` reads the body from stdin. `--as` defaults to `answer` on question threads and `comment` elsewhere; `--private` posts to staff only and `--anonymous` hides your name from other students.
+
+The MCP tools `create_thread` and `reply_thread` are disabled by default. Set `EDSTEM_ALLOW_POSTING=1` for the stdio server, or the Worker variable `MCP_ALLOW_POSTING=1`, to enable them.
+
 ## Output and errors
 
 Successful output is a table when stdout is a terminal and JSON when stdout is piped or redirected. Override this with `--json`, `--yaml`, or `--table`; select fields with `--fields a,b`; write to a file with `--output FILE`.
@@ -116,6 +131,7 @@ Run `edstem commands --json` for the full machine-readable command tree, includi
 | `EDSTEM_BASE_URL` | Override the Ed JSON API base URL. |
 | `EDSTEM_TOKEN` | Provide the Ed API token. |
 | `EDSTEM_CONFIG` | Override the local config file path. |
+| `EDSTEM_ALLOW_POSTING` | Set to `1` to enable the `edstem-mcp` posting tools. |
 
 `config.yaml` also tunes read retries: `rateLimit.maxRetries` (default `3`) caps how many times a rate-limited or temporarily failing GET is retried, and `rateLimit.retryBaseDelay` (seconds, default `1.0`) sets the exponential backoff base. A longer `Retry-After` header wins. Writes are never retried.
 

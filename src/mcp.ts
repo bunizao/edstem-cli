@@ -1,3 +1,4 @@
+import type { McpServer } from "@modelcontextprotocol/server";
 import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { reportError } from "@bunizao/cli-kit";
 
@@ -31,6 +32,14 @@ MCP client configuration:
   }
 `;
 
+export function createStdioEdMcpServer(client: EdClient): McpServer {
+  return createEdMcpServer({
+    canPost: () => process.env.EDSTEM_ALLOW_POSTING === "1",
+    canWrite: () => true,
+    getClient: () => client,
+  });
+}
+
 export async function startStdioServer(): Promise<void> {
   const [token, config] = await Promise.all([loadToken(), loadConfig()]);
   const client = new EdClient({
@@ -39,11 +48,7 @@ export async function startStdioServer(): Promise<void> {
     retryBaseDelayMs: config.retryBaseDelayMs,
     token,
   });
-  const server = createEdMcpServer({
-    canWrite: () => true,
-    getClient: () => client,
-  });
-  await server.connect(new StdioServerTransport());
+  await createStdioEdMcpServer(client).connect(new StdioServerTransport());
 }
 
 if (isMainModule(import.meta.url)) {

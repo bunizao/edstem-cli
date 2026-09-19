@@ -2,9 +2,11 @@ import { readFileSync } from "node:fs";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { EdClient, type FetchLike } from "../src/ed/client.js";
+import { createStdioEdMcpServer } from "../src/mcp.js";
 import { createEdMcpServer } from "../src/mcp/server.js";
 
 function fixture(name: string): unknown {
@@ -503,11 +505,9 @@ describe("stdio MCP adapter", () => {
 
   it("enforces write scope at the MCP seam", async () => {
     const edClient = new EdClient({ fetch: vi.fn<FetchLike>(), token: "test-token" });
-    const server = createEdMcpServer({ canWrite: () => false, getClient: () => edClient });
-    const client = new Client({ name: "test", version: "1.0.0" });
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
-    cleanups.push(async () => client.close(), async () => server.close());
+    const client = await connectServer(
+      createEdMcpServer({ canWrite: () => false, getClient: () => edClient })
+    );
 
     const result = await client.callTool({
       arguments: { choices: [1], questionId: 2 },
@@ -518,8 +518,78 @@ describe("stdio MCP adapter", () => {
     expect(parseToolResult(result)).toHaveProperty("error.type", "INSUFFICIENT_SCOPE");
   });
 
+  it("creates a thread from Markdown and reports it back", async () => {
+    const fetch = vi.fn<FetchLike>().mockImplementation(async () => new Response(
+      JSON.stringify({ thread: { course_id: 100, id: 5100, number: 44, title: "Install" } }),
+      { status: 200 }
+    ));
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const result = await client.callTool({
+      arguments: { body: "Help **me**", courseId: 100, title: "Install", type: "question" },
+      name: "create_thread",
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(parseToolResult(result)).toMatchObject({ id: 5100, number: 44, title: "Install" });
+    const [url, init] = fetch.mock.calls[0] ?? [];
+    expect(new URL(String(url)).pathname).toBe("/api/courses/100/threads");
+    expect(JSON.parse(String(init?.body)).thread).toMatchObject({
+      content: '<document version="2.0"><paragraph>Help <bold>me</bold></paragraph></document>',
+      is_private: false,
+      title: "Install",
+      type: "question",
+    });
+  });
+
+  it("gates posting tools behind canPost even when writes are allowed", async () => {
+    const fetch = vi.fn<FetchLike>();
+    const edClient = new EdClient({ fetch, token: "test-token" });
+    const client = await connectServer(createEdMcpServer({
+      canPost: () => false,
+      canWrite: () => true,
+      getClient: () => edClient,
+    }));
+
+    const result = await client.callTool({
+      arguments: { body: "Hi", threadId: 5001 },
+      name: "reply_thread",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseToolResult(result)).toMatchObject({
+      error: {
+        message: "Posting is disabled; set EDSTEM_ALLOW_POSTING=1 for edstem-mcp.",
+        type: "INSUFFICIENT_SCOPE",
+      },
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("disables posting on the stdio server until EDSTEM_ALLOW_POSTING is set", async () => {
+    const fetch = vi.fn<FetchLike>();
+    const edClient = new EdClient({ fetch, token: "test-token" });
+    vi.stubEnv("EDSTEM_ALLOW_POSTING", "");
+    cleanups.push(async () => {
+      vi.unstubAllEnvs();
+    });
+    const client = await connectServer(createStdioEdMcpServer(edClient));
+
+    const result = await client.callTool({
+      arguments: { body: "Hi", courseId: 100, title: "Hi", type: "post" },
+      name: "create_thread",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseToolResult(result)).toHaveProperty("error.type", "INSUFFICIENT_SCOPE");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   async function connect(edClient: EdClient): Promise<Client> {
-    const server = createEdMcpServer({ canWrite: () => true, getClient: () => edClient });
+    return connectServer(createEdMcpServer({ canWrite: () => true, getClient: () => edClient }));
+  }
+
+  async function connectServer(server: McpServer): Promise<Client> {
     const client = new Client({ name: "test", version: "1.0.0" });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);

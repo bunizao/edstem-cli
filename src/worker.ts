@@ -29,6 +29,7 @@ export interface WorkerEnv {
   MCP_ALLOWED_HOSTNAMES?: string;
   MCP_ALLOWED_ORIGIN_HOSTNAMES?: string;
   MCP_TOKEN_CACHE_TTL_SECONDS?: string;
+  MCP_ALLOW_POSTING?: string;
 }
 
 type Credential = {
@@ -95,6 +96,7 @@ function getHandler(env: WorkerEnv): StatelessMcpHandler {
       const token = authInfo.token;
       const client = new EdClient({ apiBaseUrl, token });
       return createEdMcpServer({
+        canPost: () => env.MCP_ALLOW_POSTING === "1",
         canWrite: () => true,
         getClient: () => client,
         onAuthExpired: async () => {

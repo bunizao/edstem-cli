@@ -38,6 +38,14 @@ export const MCP_TOOL_CATALOG = [
     "list_modules",
     "List the lesson modules of one course with the number of lessons in each. courseId accepts a numeric ID or course code. Use it to pick a module value for list_lessons.",
   ],
+  [
+    "create_thread",
+    "Create a thread in one course. body is Markdown and is converted to Ed's document format. The thread is posted publicly to the course as the token owner and cannot be removed from here; ask the user before calling it.",
+  ],
+  [
+    "reply_thread",
+    "Reply to one thread, or to one comment inside it. body is Markdown and is converted to Ed's document format. The reply is posted publicly as the token owner and cannot be removed from here; ask the user before calling it.",
+  ],
 ] as const;
 
 export type McpToolName = typeof MCP_TOOL_CATALOG[number][0];
