@@ -11,11 +11,22 @@ CLI and MCP access to Ed Discussion for people, scripts, and agents.
 
 ```bash
 npm install -g edstem-cli
+
+# Recommended: verify a token once and save it to ~/.config/edstem-cli/token.
+edstem auth login
+
+# Or, for scripts and CI:
 export EDSTEM_TOKEN="your-token"
+
 edstem auth status
 ```
 
-Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens). The CLI also reads `~/.config/edstem-cli/token` and `~/.config/edstem-cli/config.yaml`.
+Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens). `edstem auth login` prompts for the token without echoing it, or reads it from stdin with `--token-stdin`; it verifies the token before writing `~/.config/edstem-cli/token` with `0600` permissions. `edstem auth logout` removes that file, and `edstem auth status` reports whether the active token came from the environment or the file. `EDSTEM_TOKEN` always takes precedence over the saved file. The CLI also reads `~/.config/edstem-cli/config.yaml`.
+
+```bash
+printf '%s\n' "your-token" | edstem auth login --token-stdin
+edstem auth logout --yes
+```
 
 Run `edstem update --check` to compare the installed version against npm, or `edstem update --yes` to install the latest release.
 
