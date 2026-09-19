@@ -31,9 +31,11 @@ import {
   listCurrentActivity,
   listLessons,
   listThreads,
+  parseSinceValue,
   readLessons,
   resolveCourse,
   resolveThread,
+  type ThreadListOptions,
 } from "./ed/operations.js";
 import {
   compactActivity,
@@ -72,7 +74,7 @@ const NOUNS: readonly NounSpec[] = [
   },
   {
     name: "threads",
-    verbs: ["list", "show", "read"],
+    verbs: ["list", "search", "show", "read"],
     defaultByArity: { 1: "list" },
     valueFlags: [
       "-n",
@@ -84,6 +86,8 @@ const NOUNS: readonly NounSpec[] = [
       "--subcategory",
       "-t",
       "--type",
+      "--offset",
+      "--since",
     ],
   },
   {
@@ -221,37 +225,27 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
       projectCourse(await resolveCourse(client, unit))
     ));
 
-  const threads = program.command("threads").description("List, show, or read Ed threads.");
-  threads.command("list")
-    .description("List threads in a unit.")
-    .argument("<unit>", "Unit ID or code", unitIdentifier)
-    .option("-n, --max <count>", "Maximum threads to fetch", positiveInteger("--max"))
-    .addOption(program.createOption(
-      "-s, --sort <order>",
-      "Ed sort order; defaults to new and pinned threads may remain first."
-    ).choices([...SORT_OPTIONS]).default("new"))
-    .option("-c, --category <category>", "Filter by exact top-level category.")
-    .option("--subcategory <subcategory>", "Filter by exact second-level subcategory.")
-    .option("-t, --type <type>", "Filter by thread type.")
-    .option("--answered", "Only answered threads.")
-    .option("--unanswered", "Only unanswered threads.")
-    .action(outputAction(runtime, async (client, command, unit: string) => {
-      const options = command.opts();
-      if (options.answered && options.unanswered) {
-        throw new CliError("usage", "Use only one of --answered or --unanswered.");
-      }
-      const limit = options.max ?? await runtime.defaultFetchCount();
-      const values = await listThreads(client, {
-        answered: options.answered ? true : options.unanswered ? false : undefined,
-        category: options.category,
-        courseId: unit,
-        limit,
-        sort: options.sort,
-        subcategory: options.subcategory,
-        threadType: options.type,
-      });
-      return values.map(projectThreadSummary);
-    }));
+  const threads = program.command("threads")
+    .description("List, search, show, or read Ed threads.");
+  withThreadFilters(
+    threads.command("list")
+      .description("List threads in a unit.")
+      .argument("<unit>", "Unit ID or code", unitIdentifier)
+  ).action(outputAction(runtime, async (client, command, unit: string) =>
+    (await listThreads(client, await threadListOptions(runtime, command, unit)))
+      .map(projectThreadSummary)
+  ));
+  withThreadFilters(
+    threads.command("search")
+      .description("Search threads in a unit by words in the title and body.")
+      .argument("<unit>", "Unit ID or code", unitIdentifier)
+      .argument("<query...>", "Words that must all appear in the title or body")
+  ).action(outputAction(runtime, async (client, command, unit: string, query: string[]) =>
+    (await listThreads(client, {
+      ...await threadListOptions(runtime, command, unit),
+      query: query.join(" "),
+    })).map(projectThreadSummary)
+  ));
   threads.command("show")
     .description("Show a thread by ID or unit ID/code plus #number.")
     .argument("<reference>", "Thread ID or unit ID/code plus #number")
@@ -582,6 +576,48 @@ function outputOptions(command: Command): GlobalOptions {
   return command.optsWithGlobals() as GlobalOptions;
 }
 
+function withThreadFilters(command: Command): Command {
+  return command
+    .option("-n, --max <count>", "Maximum threads to return", positiveInteger("--max"))
+    .addOption(command.createOption(
+      "-s, --sort <order>",
+      "Ed sort order; defaults to new and pinned threads may remain first."
+    ).choices([...SORT_OPTIONS]).default("new"))
+    .option("-c, --category <category>", "Filter by exact top-level category.")
+    .option("--subcategory <subcategory>", "Filter by exact second-level subcategory.")
+    .option("-t, --type <type>", "Filter by thread type.")
+    .option("--answered", "Only answered threads.")
+    .option("--unanswered", "Only unanswered threads.")
+    .option("--offset <count>", "Skip this many threads before filtering.", nonNegativeInteger, 0)
+    .option(
+      "--since <when>",
+      "Only threads created at or after an ISO date or a relative offset such as 7d.",
+      parseSinceValue
+    );
+}
+
+async function threadListOptions(
+  runtime: CliRuntime,
+  command: Command,
+  unit: string
+): Promise<ThreadListOptions> {
+  const options = command.opts();
+  if (options.answered && options.unanswered) {
+    throw new CliError("usage", "Use only one of --answered or --unanswered.");
+  }
+  return {
+    answered: options.answered ? true : options.unanswered ? false : undefined,
+    category: options.category,
+    courseId: unit,
+    limit: options.max ?? await runtime.defaultFetchCount(),
+    offset: options.offset,
+    since: options.since,
+    sort: options.sort,
+    subcategory: options.subcategory,
+    threadType: options.type,
+  };
+}
+
 function positiveInteger(name: string): (value: string) => number {
   return (value) => {
     const parsed = Number(value);
@@ -602,6 +638,14 @@ export function parseFileTarget(value: string): FileTarget {
     throw new CliError("usage", "Thread target must be thread:<id> or thread:<unit>#<number>.");
   }
   return { kind: "thread", reference };
+}
+
+function nonNegativeInteger(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new CliError("usage", "Value must be an integer greater than or equal to 0.");
+  }
+  return parsed;
 }
 
 function unitIdentifier(value: string): string {
