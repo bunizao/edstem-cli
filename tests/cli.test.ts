@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -16,7 +16,8 @@ function fixture(name: string): unknown {
 function makeRuntime(
   status = 200,
   isTTY = false,
-  userInfo: unknown = fixture("user_info")
+  userInfo: unknown = fixture("user_info"),
+  options: { stdinLine?: string; tokenFile?: string } = {}
 ): {
   fetch: ReturnType<typeof vi.fn<FetchLike>>;
   runtime: CliRuntime;
@@ -82,9 +83,12 @@ function makeRuntime(
     fetch,
     runtime: {
       createClient: async () => client,
+      createClientForToken: async (token) => new EdClient({ fetch, token }),
       defaultFetchCount: async () => 30,
       interactive: false,
       isTTY,
+      readStdinLine: async () => options.stdinLine ?? "",
+      tokenFile: options.tokenFile ?? join(tmpdir(), "edstem-cli-absent-token"),
       writeStderr: (text) => stderr.push(text),
       writeStdout: (text) => stdout.push(text),
     },
@@ -448,6 +452,171 @@ describe("CLI", () => {
     });
   });
 });
+
+describe("auth commands", () => {
+  async function tokenPath(prefix: string): Promise<string> {
+    return join(await mkdtemp(join(tmpdir(), prefix)), "config", "token");
+  }
+
+  it("saves and verifies a token read from stdin", async () => {
+    vi.stubEnv("EDSTEM_TOKEN", undefined);
+    const tokenFile = await tokenPath("edstem-login-");
+    const { fetch, runtime, stderr, stdout } = makeRuntime(200, false, fixture("user_info"), {
+      stdinLine: "stdin-token",
+      tokenFile,
+    });
+    try {
+      expect(await run(["node", "edstem", "auth", "login", "--token-stdin", "--json"], runtime)).toBe(0);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+
+    expect(JSON.parse(stdout.join(""))).toMatchObject({
+      authenticated: true,
+      tokenFile,
+      user: { id: 12345, name: "Alice Student" },
+    });
+    expect(fetch.mock.calls[0]?.[1]?.headers).toMatchObject({
+      Authorization: "Bearer stdin-token",
+    });
+    expect(await readFile(tokenFile, "utf8")).toBe("stdin-token\n");
+    expect((await stat(tokenFile)).mode & 0o777).toBe(0o600);
+    expect(stderr).toEqual([]);
+  });
+
+  it("warns when EDSTEM_TOKEN shadows the saved token", async () => {
+    const tokenFile = await tokenPath("edstem-login-env-");
+    const { runtime, stderr } = makeRuntime(200, false, fixture("user_info"), {
+      stdinLine: "stdin-token",
+      tokenFile,
+    });
+
+    vi.stubEnv("EDSTEM_TOKEN", "env-token");
+    try {
+      expect(await run(["node", "edstem", "auth", "login", "--token-stdin", "--json"], runtime)).toBe(0);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+
+    expect(stderr.join("")).toContain("EDSTEM_TOKEN is set and takes precedence");
+    expect(await readFile(tokenFile, "utf8")).toBe("stdin-token\n");
+  });
+
+  it("prints the login plan without reading or saving a token on a dry run", async () => {
+    const tokenFile = await tokenPath("edstem-login-dry-");
+    await writeTokenFile(tokenFile);
+    const { fetch, runtime, stdout } = makeRuntime(200, false, fixture("user_info"), {
+      stdinLine: "stdin-token",
+      tokenFile,
+    });
+    const planned: string[] = [];
+    const write = vi.spyOn(process.stderr, "write").mockImplementation((text) => {
+      planned.push(String(text));
+      return true;
+    });
+
+    vi.stubEnv("EDSTEM_TOKEN", undefined);
+    try {
+      expect(await run([
+        "node", "edstem", "auth", "login", "--token-stdin", "--dry-run", "--json",
+      ], runtime)).toBe(0);
+    } finally {
+      write.mockRestore();
+      vi.unstubAllEnvs();
+    }
+
+    expect(planned.join("")).toBe(`Verify an Ed token and save it to ${tokenFile}.\n`);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(stdout).toEqual([]);
+    expect(await readFile(tokenFile, "utf8")).toBe("saved-token\n");
+  });
+
+  it("rejects an invalid token without writing it", async () => {
+    const tokenFile = await tokenPath("edstem-login-invalid-");
+    const { runtime, stderr } = makeRuntime(401, false, fixture("user_info"), {
+      stdinLine: "bad-token",
+      tokenFile,
+    });
+
+    expect(await run(["node", "edstem", "auth", "login", "--token-stdin", "--json"], runtime)).toBe(3);
+
+    expect(JSON.parse(stderr.join(""))).toMatchObject({ error: { code: "auth" } });
+    await expect(readFile(tokenFile, "utf8")).rejects.toThrow();
+  });
+
+  it("removes the token file and stays idempotent", async () => {
+    const tokenFile = await tokenPath("edstem-logout-");
+    await writeTokenFile(tokenFile);
+    const first = makeRuntime(200, false, fixture("user_info"), { tokenFile });
+
+    expect(await run(["node", "edstem", "auth", "logout", "--yes", "--json"], first.runtime)).toBe(0);
+    expect(JSON.parse(first.stdout.join(""))).toEqual({ removed: true, tokenFile });
+    await expect(readFile(tokenFile, "utf8")).rejects.toThrow();
+
+    const second = makeRuntime(200, false, fixture("user_info"), { tokenFile });
+    expect(await run(["node", "edstem", "auth", "logout", "--yes", "--json"], second.runtime)).toBe(0);
+    expect(JSON.parse(second.stdout.join(""))).toEqual({ removed: false, tokenFile });
+    expect(first.fetch).not.toHaveBeenCalled();
+  });
+
+  it("prints the logout plan without removing the token on a dry run", async () => {
+    const tokenFile = await tokenPath("edstem-logout-dry-");
+    await writeTokenFile(tokenFile);
+    const { runtime, stdout } = makeRuntime(200, false, fixture("user_info"), { tokenFile });
+    const planned: string[] = [];
+    const write = vi.spyOn(process.stderr, "write").mockImplementation((text) => {
+      planned.push(String(text));
+      return true;
+    });
+
+    try {
+      expect(await run(["node", "edstem", "auth", "logout", "--dry-run", "--json"], runtime)).toBe(0);
+    } finally {
+      write.mockRestore();
+    }
+
+    expect(planned.join("")).toBe(`Remove the saved Ed token at ${tokenFile}.\n`);
+    expect(stdout).toEqual([]);
+    expect(await readFile(tokenFile, "utf8")).toBe("saved-token\n");
+  });
+
+  it("reports the token source for the environment and the token file", async () => {
+    const tokenFile = await tokenPath("edstem-status-");
+    await writeTokenFile(tokenFile);
+
+    const environment = makeRuntime(200, false, fixture("user_info"), { tokenFile });
+    vi.stubEnv("EDSTEM_TOKEN", "env-token");
+    try {
+      expect(await run(["node", "edstem", "auth", "status", "--json"], environment.runtime)).toBe(0);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(JSON.parse(environment.stdout.join(""))).toMatchObject({
+      authenticated: true,
+      source: "environment",
+      tokenFile,
+    });
+
+    const file = makeRuntime(200, false, fixture("user_info"), { tokenFile });
+    vi.stubEnv("EDSTEM_TOKEN", undefined);
+    try {
+      expect(await run(["node", "edstem", "auth", "status", "--json"], file.runtime)).toBe(0);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(JSON.parse(file.stdout.join(""))).toMatchObject({
+      authenticated: true,
+      source: "file",
+      tokenFile,
+      user: { id: 12345 },
+    });
+  });
+});
+
+async function writeTokenFile(tokenFile: string): Promise<void> {
+  await mkdir(dirname(tokenFile), { mode: 0o700, recursive: true });
+  await writeFile(tokenFile, "saved-token\n", { encoding: "utf8", mode: 0o600 });
+}
 
 function duplicateCourseIdentity(): unknown {
   const identity = fixture("user_info") as {

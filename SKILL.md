@@ -34,7 +34,9 @@ edstem units --fields id,code,name
 
 | Command | Description | Arguments | Options | Mutating |
 | --- | --- | --- | --- | --- |
-| edstem auth | Inspect Ed authentication. |  |  | no |
+| edstem auth | Manage Ed authentication. |  |  | no |
+| edstem auth login | Verify an Ed token and save it for later commands. |  | --token-stdin | no |
+| edstem auth logout | Remove the saved Ed token file. |  |  | yes |
 | edstem auth status | Verify the configured Ed token. |  |  | no |
 | edstem user | Show the current Ed identity and enrolled units. |  |  | no |
 | edstem units | List or show enrolled units. |  |  | no |

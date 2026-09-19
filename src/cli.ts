@@ -15,7 +15,14 @@ import {
 } from "@bunizao/cli-kit";
 import type { Command } from "commander";
 
-import { loadToken } from "./auth.js";
+import {
+  defaultTokenFile,
+  loadToken,
+  loadTokenWithSource,
+  promptHiddenToken,
+  removeToken,
+  saveToken,
+} from "./auth.js";
 import { loadConfig } from "./config.js";
 import { downloadLessonFiles } from "./download.js";
 import { EdClient, type FetchLike } from "./ed/client.js";
@@ -94,10 +101,13 @@ const NOUNS: readonly NounSpec[] = [
 
 export interface CliRuntime {
   createClient: () => Promise<EdClient>;
+  createClientForToken: (token: string) => Promise<EdClient>;
   defaultFetchCount: () => Promise<number>;
   fetch?: FetchLike;
   interactive: boolean;
   isTTY: boolean;
+  readStdinLine: () => Promise<string>;
+  tokenFile: string;
   writeStderr: (text: string) => void;
   writeOutput?: (text: string, output?: string) => Promise<void>;
   writeStdout: (text: string) => void;
@@ -116,13 +126,65 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     description: "CLI for Ed Discussion.",
   });
 
-  program.command("auth")
-    .description("Inspect Ed authentication.")
-    .command("status")
+  const auth = program.command("auth").description("Manage Ed authentication.");
+  auth.command("login")
+    .description("Verify an Ed token and save it for later commands.")
+    .option("--token-stdin", "Read the token from the first line of stdin.")
+    .action(async (_options: unknown, command: Command) => {
+      const shadowed = Boolean(process.env.EDSTEM_TOKEN?.trim());
+      // Entering a token is already explicit, so only --dry-run short-circuits the login.
+      const accepted = await confirm(
+        {
+          summary: `Verify an Ed token and save it to ${runtime.tokenFile}.${
+            shadowed ? " EDSTEM_TOKEN is set and takes precedence." : ""
+          }`,
+        },
+        {
+          dryRun: Boolean(outputOptions(command).dryRun),
+          interactive: runtime.interactive,
+          yes: true,
+        }
+      );
+      if (!accepted) return;
+
+      const token = command.opts().tokenStdin
+        ? (await runtime.readStdinLine()).trim()
+        : (await promptHiddenToken()).trim();
+      if (!token) throw new CliError("auth", "No Ed token provided.");
+
+      const client = await runtime.createClientForToken(token);
+      const identity = projectIdentity(await client.fetchUser());
+      await saveToken(token, runtime.tokenFile);
+      if (shadowed) {
+        runtime.writeStderr(
+          `Saved ${runtime.tokenFile}, but EDSTEM_TOKEN is set and takes precedence.\n`
+        );
+      }
+      await writeValue(runtime, command, {
+        authenticated: true,
+        user: identity.user,
+        tokenFile: runtime.tokenFile,
+      });
+    });
+  mutating(auth.command("logout")
+    .description("Remove the saved Ed token file.")
+    .action(mutationAction(runtime,
+      () => ({ summary: `Remove the saved Ed token at ${runtime.tokenFile}.` }),
+      async () => ({
+        removed: await removeToken(runtime.tokenFile),
+        tokenFile: runtime.tokenFile,
+        ...(process.env.EDSTEM_TOKEN?.trim() ? { environment: true } : {}),
+      })
+    )));
+  auth.command("status")
     .description("Verify the configured Ed token.")
     .action(outputAction(runtime, async (client) => {
       const identity = projectIdentity(await client.fetchUser());
-      return { authenticated: true, user: identity.user };
+      const { source, tokenFile } = await loadTokenWithSource({
+        interactive: false,
+        tokenFile: runtime.tokenFile,
+      });
+      return { authenticated: true, source, tokenFile, user: identity.user };
     }));
 
   program.command("user")
@@ -286,8 +348,8 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
         };
       },
       async (command, slide: number) => {
-        const client = await runtime.createClient();
         const options = command.opts();
+        const client = await runtime.createClient();
         if (options.question !== undefined) {
           return client.submitSlideAnswer(
             options.question,
@@ -385,10 +447,11 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
 }
 
 function createDefaultRuntime(): CliRuntime {
+  const tokenFile = defaultTokenFile();
   let client: Promise<EdClient> | undefined;
   return {
     createClient: () => {
-      client ??= Promise.all([loadToken(), loadConfig()]).then(([token, config]) =>
+      client ??= Promise.all([loadToken({ tokenFile }), loadConfig()]).then(([token, config]) =>
         new EdClient({
           apiBaseUrl: config.apiBaseUrl,
           maxRetries: config.maxRetries,
@@ -398,13 +461,28 @@ function createDefaultRuntime(): CliRuntime {
       );
       return client;
     },
+    createClientForToken: async (token) =>
+      new EdClient({ apiBaseUrl: (await loadConfig()).apiBaseUrl, token }),
     defaultFetchCount: async () => (await loadConfig()).fetchCount,
     interactive: Boolean(process.stdin.isTTY),
     isTTY: Boolean(process.stdout.isTTY),
+    readStdinLine,
+    tokenFile,
     writeStderr: (text) => process.stderr.write(text),
     writeOutput: (text, output) => writeOutput(text, { output }),
     writeStdout: (text) => process.stdout.write(text),
   };
+}
+
+async function readStdinLine(): Promise<string> {
+  process.stdin.setEncoding("utf8");
+  let buffered = "";
+  for await (const chunk of process.stdin) {
+    buffered += chunk;
+    const newline = buffered.indexOf("\n");
+    if (newline >= 0) return buffered.slice(0, newline);
+  }
+  return buffered;
 }
 
 function outputAction<Arguments extends unknown[]>(
@@ -429,6 +507,7 @@ function textAction<Arguments extends unknown[]>(
   };
 }
 
+/** Confirms the plan first; the action decides whether it needs an Ed client. */
 function mutationAction<Arguments extends unknown[]>(
   runtime: CliRuntime,
   plan: (command: Command, ...args: Arguments) => { summary: string },
