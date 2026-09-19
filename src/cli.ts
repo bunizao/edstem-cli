@@ -131,6 +131,22 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     .description("Verify an Ed token and save it for later commands.")
     .option("--token-stdin", "Read the token from the first line of stdin.")
     .action(async (_options: unknown, command: Command) => {
+      const shadowed = Boolean(process.env.EDSTEM_TOKEN?.trim());
+      // Entering a token is already explicit, so only --dry-run short-circuits the login.
+      const accepted = await confirm(
+        {
+          summary: `Verify an Ed token and save it to ${runtime.tokenFile}.${
+            shadowed ? " EDSTEM_TOKEN is set and takes precedence." : ""
+          }`,
+        },
+        {
+          dryRun: Boolean(outputOptions(command).dryRun),
+          interactive: runtime.interactive,
+          yes: true,
+        }
+      );
+      if (!accepted) return;
+
       const token = command.opts().tokenStdin
         ? (await runtime.readStdinLine()).trim()
         : (await promptHiddenToken()).trim();
@@ -139,7 +155,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
       const client = await runtime.createClientForToken(token);
       const identity = projectIdentity(await client.fetchUser());
       await saveToken(token, runtime.tokenFile);
-      if (process.env.EDSTEM_TOKEN?.trim()) {
+      if (shadowed) {
         runtime.writeStderr(
           `Saved ${runtime.tokenFile}, but EDSTEM_TOKEN is set and takes precedence.\n`
         );

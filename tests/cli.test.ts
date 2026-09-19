@@ -502,6 +502,35 @@ describe("auth commands", () => {
     expect(await readFile(tokenFile, "utf8")).toBe("stdin-token\n");
   });
 
+  it("prints the login plan without reading or saving a token on a dry run", async () => {
+    const tokenFile = await tokenPath("edstem-login-dry-");
+    await writeTokenFile(tokenFile);
+    const { fetch, runtime, stdout } = makeRuntime(200, false, fixture("user_info"), {
+      stdinLine: "stdin-token",
+      tokenFile,
+    });
+    const planned: string[] = [];
+    const write = vi.spyOn(process.stderr, "write").mockImplementation((text) => {
+      planned.push(String(text));
+      return true;
+    });
+
+    vi.stubEnv("EDSTEM_TOKEN", undefined);
+    try {
+      expect(await run([
+        "node", "edstem", "auth", "login", "--token-stdin", "--dry-run", "--json",
+      ], runtime)).toBe(0);
+    } finally {
+      write.mockRestore();
+      vi.unstubAllEnvs();
+    }
+
+    expect(planned.join("")).toBe(`Verify an Ed token and save it to ${tokenFile}.\n`);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(stdout).toEqual([]);
+    expect(await readFile(tokenFile, "utf8")).toBe("saved-token\n");
+  });
+
   it("rejects an invalid token without writing it", async () => {
     const tokenFile = await tokenPath("edstem-login-invalid-");
     const { runtime, stderr } = makeRuntime(401, false, fixture("user_info"), {
