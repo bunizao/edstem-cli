@@ -286,7 +286,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     ));
   lessons.command("read")
     .description("Read a lesson and its slides as Markdown.")
-    .argument("<lesson>", "Lesson ID", positiveInteger)
+    .argument("<lesson>", "Lesson ID", positiveInteger("<lesson>"))
     .action(textAction(runtime, async (client, _command, lesson: number) =>
       lessonToMarkdown(await client.fetchLesson(lesson))
     ));
@@ -332,7 +332,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     }));
   slides.command("read")
     .description("Read one slide as Markdown.")
-    .argument("<slide>", "Slide ID", positiveInteger)
+    .argument("<slide>", "Slide ID", positiveInteger("<slide>"))
     .action(textAction(runtime, async (client, _command, slide: number) =>
       slideToMarkdown(await client.fetchSlide(slide))
     ));
