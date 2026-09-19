@@ -26,6 +26,10 @@ export const MCP_TOOL_CATALOG = [
   ],
   ["read_lesson", "Read one lesson and its slides as Markdown."],
   ["read_slide", "Read one lesson slide as Markdown."],
+  [
+    "list_thread_files",
+    "List Ed-hosted downloadable files and direct resource links attached to one thread, including its answers and comments.",
+  ],
 ] as const;
 
 export type McpToolName = typeof MCP_TOOL_CATALOG[number][0];

@@ -337,6 +337,32 @@ describe("stdio MCP adapter", () => {
     );
   });
 
+  it("exposes thread files as structured metadata and resource links", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(
+      new Response(JSON.stringify(fixture("thread_files")), { status: 200 })
+    );
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const result = await client.callTool({
+      arguments: { threadId: 5001 },
+      name: "list_thread_files",
+    });
+
+    expect(parseToolResult(result)).toEqual([
+      expect.objectContaining({ filename: "starter.zip", source: "thread", threadId: 5001 }),
+      expect.objectContaining({ filename: "solution.pdf", commentId: 9001 }),
+      expect.objectContaining({ filename: "notes.txt", commentId: 9010 }),
+    ]);
+    expect(result.content).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        description: "Thread 5001 file",
+        name: "starter.zip",
+        type: "resource_link",
+        uri: "https://static.edusercontent.com/files/starter",
+      }),
+    ]));
+  });
+
   it("enforces write scope at the MCP seam", async () => {
     const edClient = new EdClient({ fetch: vi.fn<FetchLike>(), token: "test-token" });
     const server = createEdMcpServer({ canWrite: () => false, getClient: () => edClient });

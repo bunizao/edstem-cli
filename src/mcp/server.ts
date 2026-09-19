@@ -2,7 +2,7 @@ import { McpServer, type AuthInfo } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { EdApiError, EdAuthExpiredError, type EdClient } from "../ed/client.js";
-import { listLessonFiles } from "../ed/files.js";
+import { listLessonFiles, listThreadFiles } from "../ed/files.js";
 import type { LessonFile } from "../ed/models.js";
 import {
   EdInputError,
@@ -129,6 +129,18 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     },
     async ({ lessonId }, extra) => runTool(runtime, extra, false, async (client) =>
       fileLinksResult(listLessonFiles(await client.fetchLesson(lessonId)))
+    )
+  );
+
+  server.registerTool(
+    "list_thread_files",
+    {
+      annotations: READ_ONLY,
+      description: toolDescription("list_thread_files"),
+      inputSchema: z.object({ threadId: z.number().int().positive() }),
+    },
+    async ({ threadId }, extra) => runTool(runtime, extra, false, async (client) =>
+      fileLinksResult(listThreadFiles(await client.fetchThread(threadId)))
     )
   );
 
@@ -433,7 +445,8 @@ function fileLinksResult(files: LessonFile[]): ToolResult {
     content: [
       { type: "text", text: JSON.stringify(files) },
       ...files.map((file) => ({
-        description: file.slideTitle || `Lesson ${file.lessonId} file`,
+        description: file.slideTitle ||
+          (file.threadId ? `Thread ${file.threadId} file` : `Lesson ${file.lessonId} file`),
         ...(file.mediaType ? { mimeType: file.mediaType } : {}),
         name: file.filename,
         type: "resource_link" as const,
