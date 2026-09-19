@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { listLessonFiles } from "../src/ed/files.js";
-import type { Lesson, LessonSlide } from "../src/ed/models.js";
+import { listLessonFiles, listThreadFiles } from "../src/ed/files.js";
+import type { Comment, Lesson, LessonSlide, Thread } from "../src/ed/models.js";
 
 describe("lesson files", () => {
   it("collects PDF slides and embedded files without duplicate URLs", () => {
@@ -61,6 +61,103 @@ describe("lesson files", () => {
     expect(listLessonFiles(lesson)).toEqual([]);
   });
 });
+
+describe("thread files", () => {
+  it("collects files from the body, answers, and nested comments without duplicate URLs", () => {
+    const thread = makeThread({
+      answers: [makeComment({
+        comments: [makeComment({
+          comments: [makeComment({
+            content: '<file filename="nested.txt" url="https://static.edusercontent.com/files/nested"/>',
+            id: 9020,
+          })],
+          content: '<file filename="reply.zip" url="https://static.edusercontent.com/files/reply"/>',
+          id: 9010,
+        })],
+        content: '<file filename="solution.pdf" url="https://static.edusercontent.com/files/solution"/>',
+        id: 9001,
+      })],
+      comments: [makeComment({
+        content: '<file filename="duplicate.zip" url="https://static.edusercontent.com/files/starter"/>',
+        id: 9100,
+      })],
+      content: '<document><file filename="starter.zip" url="https://static.edusercontent.com/files/starter"/></document>',
+    });
+
+    expect(listThreadFiles(thread)).toEqual([
+      { filename: "starter.zip", threadId: 5001, source: "thread", url: "https://static.edusercontent.com/files/starter" },
+      expect.objectContaining({ filename: "solution.pdf", commentId: 9001, source: "comment" }),
+      expect.objectContaining({ filename: "reply.zip", commentId: 9010 }),
+      expect.objectContaining({ filename: "nested.txt", commentId: 9020 }),
+    ]);
+  });
+
+  it("ignores external and insecure thread file URLs", () => {
+    const thread = makeThread({
+      content: [
+        '<file filename="external" url="https://example.com/external.pdf"/>',
+        '<file filename="insecure" url="http://static.edusercontent.com/files/insecure"/>',
+      ].join(""),
+    });
+
+    expect(listThreadFiles(thread)).toEqual([]);
+  });
+});
+
+function makeComment(overrides: Partial<Comment> = {}): Comment {
+  return {
+    author: null,
+    comments: [],
+    content: "",
+    createdAt: "",
+    document: "",
+    id: 9001,
+    isAnonymous: false,
+    isEndorsed: false,
+    isResolved: false,
+    type: "comment",
+    userId: 12345,
+    voteCount: 0,
+    ...overrides,
+  };
+}
+
+function makeThread(overrides: Partial<Thread> = {}): Thread {
+  return {
+    answers: [],
+    author: null,
+    category: "",
+    comments: [],
+    content: "",
+    courseId: 100,
+    createdAt: "",
+    document: "",
+    id: 5001,
+    isAnonymous: false,
+    isAnswered: false,
+    isEndorsed: false,
+    isLocked: false,
+    isPinned: false,
+    isPrivate: false,
+    metrics: {
+      flagCount: 0,
+      replyCount: 0,
+      starCount: 0,
+      uniqueViewCount: 0,
+      unresolvedCount: 0,
+      viewCount: 0,
+      voteCount: 0,
+    },
+    number: 1,
+    subcategory: "",
+    subsubcategory: "",
+    title: "Thread",
+    type: "post",
+    updatedAt: "",
+    userId: 12345,
+    ...overrides,
+  };
+}
 
 function makeSlide(overrides: Partial<LessonSlide> = {}): LessonSlide {
   return {

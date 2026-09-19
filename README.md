@@ -61,10 +61,14 @@ Omitted verbs are inferred when the arguments are unambiguous. `read` always emi
 
 Lesson files include PDF slides stored in Ed's `file_url` field and Ed-hosted files embedded in lesson content. List them without downloading, or download all files to a directory. External links remain visible in lesson content but are not presented as downloadable files. Existing files are protected unless `--force` is supplied.
 
+A target is a lesson ID, or a thread prefixed with `thread:`. Thread targets collect the attachments in the thread body, its answers, and every nested comment; `--slide` applies to lesson targets only.
+
 ```bash
 edstem files list 67890
 edstem files get 67890 --dest ./slides
 edstem files get 67890 --slide 4401 --dest ./slides
+edstem files list thread:5001
+edstem files get thread:FIT1045#42 --dest ./attachments
 ```
 
 Slide facets use one read-only command so the verb vocabulary stays consistent:
@@ -116,7 +120,7 @@ The package also installs `edstem-mcp`, a local stdio MCP server using the same 
 
 The remote runtime supports MCP `2026-07-28`, including stateless `server/discover`, header-based routing, and results with `resultType`. It also keeps a stateless compatibility lane for 2025 Streamable HTTP clients during migration.
 
-The read-only `list_lesson_files` tool returns compact file metadata plus MCP resource links. Remote MCP servers cannot write to a client's local path, so clients can follow those links while the CLI's `files get` command handles direct filesystem downloads.
+The read-only `list_lesson_files` and `list_thread_files` tools return compact file metadata plus MCP resource links. Remote MCP servers cannot write to a client's local path, so clients can follow those links while the CLI's `files get` command handles direct filesystem downloads.
 
 ```json
 {

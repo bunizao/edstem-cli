@@ -26,7 +26,7 @@ import {
 import { loadConfig } from "./config.js";
 import { downloadLessonFiles } from "./download.js";
 import { EdClient, type FetchLike } from "./ed/client.js";
-import { listLessonFiles } from "./ed/files.js";
+import { listLessonFiles, listThreadFiles } from "./ed/files.js";
 import {
   listCurrentActivity,
   listLessons,
@@ -56,6 +56,12 @@ import { VERSION } from "./version.js";
 
 const SORT_OPTIONS = ["new", "old", "top", "hot"] as const;
 const SLIDE_SECTIONS = ["slide", "questions", "responses", "quiz"] as const;
+const FILE_TARGET_HELP =
+  "Lesson ID, or a thread as thread:<id> or thread:<unit>#<number>";
+
+export type FileTarget =
+  | { kind: "lesson"; id: number }
+  | { kind: "thread"; reference: string };
 
 const NOUNS: readonly NounSpec[] = [
   {
@@ -374,21 +380,39 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
       }
     )));
 
-  const files = program.command("files").description("List or download Ed-hosted lesson files.");
+  const files = program.command("files")
+    .description("List or download Ed-hosted lesson and thread files.");
   files.command("list")
-    .description("List Ed-hosted downloadable files in one lesson.")
-    .argument("<lesson>", "Lesson ID", positiveInteger("<lesson>"))
-    .action(outputAction(runtime, async (client, _command, lesson: number) =>
-      listLessonFiles(await client.fetchLesson(lesson))
+    .description("List Ed-hosted downloadable files in one lesson or thread.")
+    .argument("<target>", FILE_TARGET_HELP, parseFileTarget)
+    .action(outputAction(runtime, async (client, _command, target: FileTarget) =>
+      target.kind === "lesson"
+        ? listLessonFiles(await client.fetchLesson(target.id))
+        : listThreadFiles(await resolveThread(client, target.reference))
     ));
   files.command("get")
-    .description("Download Ed-hosted files from one lesson.")
-    .argument("<lesson>", "Lesson ID", positiveInteger("<lesson>"))
+    .description("Download Ed-hosted files from one lesson or thread.")
+    .argument("<target>", FILE_TARGET_HELP, parseFileTarget)
     .option("--dest <directory>", "Destination directory", ".")
     .option("--slide <slide>", "Download only one slide file", positiveInteger("--slide"))
     .option("--force", "Replace existing files.")
-    .action(outputAction(runtime, async (client, command, lessonId: number) => {
+    .action(outputAction(runtime, async (client, command, target: FileTarget) => {
       const options = command.opts();
+      const download = (selected: Parameters<typeof downloadLessonFiles>[1]) =>
+        downloadLessonFiles(client, selected, {
+          destination: options.dest,
+          force: options.force,
+        });
+
+      if (target.kind === "thread") {
+        if (options.slide !== undefined) {
+          throw new CliError("usage", "--slide only applies to lesson targets.");
+        }
+        const thread = await resolveThread(client, target.reference);
+        return { threadId: thread.id, downloads: await download(listThreadFiles(thread)) };
+      }
+
+      const lessonId = target.id;
       const available = listLessonFiles(await client.fetchLesson(lessonId));
       const selected = options.slide === undefined
         ? available
@@ -399,13 +423,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
           `No downloadable file was found for slide ${options.slide} in lesson ${lessonId}.`
         );
       }
-      return {
-        lessonId,
-        downloads: await downloadLessonFiles(client, selected, {
-          destination: options.dest,
-          force: options.force,
-        }),
-      };
+      return { lessonId, downloads: await download(selected) };
     }));
 
   program.command("activity")
@@ -572,6 +590,18 @@ function positiveInteger(name: string): (value: string) => number {
     }
     return parsed;
   };
+}
+
+export function parseFileTarget(value: string): FileTarget {
+  const normalized = value.trim();
+  if (!/^thread:/i.test(normalized)) {
+    return { kind: "lesson", id: positiveInteger("<target>")(normalized) };
+  }
+  const reference = normalized.slice("thread:".length).trim();
+  if (!reference) {
+    throw new CliError("usage", "Thread target must be thread:<id> or thread:<unit>#<number>.");
+  }
+  return { kind: "thread", reference };
 }
 
 function unitIdentifier(value: string): string {

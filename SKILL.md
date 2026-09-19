@@ -55,9 +55,9 @@ edstem units --fields id,code,name
 | edstem slides show | Show slide content, questions, responses, or quiz context. | <slide> | --section <section> | no |
 | edstem slides read | Read one slide as Markdown. | <slide> |  | no |
 | edstem slides submit | Save one answer or submit all saved answers for a slide. | <slide> | --question <question><br>--choice <number><br>--amend | yes |
-| edstem files | List or download Ed-hosted lesson files. |  |  | no |
-| edstem files list | List Ed-hosted downloadable files in one lesson. | <lesson> |  | no |
-| edstem files get | Download Ed-hosted files from one lesson. | <lesson> | --dest <directory><br>--slide <slide><br>--force | no |
+| edstem files | List or download Ed-hosted lesson and thread files. |  |  | no |
+| edstem files list | List Ed-hosted downloadable files in one lesson or thread. | <target> |  | no |
+| edstem files get | Download Ed-hosted files from one lesson or thread. | <target> | --dest <directory><br>--slide <slide><br>--force | no |
 | edstem activity | List current-user activity. | [unit] | -n, --max <count><br>-f, --filter <type> | no |
 | edstem update | Report or install the latest edstem-cli release. |  | --check | yes |
 | edstem commands | Describe the complete command tree. |  |  | no |
@@ -90,6 +90,7 @@ Run `edstem commands --json` for machine-readable metadata, including aliases, e
 | read_thread | Read one thread as Markdown. Pass either threadId, or courseId plus the course-local number. |
 | read_lesson | Read one lesson and its slides as Markdown. |
 | read_slide | Read one lesson slide as Markdown. |
+| list_thread_files | List Ed-hosted downloadable files and direct resource links attached to one thread, including its answers and comments. |
 
 ## Errors
 
