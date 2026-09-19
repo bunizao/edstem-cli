@@ -55,6 +55,7 @@ edstem units --fields id,code,name
 | edstem files list | List Ed-hosted downloadable files in one lesson. | <lesson> |  | no |
 | edstem files get | Download Ed-hosted files from one lesson. | <lesson> | --dest <directory><br>--slide <slide><br>--force | no |
 | edstem activity | List current-user activity. | [unit] | -n, --max <count><br>-f, --filter <type> | no |
+| edstem update | Report or install the latest edstem-cli release. |  | --check | yes |
 | edstem commands | Describe the complete command tree. |  |  | no |
 | edstem skills | Generate the agent skill. |  |  | no |
 | edstem skills generate | Regenerate SKILL.md from command metadata. |  |  | no |

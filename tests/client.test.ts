@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { EdAuthExpiredError, EdClient, type FetchLike } from "../src/ed/client.js";
 
@@ -16,6 +16,10 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe("EdClient", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("fetches identity with one authenticated request", async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(jsonResponse(fixture("user_info")));
     const client = new EdClient({ apiBaseUrl: "https://ed.example/api", fetch, token: "secret" });
@@ -123,6 +127,99 @@ describe("EdClient", () => {
 
     await expect(client.fetchUser()).rejects.toBeInstanceOf(EdAuthExpiredError);
     await expect(client.fetchUser()).rejects.not.toThrow(/never-print-this/);
+  });
+
+  it("serves a repeated identity lookup from the memo", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(jsonResponse(fixture("user_info")));
+    const client = new EdClient({ fetch, token: "secret" });
+
+    const [first, second] = await Promise.all([client.fetchUser(), client.fetchUser()]);
+    await client.fetchUser();
+
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(first).toBe(second);
+  });
+
+  it("refetches the identity after the memo expires", async () => {
+    vi.useFakeTimers();
+    const fetch = vi.fn<FetchLike>().mockImplementation(async () => jsonResponse(fixture("user_info")));
+    const client = new EdClient({ fetch, token: "secret" });
+
+    await client.fetchUser();
+    vi.advanceTimersByTime(61_000);
+    await client.fetchUser();
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not memoize a failed identity lookup", async () => {
+    const fetch = vi.fn<FetchLike>()
+      .mockResolvedValueOnce(jsonResponse({ code: "bad_token" }, 401))
+      .mockResolvedValueOnce(jsonResponse(fixture("user_info")));
+    const client = new EdClient({ fetch, token: "secret" });
+
+    await expect(client.fetchUser()).rejects.toBeInstanceOf(EdAuthExpiredError);
+    await expect(client.fetchUser()).resolves.toMatchObject({ user: { id: 12345 } });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries a rate-limited read with exponential backoff", async () => {
+    const fetch = vi.fn<FetchLike>()
+      .mockResolvedValueOnce(jsonResponse({ message: "slow down" }, 429))
+      .mockResolvedValueOnce(jsonResponse({ message: "gateway" }, 503))
+      .mockResolvedValueOnce(jsonResponse(fixture("user_info")));
+    const delays: number[] = [];
+    const client = new EdClient({
+      fetch,
+      retryBaseDelayMs: 10,
+      sleep: async (ms) => { delays.push(ms); },
+      token: "secret",
+    });
+
+    await expect(client.fetchUser()).resolves.toMatchObject({ user: { id: 12345 } });
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(delays).toEqual([10, 20]);
+  });
+
+  it("waits for a longer Retry-After header", async () => {
+    const fetch = vi.fn<FetchLike>()
+      .mockResolvedValueOnce(new Response("{}", { headers: { "retry-after": "5" }, status: 429 }))
+      .mockResolvedValueOnce(jsonResponse(fixture("user_info")));
+    const delays: number[] = [];
+    const client = new EdClient({
+      fetch,
+      retryBaseDelayMs: 10,
+      sleep: async (ms) => { delays.push(ms); },
+      token: "secret",
+    });
+
+    await client.fetchUser();
+
+    expect(delays).toEqual([5000]);
+  });
+
+  it("gives up after the configured retry count", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(jsonResponse({ message: "slow down" }, 429));
+    const client = new EdClient({
+      fetch,
+      maxRetries: 2,
+      retryBaseDelayMs: 10,
+      sleep: async () => undefined,
+      token: "secret",
+    });
+
+    await expect(client.fetchUser()).rejects.toThrow("HTTP 429");
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("never retries a write", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(jsonResponse({ message: "slow down" }, 429));
+    const sleep = vi.fn(async () => undefined);
+    const client = new EdClient({ fetch, sleep, token: "secret" });
+
+    await expect(client.submitSlide(42)).rejects.toThrow("HTTP 429");
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(sleep).not.toHaveBeenCalled();
   });
 
   it("marks a slide complete with an empty response", async () => {
