@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.7.0 - 2026-09-20
+
+### Added
+
+- Added styled help pages with a root wordmark, `gh`-style command groups (core, additional, agent), cyan flags, and a short "Try" list.
+- Added first-run onboarding: a terminal session with no saved token is shown where to create one, reads it hidden, verifies it with Ed and saves it.
+- Added prompts for what a person left out: a unit picker for `threads send`, an `$EDITOR` body, and a list for ambiguous units.
+- Added colour roles for tables and mutation plans: keys, the thing being posted, its destination, and status-like words each get a tone.
+
+### Changed
+
+- `edstem auth login` reads the token through the shared hidden prompt.
+- Per-command output flags are hidden from help pages; the root names them once. Commands carry short summaries in listings.
+
+### Compatibility notes
+
+- Prompts and colour only appear when stdin and stdout are terminals, the output is a table, and none of `CLI_AGENT`, `CLAUDECODE` or `CI` is set. Pipes, `--json`, `--output` and `NO_COLOR` keep the previous plain behaviour.
+
 ## 0.6.0 - 2026-09-20
 
 ### Added
