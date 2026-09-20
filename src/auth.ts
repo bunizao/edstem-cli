@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { createUi } from "@bunizao/cli-kit";
 import { CliError } from "./errors.js";
 
-const TOKEN_HELP_URL = "https://edstem.org/settings/api-tokens";
+export const TOKEN_HELP_URL = "https://edstem.org/settings/api-tokens";
 
 export type TokenSource = "environment" | "file";
 
