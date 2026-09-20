@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.6.0 - 2026-09-20
+
+### Added
+
+- Added `edstem threads send` and `edstem replies send`, which convert a Markdown body into Ed's document format before posting.
+- Added the gated MCP tools `create_thread` and `reply_thread`, disabled unless `EDSTEM_ALLOW_POSTING=1` is set for the stdio server or `MCP_ALLOW_POSTING=1` for the Worker.
+- Added `edstem auth login` and `edstem auth logout`, which verify a token before writing the `0600` token file, remove it idempotently, and warn when `EDSTEM_TOKEN` shadows it.
+- Added the Markdown read verbs `edstem lessons read` and `edstem slides read`, plus the MCP tools `read_thread`, `read_lesson`, `read_slide`, and `get_slide`.
+- Added `edstem threads search` and the `search_threads` MCP tool, along with `--offset` and `--since`, which accepts an ISO date, an ISO datetime, or a relative offset such as `7d`.
+- Added thread attachment support: `edstem files list` and `edstem files get` accept `thread:<id>` and `thread:<unit>#<number>` targets, and the `list_thread_files` MCP tool lists them.
+- Added the `list_modules` MCP tool and the `triage_unanswered` prompt, and gave every MCP tool a title and per-field input descriptions.
+- Restored `edstem update`, which reports the registry version and upgrades when one is available without requiring a token.
+- Added retry with exponential backoff and an honored `Retry-After` header for rate-limited reads, configured by the `rateLimit` block in `config.yaml`. Writes are never retried.
+
+### Changed
+
+- Made filtered thread listings walk pages until enough threads match, so `--max` is honest for filters Ed does not apply server-side.
+- Made `edstem slides show` return the projected slide instead of Ed's raw payload, matching every other projection.
+- Cached verified Ed tokens in the Worker isolate for five minutes, keyed by token digest and bounded to 1000 entries, overridable with `MCP_TOKEN_CACHE_TTL_SECONDS`.
+- Memoized the identity lookup for 60 seconds so a command and the course resolution before it share one `/api/user` request.
+
+### Fixed
+
+- Required an explicit selection for `lessons mark-read` and `mark_lessons_read`, which previously matched every lesson in a unit when no query was given.
+- Required at least one choice for `submit_slide_answer`, which previously posted an empty selection.
+- Named the offending argument in validation errors instead of reporting a bare value.
+- Handled `--help` and `--version` in `edstem-mcp` before starting the stdio server, so neither hangs in a terminal.
+- Honored `--dry-run` in `auth login` instead of contacting Ed and overwriting the saved token.
+- Ignored pinned threads when deciding where a `--since` walk stops, and shared the `offset` field between `search_threads` and `list_threads`.
+- Preserved link targets through emphasis and rejected unbalanced link URLs when converting Markdown bodies.
+- Verified reply targets belong to the thread being replied to.
+
+### Compatibility notes
+
+- `edstem slides show` now returns the projected slide shape rather than Ed's raw payload.
+- `lessons mark-read` and `mark_lessons_read` now fail without a query or `--all`/`all`.
+- `submit_slide_answer` now fails without at least one choice.
+
 ## 0.5.0 - 2026-08-25
 
 ### Added
