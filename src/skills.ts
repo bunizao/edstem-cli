@@ -108,7 +108,8 @@ function collectCommands(command: CommandDescription, parent: string[] = []): st
       const suffix = argument.variadic ? "..." : "";
       return argument.required ? `<${argument.name}${suffix}>` : `[${argument.name}${suffix}]`;
     }).join(" "),
-    command.options.map((option) => option.flags).join("<br>"),
+    // cli-kit's description has no hidden bit; a hidden alias is the only option without help text.
+    command.options.filter((option) => option.description).map((option) => option.flags).join("<br>"),
     command.mutating ? "yes" : "no",
   ];
   return [row, ...command.commands.flatMap((child) => collectCommands(child, path))];
