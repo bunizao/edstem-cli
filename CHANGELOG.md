@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.2 - 2026-09-24
+
+### Fixed
+
+- `--max` is accepted again as a hidden alias for `--limit` on `threads` and `activity`, so scripts written before 0.7.1 keep working.
+
 ## 0.7.1 - 2026-09-24
 
 ### Added
@@ -17,7 +23,7 @@
 
 ### Compatibility notes
 
-- `--max` is now `--limit`; `-n` is unchanged.
+- `--max` is now `--limit`; `-n` is unchanged. 0.7.2 accepts `--max` again as a hidden alias.
 - `edstem activity` output keys changed, and an unknown unit exits 4 instead of 2.
 
 ## 0.7.0 - 2026-09-20

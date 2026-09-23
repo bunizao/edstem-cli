@@ -1,6 +1,6 @@
 {
   "name": "edstem-cli",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Agent-first CLI and MCP server for Ed Discussion",
   "license": "MIT",
   "type": "module",
