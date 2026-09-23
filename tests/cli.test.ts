@@ -158,6 +158,17 @@ describe("CLI", () => {
     expect(await run(["node", "edstem", "threads", "--limit", "1", "100"], interleaved.runtime)).toBe(0);
   });
 
+  it("still accepts the pre-0.7.1 --max spelling, hidden from help", async () => {
+    const { fetch, runtime } = makeRuntime();
+
+    expect(await run(["node", "edstem", "threads", "--max", "1", "100"], runtime)).toBe(0);
+
+    expect(new URL(String(fetch.mock.calls[0]?.[0])).searchParams.get("limit")).toBe("1");
+    const help = makeRuntime();
+    await run(["node", "edstem", "threads", "list", "--help"], help.runtime);
+    expect(help.stdout.join("")).not.toContain("--max");
+  });
+
   it("emits compact thread summaries and field selection", async () => {
     const { runtime, stdout } = makeRuntime();
 
