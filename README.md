@@ -134,6 +134,7 @@ Run `edstem commands --json` for the full machine-readable command tree, includi
 | `EDSTEM_TOKEN` | Provide the Ed API token. |
 | `EDSTEM_CONFIG` | Override the local config file path. |
 | `EDSTEM_ALLOW_POSTING` | Set to `1` to enable the `edstem-mcp` posting tools. |
+| `EDSTEM_WIDGETS` | Set to `0` to drop the interactive `show_*` tools from `edstem-mcp`. |
 
 `config.yaml` also tunes read retries: `rateLimit.maxRetries` (default `3`) caps how many times a rate-limited or temporarily failing GET is retried, and `rateLimit.retryBaseDelay` (seconds, default `1.0`) sets the exponential backoff base. A longer `Retry-After` header wins. Writes are never retried.
 
@@ -144,6 +145,19 @@ The package also installs `edstem-mcp`, a local stdio MCP server using the same 
 The remote runtime supports MCP `2026-07-28`, including stateless `server/discover`, header-based routing, and results with `resultType`. It also keeps a stateless compatibility lane for 2025 Streamable HTTP clients during migration.
 
 The read-only `list_lesson_files` and `list_thread_files` tools return compact file metadata plus MCP resource links. Remote MCP servers cannot write to a client's local path, so clients can follow those links while the CLI's `files get` command handles direct filesystem downloads.
+
+### Interactive views
+
+In hosts that support [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) (Claude and ChatGPT among them), four tools render an interactive view in the chat instead of a wall of text:
+
+| Tool | Shows |
+| --- | --- |
+| `show_forum_catchup` | Unread announcements and threads that are new to you or have new replies, each expandable in place. |
+| `show_thread_activity` | New threads per week, stacked by category, with each week expandable to its busiest threads. |
+| `show_lesson_progress` | Completed lessons per released module, with what is left on click. |
+| `show_lesson_guide` | A step-through guide the assistant writes for one lesson, then a short practice quiz graded in place. The lesson's own Ed quiz is never answered. |
+
+Views are the default. Ask for a plain-text answer and the assistant uses the `list_*` and `read_*` tools instead; hosts without MCP Apps get the same data as text; and `EDSTEM_WIDGETS=0` removes the `show_*` tools from the stdio server. The `teach_lesson` prompt runs the lesson guide end to end.
 
 ```json
 {
