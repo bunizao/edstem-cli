@@ -89,6 +89,8 @@ edstem slides read 4401
 
 Mutations are visible in help, print a plan, and prompt with `y/N` in an interactive terminal. Non-interactive callers must pass `--yes`. `--dry-run` prints the plan without sending a write request.
 
+In a terminal, a command missing its unit asks for it with a picker (`edstem threads` lists your units), and `threads send` asks for `--title` and opens `$EDITOR` for the body. Pipes, `--json` and agent shells get the usage error with the usage line instead.
+
 ```bash
 edstem lessons mark-read 12345 Pre-Reading --dry-run
 edstem lessons mark-read 12345 Pre-Reading --yes
@@ -114,7 +116,7 @@ edstem replies send 12345#42 --body "Fixed by reinstalling." --yes
 edstem replies send 12345#42 --to 88991 --as comment --body-file - --yes
 ```
 
-The body is Markdown and is converted to Ed's document format: paragraphs, headings, fenced code, inline code, bold, italic, links, and bullet or numbered lists. `--body-file -` reads the body from stdin. `--as` defaults to `answer` on question threads and `comment` elsewhere; `--private` posts to staff only and `--anonymous` hides your name from other students.
+The body is Markdown and is converted to Ed's document format: paragraphs, headings, fenced code, inline code, bold, italic, links, and bullet or numbered lists. `--body-file -` reads the body from stdin; with neither flag, a terminal opens `$EDITOR`. `--as` defaults to `answer` on question threads and `comment` elsewhere; `--private` posts to staff only and `--anonymous` hides your name from other students.
 
 The MCP tools `create_thread` and `reply_thread` are disabled by default. Set `EDSTEM_ALLOW_POSTING=1` for the stdio server, or the Worker variable `MCP_ALLOW_POSTING=1`, to enable them.
 

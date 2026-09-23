@@ -1,6 +1,6 @@
 {
   "name": "edstem-cli",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "description": "Agent-first CLI and MCP server for Ed Discussion",
   "license": "MIT",
   "type": "module",
@@ -38,7 +38,7 @@
     "build:widget": "node scripts/build-widget.mjs"
   },
   "dependencies": {
-    "@bunizao/cli-kit": "^0.2.0",
+    "@bunizao/cli-kit": "^0.5.0",
     "@modelcontextprotocol/ext-apps": "^2.0.0",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@modelcontextprotocol/server": "2.0.0",

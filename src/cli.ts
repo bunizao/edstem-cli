@@ -1,29 +1,43 @@
 import {
   CliError,
+  banner,
+  colorEnabled,
   commandsJson,
   confirm,
+  createTheme,
   createProgram as createCliProgram,
+  createUi,
+  detectAudience,
+  examples,
+  formatFromArgv,
+  helpSection,
   insertDefaultVerb,
+  isInformationalExit,
   mutating,
+  parseWithPrompts,
   render,
   reportError,
   resolveFormat,
   writeOutput,
+  type ArgumentFiller,
   type FormatOptions,
   type NounSpec,
   type OutputFormat,
+  type Theme,
+  type Ui,
 } from "@bunizao/cli-kit";
 import type { Command } from "commander";
 import { readFile } from "node:fs/promises";
 
 import {
+  TOKEN_HELP_URL,
   defaultTokenFile,
   loadToken,
   loadTokenWithSource,
-  promptHiddenToken,
   removeToken,
   saveToken,
 } from "./auth.js";
+import { EDSTEM_TAGLINE, EDSTEM_WORDMARK, showWordmark } from "./wordmark.js";
 import { loadConfig } from "./config.js";
 import { downloadLessonFiles } from "./download.js";
 import { EdClient, type FetchLike } from "./ed/client.js";
@@ -83,7 +97,7 @@ const NOUNS: readonly NounSpec[] = [
   {
     name: "threads",
     verbs: ["list", "search", "show", "read", "send"],
-    defaultByArity: { 1: "list" },
+    defaultByArity: { 0: "list", 1: "list" },
     valueFlags: [
       "-n",
       "--limit",
@@ -110,7 +124,7 @@ const NOUNS: readonly NounSpec[] = [
   {
     name: "lessons",
     verbs: ["list", "show", "read", "mark-read"],
-    defaultByArity: { 1: "list" },
+    defaultByArity: { 0: "list", 1: "list" },
     valueFlags: ["--module", "--type", "--state", "--status", "--delay"],
   },
   {
@@ -126,6 +140,13 @@ const NOUNS: readonly NounSpec[] = [
     valueFlags: ["--dest", "--slide"],
   },
 ];
+
+// Grouped the way `gh` does: what a person reaches for daily, then the rest, then what only an agent runs.
+const HELP_SECTIONS: Readonly<Record<string, readonly string[]>> = {
+  "Core commands": ["threads", "replies", "lessons", "slides", "files", "units"],
+  "Additional commands": ["user", "activity", "auth", "update"],
+  "Agent commands": ["commands", "skills"],
+};
 
 export interface CliRuntime {
   createClient: () => Promise<EdClient>;
@@ -144,17 +165,22 @@ export interface CliRuntime {
 }
 
 interface GlobalOptions extends FormatOptions {
+  color?: boolean;
   dryRun?: boolean;
   output?: string;
   yes?: boolean;
 }
 
-export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Command {
+export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interactive: false })): Command {
+  runtime ??= createDefaultRuntime(ui);
+  // Plans go to stderr, so that stream decides whether the roles in them are painted.
+  const theme = (): Theme => createTheme(colorEnabled(process.stderr) && program.opts().color !== false);
   const program = createCliProgram({
     name: "edstem",
     version: VERSION,
-    description: "CLI for Ed Discussion.",
+    description: EDSTEM_TAGLINE,
   });
+  banner(program, EDSTEM_WORDMARK);
 
   const auth = program.command("auth").description("Manage Ed authentication.");
   auth.command("login")
@@ -179,7 +205,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
 
       const token = command.opts().tokenStdin
         ? (await runtime.readStdinLine()).trim()
-        : (await promptHiddenToken()).trim();
+        : await askForToken(ui, runtime.tokenFile);
       if (!token) throw new CliError("auth", "No Ed token provided.");
 
       const client = await runtime.createClientForToken(token);
@@ -256,7 +282,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
   ));
   withThreadFilters(
     threads.command("search")
-      .description("Search threads in a unit by words in the title and body.")
+      .description("Search threads in a unit by words in the title and body.").summary("Search threads in a unit")
       .argument("<unit>", "Unit ID or code", unitIdentifier)
       .argument("<query...>", "Words that must all appear in the title or body")
   ).action(outputAction(runtime, async (client, command, unit: string, query: string[]) =>
@@ -266,7 +292,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     })).map(projectThreadSummary)
   ));
   threads.command("show")
-    .description("Show a thread by ID or unit ID/code plus #number.")
+    .description("Show a thread by ID or unit ID/code plus #number.").summary("Show a thread")
     .argument("<reference>", "Thread ID or unit ID/code plus #number")
     .option("--include-html", "Include Ed XML content.")
     .action(outputAction(runtime, async (client, command, reference: string) => {
@@ -294,11 +320,11 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     .action(mutationAction(runtime,
       async (command, unit: string) => {
         const options = command.opts();
-        const document = markdownToEdDocument(await readMarkdownBody(options));
+        const document = markdownToEdDocument(await readMarkdownBody(options, ui));
         return {
           details: document,
           document,
-          summary: `Post a ${options.type} ${JSON.stringify(options.title)} in unit ${unit}.`,
+          summary: `Post a ${options.type} ${theme().subject(JSON.stringify(options.title))} in unit ${theme().target(unit)}.`,
         };
       },
       async (command, plan, unit: string) => {
@@ -336,7 +362,7 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
     .action(mutationAction(runtime,
       async (command, reference: string) => {
         const options = command.opts();
-        const document = markdownToEdDocument(await readMarkdownBody(options));
+        const document = markdownToEdDocument(await readMarkdownBody(options, ui));
         const thread = await resolveThread(await runtime.createClient(), reference);
         if (options.to !== undefined) {
           assertCommentInThread(thread, options.to);
@@ -346,8 +372,8 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
           details: document,
           document,
           summary: options.to === undefined
-            ? `Post a ${type} on thread ${thread.id}.`
-            : `Post a ${type} under comment ${options.to} on thread ${thread.id}.`,
+            ? `Post a ${type} on thread ${theme().target(String(thread.id))}.`
+            : `Post a ${type} under comment ${theme().subject(String(options.to))} on thread ${theme().target(String(thread.id))}.`,
           thread,
           type,
         };
@@ -575,16 +601,62 @@ export function createProgram(runtime: CliRuntime = createDefaultRuntime()): Com
       await writeValue(runtime, command, { generated: "SKILL.md" });
     });
 
+  for (const [title, names] of Object.entries(HELP_SECTIONS)) {
+    // Placed in the order the list names them: that order is the help page.
+    for (const name of names) for (const command of program.commands) if (command.name() === name) helpSection(command, title);
+  }
+  examples(program, [
+    "edstem threads UNIT  # latest threads in a unit",
+    "edstem threads read UNIT#42",
+    "edstem threads send UNIT --title \"Week 3 question\"  # asks for the body in $EDITOR",
+  ]);
   return program as Command;
 }
 
-function createDefaultRuntime(): CliRuntime {
+// Where a token comes from and where it goes, then the token itself, echoed as dots.
+async function askForToken(ui: Ui, tokenFile: string): Promise<string> {
+  ui.note(`Ed needs a personal API token.\nCreate one at ${TOKEN_HELP_URL} and paste it below.\nIt is saved to ${tokenFile}.`, "Ed token");
+  return (await ui.password("Ed API token")).trim();
+}
+
+// First run on this machine: the wordmark, the token, and a check with Ed before anything is saved.
+async function onboardToken(ui: Ui, tokenFile: string, verify: (token: string) => Promise<EdClient>): Promise<string> {
+  showWordmark(ui);
+  for (;;) {
+    const token = await askForToken(ui, tokenFile);
+    if (!token) {
+      ui.warn("Nothing was pasted.");
+      continue;
+    }
+    const spin = ui.spinner();
+    spin.start("Checking the token with Ed");
+    try {
+      const identity = await (await verify(token)).fetchUser();
+      spin.stop(`Signed in as ${identity.user.name}`);
+    } catch (error) {
+      spin.error(`Ed rejected that token: ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+    await saveToken(token, tokenFile);
+    return token;
+  }
+}
+
+function createDefaultRuntime(ui: Ui): CliRuntime {
   const tokenFile = defaultTokenFile();
   let client: Promise<EdClient> | undefined;
+  const createClientForToken = async (token: string): Promise<EdClient> =>
+    new EdClient({ apiBaseUrl: (await loadConfig()).apiBaseUrl, token });
   return {
     createClient: () => {
-      client ??= Promise.all([loadToken({ tokenFile }), loadConfig()]).then(([token, config]) =>
-        new EdClient({
+      client ??= (async () => {
+        const config = await loadConfig();
+        // A person with no token is walked through getting one; a pipe or an agent gets the auth error.
+        const token = await loadToken({ tokenFile, interactive: false }).catch(async (error: unknown) => {
+          if (!ui.interactive || !(error instanceof CliError) || error.code !== "auth") throw error;
+          return onboardToken(ui, tokenFile, createClientForToken);
+        });
+        return new EdClient({
           apiBaseUrl: config.apiBaseUrl,
           maxRetries: config.maxRetries,
           retryBaseDelayMs: config.retryBaseDelayMs,
@@ -594,12 +666,11 @@ function createDefaultRuntime(): CliRuntime {
           trace: process.argv.includes("--verbose")
             ? (entry) => process.stderr.write(`${entry.method} ${entry.url} ${entry.status} ${entry.ms}ms\n`)
             : undefined,
-        })
-      );
+        });
+      })();
       return client;
     },
-    createClientForToken: async (token) =>
-      new EdClient({ apiBaseUrl: (await loadConfig()).apiBaseUrl, token }),
+    createClientForToken,
     defaultFetchCount: async () => (await loadConfig()).fetchCount,
     interactive: Boolean(process.stdin.isTTY),
     isTTY: Boolean(process.stdout.isTTY),
@@ -683,16 +754,19 @@ function mutationAction<Plan extends MutationPlan, Arguments extends unknown[]>(
   };
 }
 
-async function readMarkdownBody(options: { body?: string; bodyFile?: string }): Promise<string> {
+async function readMarkdownBody(options: { body?: string; bodyFile?: string }, ui: Ui): Promise<string> {
   if (options.body !== undefined && options.bodyFile !== undefined) {
     throw new CliError("usage", "Use only one of --body or --body-file.");
   }
-  if (options.body === undefined && options.bodyFile === undefined) {
+  if (options.body === undefined && options.bodyFile === undefined && !ui.interactive) {
     throw new CliError("usage", "Provide the post body with --body or --body-file.");
   }
-  const body = options.body ?? (options.bodyFile === "-"
-    ? await readStdin()
-    : await readFile(options.bodyFile as string, "utf8"));
+  // A person at a terminal writes the body in their editor, as they would a commit message.
+  const body = options.body ?? (options.bodyFile === undefined
+    ? await ui.editor("Post body (Markdown)")
+    : options.bodyFile === "-"
+      ? await readStdin()
+      : await readFile(options.bodyFile, "utf8"));
   if (!body.trim()) {
     throw new CliError("usage", "The post body must not be empty.");
   }
@@ -732,6 +806,8 @@ async function writeValue(runtime: CliRuntime, command: Command, value: unknown)
   const options = outputOptions(command);
   const format = resolveFormat(options, runtime.isTTY);
   const fields = options.fields?.split(",").map((field) => field.trim()).filter(Boolean);
+  // Colour rides on the table alone: a file, a pipe or --json never carries escape codes.
+  const theme = format === "table" && !options.output ? createTheme(colorEnabled({ isTTY: runtime.isTTY }) && options.color !== false) : undefined;
   // Pretty JSON is for a person reading it; a pipe only pays for the whitespace.
   await writeText(
     runtime,
@@ -741,6 +817,7 @@ async function writeValue(runtime: CliRuntime, command: Command, value: unknown)
       columns: fields?.length ? undefined : TABLE_COLUMNS[commandPath(command)],
       width: runtime.columns,
       pretty: runtime.isTTY,
+      ...(theme ? { theme } : {}),
     }),
     options.output,
   );
@@ -857,14 +934,25 @@ function collectPositiveInteger(name: string): (value: string, previous: number[
 }
 
 export async function run(argv = process.argv, runtime?: CliRuntime): Promise<number> {
-  const selectedRuntime = runtime ?? createDefaultRuntime();
   const args = insertDefaultVerb(argv.slice(2), NOUNS);
-  const program = createProgram(selectedRuntime);
+  const interactive = runtime?.interactive ?? Boolean(process.stdin.isTTY);
+  const isTTY = runtime?.isTTY ?? Boolean(process.stdout.isTTY);
+  // One rule for who is on the other end: a person at a terminal reading a table gets
+  // asked for what they left out; a pipe, --json or an agent's shell gets the usage error.
+  const human = detectAudience({
+    stdin: { isTTY: interactive },
+    stdout: { isTTY },
+    env: process.env,
+    format: formatFromArgv(args, isTTY),
+  }) === "human";
+  const ui = createUi({ input: process.stdin, output: process.stderr, interactive: human });
+  const selectedRuntime = runtime ?? createDefaultRuntime(ui);
+  let program = createProgram(selectedRuntime, ui);
   try {
-    await program.parseAsync(args, { from: "user" });
+    await parseWithPrompts(() => (program = createProgram(selectedRuntime, ui)), args, { ui, fillers: { unit: pickUnit(selectedRuntime, ui) } });
     return 0;
   } catch (error) {
-    if (isCommanderSuccess(error)) return 0;
+    if (isInformationalExit(error)) return 0;
     const normalized = normalizeEdError(error);
     const format = safeErrorFormat(program, selectedRuntime.isTTY);
     const reported = reportError(normalized, format);
@@ -873,9 +961,13 @@ export async function run(argv = process.argv, runtime?: CliRuntime): Promise<nu
   }
 }
 
-function isCommanderSuccess(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  return (error as { exitCode?: unknown }).exitCode === 0;
+// A person who typed `edstem threads` is shown their units rather than a usage error.
+function pickUnit(runtime: CliRuntime, ui: Ui): ArgumentFiller {
+  return async () => {
+    const { courses } = await (await runtime.createClient()).fetchUser();
+    const active = courses.filter((course) => course.status.toLowerCase() !== "archived");
+    return ui.select("Which unit?", active.map((course) => ({ value: String(course.id), label: course.name, hint: course.code })));
+  };
 }
 
 function safeErrorFormat(program: Command, isTTY: boolean): OutputFormat {
