@@ -4,8 +4,8 @@ import { EdInputError, resolveCourse, type CourseReference } from "../ed/operati
 
 /**
  * Payloads for the MCP Apps widget. Each builder returns what the widget renders
- * (structuredContent) plus a short text for the model and for hosts without
- * MCP Apps. Interpretation stays with the model; these only shape Ed data.
+ * (view) plus a short text for the model and for hosts without MCP Apps.
+ * Interpretation stays with the model; these only shape Ed data.
  */
 
 const DAY_MS = 86_400_000;
@@ -15,7 +15,7 @@ const PAGE_SIZE = 100;
 const THREAD_PAGE_CAP = 10;
 
 export interface WidgetResult {
-  structuredContent: Record<string, unknown>;
+  view: Record<string, unknown>;
   text: string;
 }
 
@@ -68,7 +68,7 @@ export async function buildForumCatchup(
     ),
   ];
   return {
-    structuredContent: { announcements, course: label, courseId: course.id, days, kind: "forum_catchup", threads },
+    view: { announcements, course: label, courseId: course.id, days, kind: "forum_catchup", threads },
     text: lines.join("\n"),
   };
 }
@@ -111,7 +111,7 @@ export async function buildThreadActivity(
       ),
   ];
   return {
-    structuredContent: { course: label, courseId: course.id, kind: "thread_activity", threads: rows, weeks },
+    view: { course: label, courseId: course.id, kind: "thread_activity", threads: rows, weeks },
     text: lines.join("\n"),
   };
 }
@@ -157,7 +157,7 @@ export async function buildLessonProgress(
       ),
     ].join("\n");
   return {
-    structuredContent: { course: label, courseId: course.id, kind: "lesson_progress", modules: ordered },
+    view: { course: label, courseId: course.id, kind: "lesson_progress", modules: ordered },
     text,
   };
 }
@@ -185,7 +185,7 @@ export async function buildLessonGuide(client: EdClient, input: GuideInput): Pro
   const lesson = await client.fetchLesson(input.lessonId);
   const edQuizSlides = lesson.slides.filter((slide) => slide.type.toLowerCase() === "quiz").length;
   return {
-    structuredContent: {
+    view: {
       edQuizSlides,
       kind: "lesson_guide",
       lesson: { id: lesson.id, module: lesson.moduleName, title: lesson.title },

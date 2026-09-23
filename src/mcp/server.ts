@@ -125,6 +125,11 @@ export interface EdMcpRuntime {
 }
 
 const WIDGET_URI = "ui://edstem/widget.html";
+/**
+ * The widget payload rides in the result's _meta, not structuredContent: ChatGPT
+ * shows structuredContent to the model, and the text content already covers it.
+ */
+export const WIDGET_VIEW_KEY = "edstem/view";
 const SERVER_INSTRUCTIONS = [
   "Ed Discussion for one signed-in student: courses, forum threads and lessons.",
   "Prefer the show_* tools when the answer would otherwise be a long list or table:",
@@ -753,7 +758,7 @@ function registerWidgets(server: McpServer, runtime: EdMcpRuntime): void {
 }
 
 function widgetResult(result: WidgetResult): ToolResult {
-  return { content: [{ type: "text", text: result.text }], structuredContent: result.structuredContent };
+  return { _meta: { [WIDGET_VIEW_KEY]: result.view }, content: [{ type: "text", text: result.text }] };
 }
 
 function teachPrompt(courseId: string, lesson: string): string {
@@ -841,8 +846,8 @@ type ToolResult = {
       uri: string;
     }
   >;
+  _meta?: Record<string, unknown>;
   isError?: boolean;
-  structuredContent?: Record<string, unknown>;
 };
 
 function jsonResult(payload: unknown): ToolResult {

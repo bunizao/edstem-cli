@@ -7,7 +7,7 @@ import {
 } from "@modelcontextprotocol/ext-apps";
 
 /*
- * One widget renders every show_* tool; structuredContent.kind picks the view.
+ * One widget renders every show_* tool; the payload's kind picks the view.
  * Each view is one headline plus one main element. Stepping, drilling and grading
  * happen here with no model turn; only "summarise / explain" goes back to the model.
  */
@@ -76,7 +76,8 @@ const ui = {
 };
 
 app.ontoolresult = (result) => {
-  const content = result.structuredContent as Payload | undefined;
+  // Mirrors WIDGET_VIEW_KEY in server.ts; the widget bundle can't import server code.
+  const content = result._meta?.["edstem/view"] as Payload | undefined;
   if (result.isError || !content?.kind) {
     const text = result.content?.find((block) => block.type === "text");
     error = text && "text" in text ? readError(text.text) : "Ed returned nothing to show.";

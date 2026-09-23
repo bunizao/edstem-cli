@@ -6,7 +6,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EdClient, type FetchLike } from "../src/ed/client.js";
-import { createEdMcpServer } from "../src/mcp/server.js";
+import { createEdMcpServer, WIDGET_VIEW_KEY } from "../src/mcp/server.js";
 import {
   buildForumCatchup,
   buildLessonGuide,
@@ -62,12 +62,12 @@ describe("widget payloads", () => {
   it("catches up on the window with read state, keeping announcements apart", async () => {
     const client = new EdClient({ fetch: edFetch(), token: "secret" });
 
-    const { structuredContent, text } = await buildForumCatchup(client, "CS101", 14);
+    const { view, text } = await buildForumCatchup(client, "CS101", 14);
 
-    expect(structuredContent).toMatchObject({ course: "CS101", courseId: 100, days: 14, kind: "forum_catchup" });
-    expect(structuredContent.announcements).toEqual([expect.objectContaining({ number: 11, seen: false })]);
-    expect((structuredContent.threads as { number: number }[]).map((thread) => thread.number)).toEqual([12, 13, 14]);
-    expect(structuredContent.threads).toContainEqual(expect.objectContaining({ excerpt: "Query four fails.", number: 12, seen: false }));
+    expect(view).toMatchObject({ course: "CS101", courseId: 100, days: 14, kind: "forum_catchup" });
+    expect(view.announcements).toEqual([expect.objectContaining({ number: 11, seen: false })]);
+    expect((view.threads as { number: number }[]).map((thread) => thread.number)).toEqual([12, 13, 14]);
+    expect(view.threads).toContainEqual(expect.objectContaining({ excerpt: "Query four fails.", number: 12, seen: false }));
     expect(text).toContain("2 of 3 threads");
     expect(text).toContain("#13 Room for the test (+3 replies)");
     expect(text).toContain("#12 Autograder error (new, unanswered)");
@@ -76,18 +76,18 @@ describe("widget payloads", () => {
   it("charts only student threads inside the window", async () => {
     const client = new EdClient({ fetch: edFetch(), token: "secret" });
 
-    const { structuredContent, text } = await buildThreadActivity(client, 100, 2);
+    const { view, text } = await buildThreadActivity(client, 100, 2);
 
-    expect((structuredContent.threads as { number: number }[]).map((thread) => thread.number)).toEqual([12, 13, 14]);
-    expect(structuredContent.threads).toContainEqual(expect.objectContaining({ category: "Assignments", sub: "A2" }));
+    expect((view.threads as { number: number }[]).map((thread) => thread.number)).toEqual([12, 13, 14]);
+    expect(view.threads).toContainEqual(expect.objectContaining({ category: "Assignments", sub: "A2" }));
     expect(text).toContain("3 threads in the last 2 weeks");
   });
 
   it("orders released modules by opening and leaves unreleased ones last", async () => {
     const client = new EdClient({ fetch: edFetch(), token: "secret" });
 
-    const { structuredContent, text } = await buildLessonProgress(client, 100);
-    const modules = structuredContent.modules as { name: string; openedAt: string | null; total: number; completed: number; unfinished: unknown[] }[];
+    const { view, text } = await buildLessonProgress(client, 100);
+    const modules = view.modules as { name: string; openedAt: string | null; total: number; completed: number; unfinished: unknown[] }[];
 
     expect(modules.map((module) => [module.name, module.completed, module.total, Boolean(module.openedAt)])).toEqual([
       ["Week 1", 1, 2, true],
@@ -104,9 +104,9 @@ describe("widget payloads", () => {
     const sections = [{ points: ["A point."], title: "One" }];
     const question = { answer: 1, options: ["a", "b"], question: "Q?", section: 0, why: "Because." };
 
-    const { structuredContent } = await buildLessonGuide(client, { lessonId: 72, quiz: [question], sections });
+    const { view } = await buildLessonGuide(client, { lessonId: 72, quiz: [question], sections });
 
-    expect(structuredContent).toMatchObject({ edQuizSlides: 1, lesson: { module: "Week 1", title: "Intro quiz" } });
+    expect(view).toMatchObject({ edQuizSlides: 1, lesson: { module: "Week 1", title: "Intro quiz" } });
     expect(fetch.mock.calls.map(([url]) => new URL(String(url)).pathname)).toEqual(["/api/lessons/72"]);
     await expect(buildLessonGuide(client, { lessonId: 72, quiz: [{ ...question, answer: 2 }], sections }))
       .rejects.toThrow("quiz[0].answer");
@@ -154,7 +154,8 @@ describe("widget tools over MCP", () => {
 
     const result = await client.callTool({ arguments: { courseId: 100 }, name: "show_lesson_progress" });
 
-    expect(result.structuredContent).toMatchObject({ kind: "lesson_progress" });
+    expect(result._meta?.[WIDGET_VIEW_KEY]).toMatchObject({ kind: "lesson_progress" });
+    expect(result.structuredContent).toBeUndefined();
     expect((result.content as { text: string }[])[0]?.text).toContain("CS101:");
   });
 
