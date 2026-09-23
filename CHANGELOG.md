@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.7.1 - 2026-09-24
+
+### Added
+
+- Added four experimental MCP Apps views: `show_forum_catchup`, `show_thread_activity`, `show_lesson_progress` and `show_lesson_guide`, plus the `teach_lesson` prompt. Hosts without MCP Apps get the text content; `EDSTEM_WIDGETS=0` removes the tools from the stdio server.
+- Added thread read state: an `unseen` flag and `newReplyCount`.
+- `--verbose` now traces Ed requests and their timings to stderr.
+
+### Changed
+
+- Units resolve against the site's own list in tiers (exact code, leading code token, exact name, substring); an unmatched unit exits 4 and lists the site's units.
+- List tables show identifying columns and fit the terminal width; JSON is compact when stdout is not a terminal.
+- `edstem activity` projects `courseId`, `createdAt` and a flat row shape instead of Ed's raw keys.
+- Rewrote the skill and every MCP tool description around user intent, with institution-neutral wording.
+
+### Compatibility notes
+
+- `--max` is now `--limit`; `-n` is unchanged.
+- `edstem activity` output keys changed, and an unknown unit exits 4 instead of 2.
+
 ## 0.7.0 - 2026-09-20
 
 ### Added
