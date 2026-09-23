@@ -20,6 +20,7 @@ Options:
   -V, --version  Show the version.
 
 Authentication reads EDSTEM_TOKEN, then ~/.config/edstem-cli/token.
+Set EDSTEM_WIDGETS=0 to drop the interactive show_* tools and answer in text only.
 
 MCP client configuration:
   {
@@ -37,6 +38,7 @@ export function createStdioEdMcpServer(client: EdClient): McpServer {
     canPost: () => process.env.EDSTEM_ALLOW_POSTING === "1",
     canWrite: () => true,
     getClient: () => client,
+    widgets: process.env.EDSTEM_WIDGETS !== "0",
   });
 }
 

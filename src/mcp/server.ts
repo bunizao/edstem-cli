@@ -1,4 +1,9 @@
 import { McpServer, type AuthInfo } from "@modelcontextprotocol/server";
+import {
+  RESOURCE_MIME_TYPE,
+  registerAppResource,
+  registerAppTool,
+} from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 
 import { EdApiError, EdAuthExpiredError, type EdClient } from "../ed/client.js";
@@ -33,6 +38,14 @@ import {
 import { lessonToMarkdown, slideToMarkdown, threadToMarkdown } from "../markdown.js";
 import { VERSION } from "../version.js";
 import { toolDescription } from "./catalog.js";
+import { WIDGET_HTML } from "./widget-html.generated.js";
+import {
+  buildForumCatchup,
+  buildLessonGuide,
+  buildLessonProgress,
+  buildThreadActivity,
+  type WidgetResult,
+} from "./widgets.js";
 
 // This server only talks to Ed, so openWorldHint is false everywhere.
 const READ_ONLY = {
@@ -107,10 +120,27 @@ export interface EdMcpRuntime {
     context: McpToolContext
   ) => { extra?: Record<string, unknown>; message: string; type: string } | undefined;
   onAuthExpired?: (context: McpToolContext) => void | Promise<void>;
+  /** Register the interactive show_* tools; defaults to true. */
+  widgets?: boolean;
 }
 
+const WIDGET_URI = "ui://edstem/widget.html";
+const SERVER_INSTRUCTIONS = [
+  "Ed Discussion for one signed-in student: courses, forum threads and lessons.",
+  "Prefer the show_* tools when the answer would otherwise be a long list or table:",
+  "show_forum_catchup for what the user missed, show_thread_activity for what the forum is about over time,",
+  "show_lesson_progress for what is left in the lessons, show_lesson_guide to teach a lesson.",
+  "They render an interactive view in hosts that support MCP Apps and return the same data as text elsewhere.",
+  "After one, add a sentence or two of interpretation instead of repeating what the view shows.",
+  "Use list_* and read_* instead when the user asks for plain text or you need specific fields.",
+].join(" ");
+
 export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
-  const server = new McpServer({ name: "edstem", version: VERSION });
+  const widgets = runtime.widgets !== false;
+  const server = new McpServer(
+    { name: "edstem", version: VERSION },
+    widgets ? { instructions: SERVER_INSTRUCTIONS } : {}
+  );
 
   server.registerTool(
     "get_user",
@@ -593,7 +623,151 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
     })
   );
 
+  if (widgets) {
+    registerWidgets(server, runtime);
+  }
+
   return server;
+}
+
+function registerWidgets(server: McpServer, runtime: EdMcpRuntime): void {
+  registerAppResource(
+    server,
+    "Ed widget",
+    WIDGET_URI,
+    { description: "Interactive views for the show_* tools." },
+    async () => ({
+      contents: [{ mimeType: RESOURCE_MIME_TYPE, text: WIDGET_HTML, uri: WIDGET_URI }],
+    })
+  );
+  const ui = { _meta: { ui: { resourceUri: WIDGET_URI } } };
+
+  server.registerPrompt(
+    "teach_lesson",
+    {
+      argsSchema: z.object({
+        courseId: z.string().describe(
+          "Ed course ID, the unit code as Ed shows it, or part of the unit name (see list_courses)."
+        ),
+        lesson: z.string().describe("Words from the lesson or module title, for example a topic name."),
+      }),
+      description: "Teach one lesson as a step-through guide with a short practice quiz.",
+      title: "Teach me a lesson",
+    },
+    ({ courseId, lesson }) => ({
+      messages: [{
+        content: { text: teachPrompt(courseId, lesson), type: "text" as const },
+        role: "user" as const,
+      }],
+    })
+  );
+
+  registerAppTool(
+    server,
+    "show_forum_catchup",
+    {
+      ...ui,
+      annotations: READ_ONLY,
+      description: toolDescription("show_forum_catchup"),
+      inputSchema: z.object({
+        courseId: COURSE_REFERENCE,
+        days: z.number().int().min(1).max(60).optional().default(14).describe(
+          "How many days back to look; defaults to 14."
+        ),
+      }),
+      title: "Catch up on the forum",
+    },
+    async ({ courseId, days }, extra) => runTool(runtime, extra, "read", async (client) =>
+      widgetResult(await buildForumCatchup(client, courseId, days))
+    )
+  );
+
+  registerAppTool(
+    server,
+    "show_thread_activity",
+    {
+      ...ui,
+      annotations: READ_ONLY,
+      description: toolDescription("show_thread_activity"),
+      inputSchema: z.object({
+        courseId: COURSE_REFERENCE,
+        weeks: z.number().int().min(1).max(26).optional().default(12).describe(
+          "How many weeks back to chart; defaults to 12."
+        ),
+      }),
+      title: "Chart forum activity",
+    },
+    async ({ courseId, weeks }, extra) => runTool(runtime, extra, "read", async (client) =>
+      widgetResult(await buildThreadActivity(client, courseId, weeks))
+    )
+  );
+
+  registerAppTool(
+    server,
+    "show_lesson_progress",
+    {
+      ...ui,
+      annotations: READ_ONLY,
+      description: toolDescription("show_lesson_progress"),
+      inputSchema: z.object({ courseId: COURSE_REFERENCE }),
+      title: "Show lesson progress",
+    },
+    async ({ courseId }, extra) => runTool(runtime, extra, "read", async (client) =>
+      widgetResult(await buildLessonProgress(client, courseId))
+    )
+  );
+
+  registerAppTool(
+    server,
+    "show_lesson_guide",
+    {
+      ...ui,
+      annotations: READ_ONLY,
+      description: toolDescription("show_lesson_guide"),
+      inputSchema: z.object({
+        lessonId: LESSON_ID,
+        quiz: z.array(z.object({
+          answer: z.number().int().min(0).describe("Zero-based index of the correct option."),
+          options: z.array(z.string().trim().min(1).max(200)).min(2).max(5).describe(
+            "Two to five answer choices, shown in this order."
+          ),
+          question: z.string().trim().min(1).max(400).describe("The question, in one or two sentences."),
+          section: z.number().int().min(0).describe("Zero-based index of the section this question tests."),
+          why: z.string().trim().min(1).max(300).describe("One line on why the answer is right."),
+        })).max(8).optional().default([]).describe(
+          "Practice questions you wrote; never the lesson's own Ed quiz questions."
+        ),
+        sections: z.array(z.object({
+          points: z.array(z.string().trim().min(1).max(300)).min(1).max(5).describe(
+            "Two to four short key points, each a full sentence."
+          ),
+          title: z.string().trim().min(1).max(80).describe("Short section heading."),
+        })).min(1).max(8).describe("The guide, in teaching order."),
+      }),
+      title: "Teach a lesson",
+    },
+    async (input, extra) => runTool(runtime, extra, "read", async (client) =>
+      widgetResult(await buildLessonGuide(client, input))
+    )
+  );
+}
+
+function widgetResult(result: WidgetResult): ToolResult {
+  return { content: [{ type: "text", text: result.text }], structuredContent: result.structuredContent };
+}
+
+function teachPrompt(courseId: string, lesson: string): string {
+  return [
+    `Teach me "${lesson}" from course ${courseId}.`,
+    "",
+    `1. Call list_lessons with courseId=${courseId} and pick the lesson whose title or module best matches; ` +
+      "if several match, prefer the unfinished one that opened first.",
+    "2. Call read_lesson on it.",
+    "3. Call show_lesson_guide with 3 to 6 sections of 2 to 4 short points in teaching order, and 3 to 6 " +
+      "multiple-choice practice questions you wrote yourself, each tied to the section it tests.",
+    "Never copy, answer or hint at the lesson's own Ed quiz questions; Ed marks them.",
+    "Afterwards say one line and let me work through it.",
+  ].join("\n");
 }
 
 function triagePrompt(courseId: string, limit: string | undefined): string {
@@ -668,6 +842,7 @@ type ToolResult = {
     }
   >;
   isError?: boolean;
+  structuredContent?: Record<string, unknown>;
 };
 
 function jsonResult(payload: unknown): ToolResult {

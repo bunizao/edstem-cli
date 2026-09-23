@@ -94,6 +94,22 @@ export const MCP_TOOL_CATALOG = [
     "reply_thread",
     "Reply to one thread, or to one comment inside it; posts publicly as the token owner and cannot be removed from here. Use only when the user explicitly asks to reply and has approved the body. body is Markdown and is converted to Ed's document format. threadId is the global id. Cost: one write.",
   ],
+  [
+    "show_forum_catchup",
+    "Interactive catch-up view of one course forum: unread announcements, then the threads from the last days (default 14) that are new to the user or have new replies, each expandable in place. Use first when the user asks what they missed, what is new, or to catch up on a course; hosts without interactive views get the same list as text. Not for plain-text answers when the user asks for text (list_threads), or finding a topic (search_threads). courseId accepts a numeric ID, a unit code, or part of the unit name. Then add one or two sentences on what stands out; do not repeat the list. Cost: one to a few Ed pages.",
+  ],
+  [
+    "show_thread_activity",
+    "Interactive weekly chart of new threads in one course over the last weeks (default 12), stacked by category, with each week expandable to its busiest threads; announcements and pinned threads are excluded. Use when the user asks what people are asking about, when the forum gets busy, or how discussion changed over the term. Not for individual threads (list_threads) or plain-text answers when the user asks for text. courseId accepts a numeric ID, a unit code, or part of the unit name. Then name the one or two patterns worth noticing. Cost: up to ten Ed pages.",
+  ],
+  [
+    "show_lesson_progress",
+    "Interactive progress view of one course's Ed Lessons: completed of total for each released module in release order, its unfinished lessons on click, and a count of modules not released yet. Use when the user asks what they are behind on, what is left, or how far through the lessons they are. Not for plain-text answers when the user asks for text (list_lessons). courseId accepts a numeric ID, a unit code, or part of the unit name. Then say where to start; do not repeat the numbers. Cost: one Ed request.",
+  ],
+  [
+    "show_lesson_guide",
+    "Show a study guide you wrote for one lesson as a step-through card, then a short practice quiz that the user answers and the widget grades in place. Use when the user asks to be taught, walked through, or quizzed on a lesson or topic. First read_lesson; then pass 3 to 6 sections of 2 to 4 short points, and 3 to 6 multiple-choice practice questions of your own, each with its answer index, a one-line why, and the index of the section it tests. Never copy, answer or hint at the lesson's own Ed quiz questions: Ed marks them. Then say one line and let the user work; do not restate the guide. Cost: one Ed request.",
+  ],
 ] as const;
 
 export type McpToolName = typeof MCP_TOOL_CATALOG[number][0];
