@@ -275,6 +275,7 @@ function projectMetrics(metrics: ThreadMetrics): JsonObject {
   setNonZero(result, "voteCount", metrics.voteCount);
   setNonZero(result, "viewCount", metrics.viewCount);
   setNonZero(result, "replyCount", metrics.replyCount);
+  setNonZero(result, "newReplyCount", metrics.newReplyCount);
   setNonZero(result, "starCount", metrics.starCount);
   return result;
 }
@@ -287,6 +288,7 @@ function threadFlags(thread: Thread): string[] {
     thread.isEndorsed ? "endorsed" : "",
     thread.isAnonymous ? "anonymous" : "",
     thread.isLocked ? "locked" : "",
+    thread.isSeen ? "" : "unseen",
   ].filter(Boolean);
 }
 

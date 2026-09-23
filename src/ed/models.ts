@@ -108,6 +108,7 @@ export interface ThreadMetrics {
   uniqueViewCount: number;
   replyCount: number;
   unresolvedCount: number;
+  newReplyCount: number;
   starCount: number;
   flagCount: number;
 }
@@ -148,6 +149,7 @@ export interface Thread {
   isAnswered: boolean;
   isAnonymous: boolean;
   isLocked: boolean;
+  isSeen: boolean;
   createdAt: string;
   updatedAt: string;
   author: User | null;

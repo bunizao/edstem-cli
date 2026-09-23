@@ -647,6 +647,8 @@ function parseThread(
     isLocked: Boolean(data.is_locked),
     isPinned: Boolean(data.is_pinned),
     isPrivate: Boolean(data.is_private),
+    // Ed omits read state on some payloads; only an explicit false means unseen.
+    isSeen: data.is_seen !== false,
     number: asInt(data.number),
     metrics: parseThreadMetrics(data),
     subcategory: asString(data.subcategory),
@@ -661,6 +663,7 @@ function parseThread(
 function parseThreadMetrics(data: Record<string, unknown>): ThreadMetrics {
   return {
     flagCount: asInt(data.flag_count),
+    newReplyCount: asInt(data.new_reply_count),
     replyCount: asInt(data.reply_count),
     starCount: asInt(data.star_count),
     unresolvedCount: asInt(data.unresolved_count),

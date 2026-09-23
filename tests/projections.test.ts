@@ -30,6 +30,25 @@ describe("agent projections", () => {
     expect(result).not.toHaveProperty("answers");
   });
 
+  it("surfaces read state only when Ed says a thread is unseen", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(JSON.stringify({
+      threads: [
+        { id: 1, title: "Fresh", is_seen: false, reply_count: 2, new_reply_count: 2 },
+        { id: 2, title: "Read", is_seen: true, new_reply_count: 1 },
+        { id: 3, title: "No read state" },
+      ],
+      users: [],
+    }), { status: 200 }));
+    const threads = await new EdClient({ fetch, token: "secret" }).fetchThreads(100);
+
+    const [fresh, read, missing] = threads.map((thread) => projectThreadSummary(thread));
+
+    expect(fresh).toMatchObject({ flags: ["unseen"], metrics: { newReplyCount: 2 } });
+    expect(read).toMatchObject({ metrics: { newReplyCount: 1 } });
+    expect(read).not.toHaveProperty("flags");
+    expect(missing).not.toHaveProperty("flags");
+  });
+
   it("hoists users and omits HTML from thread detail by default", async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(
       new Response(JSON.stringify(fixture("thread_detail")), { status: 200 })

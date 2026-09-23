@@ -186,8 +186,10 @@ function thread(overrides: Partial<Thread> = {}): Thread {
     isLocked: false,
     isPinned: false,
     isPrivate: false,
+    isSeen: true,
     metrics: {
       flagCount: 0,
+      newReplyCount: 0,
       replyCount: 0,
       starCount: 0,
       uniqueViewCount: 0,
