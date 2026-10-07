@@ -2,7 +2,6 @@ import {
   CliError,
   banner,
   colorEnabled,
-  commandsJson,
   confirm,
   createTheme,
   createProgram as createCliProgram,
@@ -13,7 +12,6 @@ import {
   helpSection,
   insertDefaultVerb,
   isInformationalExit,
-  mutating,
   parseWithPrompts,
   render,
   reportError,
@@ -38,9 +36,10 @@ import {
   saveToken,
 } from "./auth.js";
 import { EDSTEM_TAGLINE, EDSTEM_WORDMARK, showWordmark } from "./wordmark.js";
+import { commandsJson, mutating } from "./commands.js";
 import { loadConfig } from "./config.js";
 import { downloadLessonFiles } from "./download.js";
-import { EdClient, type FetchLike } from "./ed/client.js";
+import { EdClient, type FetchLike, type ThreadAction } from "./ed/client.js";
 import { listLessonFiles, listThreadFiles } from "./ed/files.js";
 import { markdownToEdDocument } from "./ed/document.js";
 import {
@@ -85,6 +84,9 @@ export type FileTarget =
   | { kind: "lesson"; id: number }
   | { kind: "thread"; reference: string };
 const THREAD_TYPES = ["question", "post"] as const;
+const THREAD_ACTIONS: readonly ThreadAction[] = [
+  "star", "unstar", "watch", "unwatch", "upvote", "unvote", "mark-read", "mark-unread",
+];
 const REPLY_TYPES = ["answer", "comment"] as const;
 
 const NOUNS: readonly NounSpec[] = [
@@ -96,7 +98,7 @@ const NOUNS: readonly NounSpec[] = [
   },
   {
     name: "threads",
-    verbs: ["list", "search", "show", "read", "send"],
+    verbs: ["list", "search", "show", "read", "send", ...THREAD_ACTIONS],
     defaultByArity: { 0: "list", 1: "list" },
     valueFlags: [
       "-n",
@@ -114,6 +116,7 @@ const NOUNS: readonly NounSpec[] = [
       "--title",
       "--body",
       "--body-file",
+      "--comment",
     ],
   },
   {
@@ -306,6 +309,60 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
     .action(textAction(runtime, async (client, _command, reference: string) =>
       threadToMarkdown(await resolveThread(client, reference))
     ));
+
+  for (const action of THREAD_ACTIONS) {
+    const command = threads.command(action)
+      .description(`${action} a thread${action === "mark-read" ? " or every thread in a unit" : ""}.`)
+      .argument("<reference>", "Thread ID or UNIT#number; use UNIT with mark-read --all");
+    if (action === "upvote" || action === "unvote") {
+      command.option("--comment <id>", "Vote on a comment belonging to the thread.", positiveInteger("--comment"));
+    }
+    if (action === "mark-read") {
+      command.option("--all", "Mark every thread in the unit as read.");
+    }
+    mutating(command.action(mutationAction(runtime,
+      async (command, reference: string) => {
+        if (command.opts().all && reference.includes("#")) {
+          throw new CliError("usage", "--all requires a unit, not a thread reference.");
+        }
+        if (action === "mark-read" && !command.opts().all && !reference.includes("#") && !/^\d+$/.test(reference)) {
+          throw new CliError("usage", "Marking a unit as read requires --all; use UNIT#number for one thread.");
+        }
+        const client = await runtime.createClient();
+        if (command.opts().all) {
+          const courseId = await resolveCourseId(client, reference);
+          return { client, courseId, summary: `Mark ALL threads as read in unit ${reference}.` };
+        }
+        const thread = await resolveThread(client, reference);
+        const commentId = command.opts().comment as number | undefined;
+        const comment = commentId === undefined ? undefined : assertCommentInThread(thread, commentId);
+        const state = comment ?? thread;
+        const unchanged = action === "star" ? thread.isStarred
+          : action === "unstar" ? !thread.isStarred
+          : action === "watch" ? thread.isWatched === true
+          : action === "unwatch" ? thread.isWatched === false
+          : action === "upvote" ? state.vote === 1
+          : action === "unvote" ? state.vote === 0
+          : action === "mark-read" ? thread.isSeen : !thread.isSeen;
+        const target = commentId === undefined ? `thread ${thread.id}` : `comment ${commentId} on thread ${thread.id}`;
+        return {
+          client, thread, commentId, unchanged,
+          summary: unchanged ? `${target} is already in the requested state (${action}).` : `${action} ${target}.`,
+        };
+      },
+      async (_command, plan) => {
+        if (plan.courseId !== undefined) {
+          await plan.client.markAllThreadsRead(plan.courseId);
+          return { action, courseId: plan.courseId, changed: true };
+        }
+        const thread = plan.thread!;
+        if (!plan.unchanged) {
+          await plan.client.threadAction(thread.id, action, { commentId: plan.commentId });
+        }
+        return { action, threadId: thread.id, ...(plan.commentId === undefined ? {} : { commentId: plan.commentId }), changed: !plan.unchanged };
+      }
+    )));
+  }
 
   mutating(threads.command("send")
     .description("Post a new thread in a unit.")

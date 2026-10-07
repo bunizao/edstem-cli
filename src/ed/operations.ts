@@ -111,16 +111,21 @@ export function defaultReplyType(threadType: string): "answer" | "comment" {
  * Ed accepts a reply under any comment ID, so a mismatched ID would post to another
  * thread while we report the requested one.
  */
-export function assertCommentInThread(thread: Thread, commentId: number): void {
-  if (!containsComment(thread.answers, commentId) && !containsComment(thread.comments, commentId)) {
+export function assertCommentInThread(thread: Thread, commentId: number): Comment {
+  const comment = findComment([...thread.answers, ...thread.comments], commentId);
+  if (!comment) {
     throw new EdInputError(`Comment ${commentId} does not belong to thread ${thread.id}.`);
   }
+  return comment;
 }
 
-function containsComment(comments: Comment[], commentId: number): boolean {
-  return comments.some(
-    (comment) => comment.id === commentId || containsComment(comment.comments, commentId)
-  );
+function findComment(comments: Comment[], commentId: number): Comment | undefined {
+  for (const comment of comments) {
+    if (comment.id === commentId) return comment;
+    const nested = findComment(comment.comments, commentId);
+    if (nested) return nested;
+  }
+  return undefined;
 }
 
 export interface LessonListOptions {

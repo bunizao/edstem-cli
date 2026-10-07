@@ -1,8 +1,9 @@
 import { writeFileSync } from "node:fs";
 
-import { commandsJson, type CommandDescription } from "@bunizao/cli-kit";
+import { type CommandDescription } from "@bunizao/cli-kit";
 import type { Command } from "commander";
 
+import { commandsJson } from "./commands.js";
 import { MCP_TOOL_CATALOG } from "./mcp/catalog.js";
 
 export const SKILL_SOURCE = "https://github.com/bunizao/edstem-cli";

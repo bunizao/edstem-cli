@@ -125,6 +125,61 @@ function makeRuntime(
 }
 
 describe("CLI", () => {
+  it.each([
+    ["star", "star", { is_starred: false }, { is_starred: true }],
+    ["unstar", "unstar", { is_starred: true }, { is_starred: false }],
+    ["watch", "watch", { is_watched: null }, { is_watched: true }],
+    ["unwatch", "watch", { is_watched: true }, { is_watched: false }],
+    ["upvote", "upvote", { vote: 0 }, { vote: 1 }],
+    ["unvote", "unvote", { vote: 1 }, { vote: 0 }],
+    ["mark-read", "read", { is_seen: false }, { is_seen: true }],
+    ["mark-unread", "unread", { is_seen: true }, { is_seen: false }],
+  ])("guards and applies the %s action", async (action, endpoint, before, after) => {
+    const overrides = (state: object) => ({
+      "/api/threads/5001": { thread: { id: 5001, number: 1, ...state } },
+    });
+    const apply = makeRuntime(200, false, fixture("user_info"), {}, overrides(before));
+    expect(await run(["node", "edstem", "threads", action, "5001", "--yes", "--json"], apply.runtime)).toBe(0);
+    expect(new URL(String(apply.fetch.mock.calls.at(-1)?.[0])).pathname).toBe(`/api/threads/5001/${endpoint}`);
+    expect(apply.fetch.mock.calls.at(-1)?.[1]?.method).toBe("POST");
+    expect(JSON.parse(apply.stdout.join(""))).toMatchObject({ changed: true, threadId: 5001 });
+
+    const noOp = makeRuntime(200, false, fixture("user_info"), {}, overrides(after));
+    expect(await run(["node", "edstem", "threads", action, "5001", "--yes", "--json"], noOp.runtime)).toBe(0);
+    expect(noOp.fetch.mock.calls.map(([, init]) => init?.method)).toEqual(["GET"]);
+    expect(JSON.parse(noOp.stdout.join(""))).toMatchObject({ changed: false });
+
+    const dry = makeRuntime(200, false, fixture("user_info"), {}, overrides(before));
+    expect(await run(["node", "edstem", "threads", action, "5001", "--dry-run", "--json"], dry.runtime)).toBe(0);
+    expect(dry.fetch.mock.calls.map(([, init]) => init?.method)).toEqual(["GET"]);
+
+    const unconfirmed = makeRuntime(200, false, fixture("user_info"), {}, overrides(before));
+    expect(await run(["node", "edstem", "threads", action, "5001", "--json"], unconfirmed.runtime)).toBe(2);
+    expect(unconfirmed.fetch.mock.calls.map(([, init]) => init?.method)).toEqual(["GET"]);
+  });
+
+  it("votes on owned nested comments and rejects foreign comment IDs before writing", async () => {
+    const nested = makeRuntime();
+    expect(await run(["node", "edstem", "threads", "upvote", "CS101#1", "--comment", "9010", "--yes", "--json"], nested.runtime)).toBe(0);
+    expect(new URL(String(nested.fetch.mock.calls.at(-1)?.[0])).pathname).toBe("/api/comments/9010/upvote");
+    const foreign = makeRuntime();
+    expect(await run(["node", "edstem", "threads", "upvote", "5001", "--comment", "99", "--dry-run", "--json"], foreign.runtime)).toBe(2);
+    expect(foreign.fetch.mock.calls.map(([, init]) => init?.method)).toEqual(["GET"]);
+    expect(foreign.stderr.join("")).toContain("does not belong");
+  });
+
+  it("requires --all for a unit read mutation and uses the course endpoint", async () => {
+    const missing = makeRuntime();
+    expect(await run(["node", "edstem", "threads", "mark-read", "CS101", "--dry-run", "--json"], missing.runtime)).toBe(2);
+    expect(missing.fetch).not.toHaveBeenCalled();
+    const all = makeRuntime();
+    expect(await run(["node", "edstem", "threads", "mark-read", "CS101", "--all", "--yes", "--json"], all.runtime)).toBe(0);
+    expect(new URL(String(all.fetch.mock.calls.at(-1)?.[0])).pathname).toBe("/api/courses/100/threads/read_all");
+    const dry = makeRuntime();
+    expect(await run(["node", "edstem", "threads", "mark-read", "100", "--all", "--dry-run", "--json"], dry.runtime)).toBe(0);
+    expect(dry.fetch).not.toHaveBeenCalled();
+  });
+
   it("uses the edstem command name", () => {
     expect(createProgram(makeRuntime().runtime).name()).toBe("edstem");
   });

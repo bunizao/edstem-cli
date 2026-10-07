@@ -99,6 +99,15 @@ describe("EdClient", () => {
     expect(fetch).toHaveBeenCalledTimes(6);
   });
 
+  it.each(["star", "unstar", "watch", "unwatch", "upvote", "unvote", "mark-read", "mark-unread"] as const)(
+    "never retries %s on a transient upstream failure", async (action) => {
+      const fetch = vi.fn<FetchLike>().mockImplementation(async () => jsonResponse({}, 503));
+      const client = new EdClient({ fetch, token: "secret" });
+      await expect(client.threadAction(42, action)).rejects.toThrow("503");
+      expect(fetch).toHaveBeenCalledOnce();
+    }
+  );
+
   it("parses slide content from nested passage data", async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(
       jsonResponse({
