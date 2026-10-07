@@ -1,13 +1,30 @@
+<p align="center"><a href="https://unicorn.tuuhub.com"><img src=".github/assets/hero.jpg" alt="edstem-cli: Ed Discussion from your terminal, scripts and AI agent, part of unicorn" width="100%"></a></p>
+
 # edstem-cli
 
-CLI and MCP access to Ed Discussion for people, scripts, and agents.
+**CLI and MCP access to Ed Discussion for people, scripts, and agents.**
 
 [![npm version](https://img.shields.io/npm/v/edstem-cli?logo=npm)](https://www.npmjs.com/package/edstem-cli)
 [![CI](https://github.com/bunizao/edstem-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/bunizao/edstem-cli/actions/workflows/ci.yml)
 [![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Install
+> The live layer of [unicorn](https://unicorn.tuuhub.com): live tools answer what is there now, unicorn answers what changed. Docs: [unicorn.tuuhub.com/docs/edstem](https://unicorn.tuuhub.com/docs/edstem).
+
+## Quick start
+
+Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens), then:
+
+```bash
+npm install -g edstem-cli
+edstem auth login
+edstem units
+edstem threads UNIT --unread --limit 20
+```
+
+To connect an AI client instead, see [MCP](#mcp).
+
+## Install and sign in
 
 ```bash
 npm install -g edstem-cli
@@ -47,6 +64,10 @@ edstem lessons show 67890
 edstem lessons read 67890
 ```
 
+Omitted verbs are inferred when the arguments are unambiguous. `read` always emits Markdown and never changes upstream state; it is available for threads, lessons, and slides.
+
+### Unit arguments and filters
+
 Every `<unit>` argument (`UNIT` above) accepts either the numeric Ed course ID or the course code exactly as Ed shows it; run `edstem units` to see both. The CLI never assumes what a code looks like. MCP tools use the same rule for `courseId`, so a code can be passed directly without a preceding `list_courses` lookup. If multiple enrolments share a code, use the numeric ID shown by `edstem units --archived` to select the intended year and session.
 
 Lesson filters are case-insensitive. `--module` accepts an ID or part of a module name; `--type`, `--state`, and `--status` use exact values. Common lesson values are `general`, `active` or `scheduled`, and `unattempted`, `attempted`, or `completed`. Pass `all` or omit a filter to include every value. If an unfiltered lesson list is empty, that unit has no Ed Lessons; an invalid filter reports the values available in that unit.
@@ -62,7 +83,7 @@ edstem threads search 12345 assignment deadline --since 2026-09-01
 edstem lessons 12345 --module "<part of a module name>" --status all
 ```
 
-Omitted verbs are inferred when the arguments are unambiguous. `read` always emits Markdown and never changes upstream state; it is available for threads, lessons, and slides.
+### Thread state actions
 
 Thread state actions use paired verbs and the same confirmation gate as posting:
 
@@ -77,6 +98,8 @@ edstem threads mark-read UNIT --all --yes
 
 The full set is `star`, `unstar`, `watch`, `unwatch`, `upvote`, `unvote`, `mark-read`, and `mark-unread`. Each command fetches the thread while preparing its plan and skips the write if the requested state already applies. Votes can target a comment belonging to that thread with `--comment`; other actions target the thread. `watch` explicitly enables notifications and `unwatch` explicitly disables them, overriding the course default. `threads show` includes `isStarred`, `isWatched` (including `null` for the course default), and `vote`. Writes are never retried. These actions are CLI-only; the MCP tool catalog is unchanged.
 
+### Catch up since your last visit
+
 `--unread` selects threads Ed reports as unseen. `--since last` instead selects threads created since the last successful unrestricted catch-up listing:
 
 ```bash
@@ -85,6 +108,8 @@ edstem threads UNIT --since last --limit 100
 ```
 
 The cursor lives in `~/.config/edstem-cli/state.json`, keyed by numeric course ID so enrolments with repeated codes stay separate. On first use it looks back seven days. After a successful, complete listing it advances to the request's start time. Search, content filters (including answered and unread), nonzero offsets, and non-new sort orders never advance it. Results reaching `--limit` or the ten-page cap leave it unchanged and print a warning to stderr. Fetch or output failures leave it unchanged too. This changes local state only; listing and `read` commands never mark threads read in Ed.
+
+### Export a forum
 
 Export a forum as a portable Markdown archive:
 
@@ -98,6 +123,8 @@ The archive contains `index.md` (number, title, category, author, date, replies)
 
 Completed thread files are skipped on subsequent runs, including their detail requests and downloads, so an interrupted export resumes. `--force` rewrites completed threads. This is a resumable snapshot; it does not automatically refresh changed threads or remove old files. Use a separate destination for each unit. Export never advances the catch-up cursor. Progress goes to stderr; stdout contains only `{ dest, threads, skipped, files }`, where `threads` counts files written in this run.
 
+### Lesson and thread files
+
 Lesson files include PDF slides stored in Ed's `file_url` field and Ed-hosted files embedded in lesson content. List them without downloading, or download all files to a directory. External links remain visible in lesson content but are not presented as downloadable files. Existing files are protected unless `--force` is supplied.
 
 A target is a lesson ID, or a thread prefixed with `thread:`. Thread targets collect the attachments in the thread body, its answers, and every nested comment; `--slide` applies to lesson targets only.
@@ -109,6 +136,8 @@ edstem files get 67890 --slide 4401 --dest ./slides
 edstem files list thread:5001
 edstem files get thread:UNIT#42 --dest ./attachments
 ```
+
+### Slides
 
 Slide facets use one read-only command so the verb vocabulary stays consistent:
 
@@ -223,6 +252,8 @@ https://<worker-host>/healthz
 
 See the [MCP setup guide](MCP_SETUP.md) for manual deployment, credential-storage details, Worker configuration, and connection steps for ChatGPT web, Codex, and Claude connectors.
 
+For client-specific setup see the [MCP docs](https://unicorn.tuuhub.com/docs/mcp).
+
 ## Agent skill
 
 ```bash
@@ -230,7 +261,21 @@ npx skills add https://github.com/bunizao/edstem-cli
 edstem skills generate
 ```
 
-The tracked [SKILL.md](SKILL.md) is generated from `edstem commands --json` plus the MCP tool catalog. CI rejects drift. The shared CLI contract comes from the published `@bunizao/cli-kit` npm package (`^0.1.0`).
+The tracked [SKILL.md](SKILL.md) is generated from `edstem commands --json` plus the MCP tool catalog. CI rejects drift. The shared CLI contract comes from the published `@bunizao/cli-kit` npm package (`^0.5.0`).
+
+## Part of unicorn
+
+unicorn is one project in two layers. The live tools answer what is there now; unicorn answers what changed.
+
+| Project | Layer | What it does | Repo |
+| --- | --- | --- | --- |
+| unicorn | Memory | A Cloudflare Worker on your own account. Reads Moodle, Ed, Canvas, Gmail and feeds every hour, remembers what each said, and tells your AI agent what changed. | [TuuHub/unicorn](https://github.com/TuuHub/unicorn) |
+| moodle-cli | Live | Moodle from the terminal and MCP: units, deadlines, grades, forums, files, submissions. | [bunizao/moodle-cli](https://github.com/bunizao/moodle-cli) |
+| **edstem-cli** (you are here) | **Live** | **Ed Discussion from the terminal and MCP: units, threads, lessons, files, posting.** | [bunizao/edstem-cli](https://github.com/bunizao/edstem-cli) |
+| ontrack | Live | OnTrack / Doubtfire from the terminal: units, tasks, chats, submissions. CLI only, no MCP server. | [bunizao/ontrack-cli](https://github.com/bunizao/ontrack-cli) |
+
+The three live tools share one command contract through [@bunizao/cli-kit](https://github.com/bunizao/cli-kit).
+Docs for everything: [unicorn.tuuhub.com/docs](https://unicorn.tuuhub.com/docs). This project: [unicorn.tuuhub.com/docs/edstem](https://unicorn.tuuhub.com/docs/edstem). CLIs overview: [unicorn.tuuhub.com/cli](https://unicorn.tuuhub.com/cli).
 
 ## License
 
