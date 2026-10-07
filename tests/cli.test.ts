@@ -256,6 +256,85 @@ describe("CLI", () => {
     }
   });
 
+  it("exports a forum with local attachments and resumes completed threads", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "edstem-export-"));
+    const test = makeRuntime(200, false, fixture("user_info"), {}, {
+      "/api/courses/100/threads": { threads: [{ id: 5001, number: 1, title: "Assignment 1 starter code" }] },
+      "/api/threads/5001": fixture("thread_files"),
+    });
+    try {
+      const args = ["node", "edstem", "threads", "export", "100", "--dest", directory, "--json"];
+      expect(await run(args, test.runtime)).toBe(0);
+      expect(JSON.parse(test.stdout.join(""))).toEqual({ dest: directory, threads: 1, skipped: 0, files: 3 });
+      const markdown = await readFile(join(directory, "threads/0001-assignment-1-starter-code.md"), "utf8");
+      expect(markdown).toContain("../files/0001/Workshop%20Slides.pdf");
+      expect(markdown).toContain("../files/0001/Workshop%20Slides-3.pdf");
+      expect(markdown).not.toContain("https://static.edusercontent.com");
+      expect(await readFile(join(directory, "files/0001/Workshop Slides.pdf"), "utf8")).toBe("pdf-body");
+      expect(await readFile(join(directory, "index.md"), "utf8")).toContain("threads/0001-assignment-1-starter-code.md");
+      expect(JSON.parse(await readFile(join(directory, "manifest.json"), "utf8"))).toMatchObject({ threadIds: [5001], unit: { id: 100 } });
+      test.fetch.mockClear(); test.stdout.length = 0;
+      expect(await run(args, test.runtime)).toBe(0);
+      expect(JSON.parse(test.stdout.join(""))).toMatchObject({ threads: 0, skipped: 1, files: 0 });
+      expect(test.fetch).toHaveBeenCalledOnce();
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("exports beyond ten pages while applying unread filters and keeps remote links with --no-files", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "edstem-export-pages-"));
+    const test = makeRuntime();
+    test.fetch.mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/api/threads/1101") return new Response(JSON.stringify({
+        thread: { id: 1101, number: 42, title: "Late match", course_id: 100,
+          document: "[Download](https://static.edusercontent.com/files/example)",
+          content: '<file filename="example.pdf" url="https://static.edusercontent.com/files/example"/>' },
+      }));
+      const offset = Number(url.searchParams.get("offset"));
+      return new Response(JSON.stringify({ threads: offset < 1100
+        ? Array.from({ length: 100 }, (_, index) => ({ id: offset + index + 1, is_seen: true }))
+        : [{ id: 1101, number: 42, title: "Late match", is_seen: false }] }));
+    });
+    try {
+      expect(await run(["node", "edstem", "threads", "export", "100", "--dest", directory, "--unread", "--no-files", "--json"], test.runtime)).toBe(0);
+      expect(test.fetch).toHaveBeenCalledTimes(13);
+      expect(await readFile(join(directory, "threads/0042-late-match.md"), "utf8")).toContain("[Download](https://static.edusercontent.com/files/example)");
+      expect(JSON.parse(test.stdout.join(""))).toMatchObject({ threads: 1, files: 0 });
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("resumes an interrupted export and uses --force to rewrite completed files", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "edstem-export-resume-"));
+    const test = makeRuntime(200, false, fixture("user_info"), {}, {
+      "/api/courses/100/threads": { threads: [
+        { id: 5001, number: 1, title: "First" }, { id: 5002, number: 2, title: "Second" },
+      ] },
+      "/api/threads/5001": fixture("thread_files"),
+    });
+    const normalFetch = test.fetch.getMockImplementation()!;
+    test.fetch.mockImplementation(async (input, init) => {
+      if (new URL(String(input)).pathname === "/api/threads/5002") throw new Error("Interrupted");
+      return normalFetch(input, init);
+    });
+    try {
+      const args = ["node", "edstem", "threads", "export", "100", "--dest", directory, "--json"];
+      expect(await run(args, test.runtime)).toBe(1);
+      const first = await readFile(join(directory, "threads/0001-first.md"), "utf8");
+      test.fetch.mockImplementation(normalFetch); test.fetch.mockClear(); test.stdout.length = 0;
+      expect(await run(args, test.runtime)).toBe(0);
+      expect(JSON.parse(test.stdout.join(""))).toMatchObject({ threads: 1, skipped: 1, files: 0 });
+      expect(test.fetch.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
+        "/api/courses/100/threads", "/api/threads/5002",
+      ]);
+      expect(await readFile(join(directory, "threads/0001-first.md"), "utf8")).toBe(first);
+      test.stdout.length = 0;
+      expect(await run([...args, "--force", "--limit", "1"], test.runtime)).toBe(0);
+      expect(JSON.parse(test.stdout.join(""))).toMatchObject({ threads: 1, skipped: 0, files: 3 });
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
   it("uses the edstem command name", () => {
     expect(createProgram(makeRuntime().runtime).name()).toBe("edstem");
   });

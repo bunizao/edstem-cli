@@ -82,7 +82,7 @@ export function parseSinceValue(value: string): Date {
  * On a newest-first page, an older last thread means every later page is older too.
  * Ed keeps pinned threads first whatever their date, so they never end the walk.
  */
-function passedSince(threads: Thread[], since: Date | undefined): boolean {
+export function passedSince(threads: Thread[], since: Date | undefined): boolean {
   const oldest = threads.filter((thread) => !thread.isPinned).at(-1);
   return Boolean(since && oldest && isThreadOlderThan(oldest, since));
 }

@@ -68,6 +68,7 @@ import {
   projectThreadDetail,
   projectThreadSummary,
 } from "./ed/projections.js";
+import { exportThreads } from "./export.js";
 import { normalizeEdError } from "./errors.js";
 import { lessonToMarkdown, slideToMarkdown, threadToMarkdown } from "./markdown.js";
 import { isMainModule } from "./main.js";
@@ -99,7 +100,7 @@ const NOUNS: readonly NounSpec[] = [
   },
   {
     name: "threads",
-    verbs: ["list", "search", "show", "read", "send", ...THREAD_ACTIONS],
+    verbs: ["list", "search", "show", "read", "send", "export", ...THREAD_ACTIONS],
     defaultByArity: { 0: "list", 1: "list" },
     valueFlags: [
       "-n",
@@ -118,6 +119,7 @@ const NOUNS: readonly NounSpec[] = [
       "--body",
       "--body-file",
       "--comment",
+      "--dest",
     ],
   },
   {
@@ -309,6 +311,22 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
       query: query.join(" "),
     })).map(projectThreadSummary)
   ));
+  withThreadFilters(threads.command("export")
+    .description("Export a unit's forum and attachments to a local Markdown archive.")
+    .argument("<unit>", "Unit ID or code", unitIdentifier)
+    .requiredOption("--dest <directory>", "Archive directory.")
+    .option("--no-files", "Keep remote attachment links without downloading.")
+    .option("--force", "Rewrite completed thread files.")
+  ).action(outputAction(runtime, async (client, command, unit: string) => {
+    const filters = await threadListOptions(runtime, command, unit, client);
+    const options = command.opts();
+    return exportThreads(client, {
+      ...filters, courseId: Number(filters.courseId),
+      limit: options.limit ?? options.max,
+      destination: options.dest, files: options.files, force: options.force,
+      progress: runtime.writeStderr,
+    });
+  }));
   threads.command("show")
     .description("Show a thread by ID or unit ID/code plus #number.").summary("Show a thread")
     .argument("<reference>", "Thread ID or unit ID/code plus #number")
