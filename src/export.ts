@@ -95,8 +95,13 @@ export async function exportThreads(client: EdClient, options: ThreadExportOptio
         let markdown = threadToMarkdown(thread);
         for (const [remote, local] of links) {
           if (remote === local) continue;
-          markdown = markdown.split(`<${remote}>`).join(`[Attachment](${local})`);
           const escaped = remote.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          markdown = markdown.split(`](<${remote}>`).join(`](<${local}>`);
+          markdown = markdown.replace(
+            new RegExp(`(^[ \\t]{0,3}\\[[^\\]\\n]+\\]:[ \\t]*)<${escaped}>`, "gm"),
+            (_match, prefix: string) => `${prefix}<${local}>`
+          );
+          markdown = markdown.split(`<${remote}>`).join(`[Attachment](${local})`);
           markdown = markdown.replace(new RegExp(`${escaped}(?=$|[\\s)>])`, "g"), () => local);
         }
         if (attachments.length > 0) {

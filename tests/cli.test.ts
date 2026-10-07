@@ -342,7 +342,7 @@ describe("CLI", () => {
     const test = makeRuntime(200, false, fixture("user_info"), {}, {
       "/api/courses/100/threads": { threads: [{ id: 5001, number: 1, title: "Links" }] },
       "/api/threads/5001": { thread: { id: 5001, number: 1,
-        document: `[Inline](${url})\n\n[Reference][file]\n[file]: ${url} "Title"\n\n<${url}>`,
+        document: `[Inline](${url})\n\n[Reference][file]\n[file]: ${url} "Title"\n\n[Angle](<${url}> "Title")\n[angle]: <${url}>\n\n<${url}>`,
         content: `<file filename="report).pdf" url="${url}"/>` } },
     });
     const normalFetch = test.fetch.getMockImplementation()!;
@@ -358,6 +358,8 @@ describe("CLI", () => {
       expect(markdown).toContain("[Inline](../files/0001/report%29.pdf)");
       expect(markdown).toContain('[file]: ../files/0001/report%29.pdf "Title"');
       expect(markdown).toContain("[Attachment](../files/0001/report%29.pdf)");
+      expect(markdown).toContain('[Angle](<../files/0001/report%29.pdf> "Title")');
+      expect(markdown).toContain("[angle]: <../files/0001/report%29.pdf>");
       expect(markdown).not.toContain(url);
       expect(await readFile(join(directory, "files/0001/report).pdf"), "utf8")).toBe("pdf");
     } finally { await rm(directory, { recursive: true, force: true }); }
