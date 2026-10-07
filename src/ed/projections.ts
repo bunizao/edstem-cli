@@ -166,6 +166,9 @@ export function projectThreadDetail(
   const result: JsonObject = {
     ...projectThreadSummary(thread),
     userId: thread.userId,
+    isStarred: thread.isStarred,
+    isWatched: thread.isWatched,
+    vote: thread.vote,
     document: thread.document,
   };
   if (options.includeHtml) {

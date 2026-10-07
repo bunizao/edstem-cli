@@ -63,6 +63,42 @@ describe("EdClient", () => {
     expect(thread.answers[0]?.comments[0]?.document).toBe("Thanks, that worked!");
   });
 
+  it("preserves personal thread state, including the course watch default", async () => {
+    const fetch = vi.fn<FetchLike>().mockImplementation(async () => jsonResponse({
+      threads: [
+        { id: 1, is_starred: true, is_watched: false, vote: 1 },
+        { id: 2, is_watched: null },
+        { id: 3, is_watched: true, vote: -1 },
+      ],
+    }));
+    const threads = await new EdClient({ fetch, token: "secret" }).fetchThreads(100);
+    expect(threads).toMatchObject([
+      { isStarred: true, isWatched: false, vote: 1 },
+      { isStarred: false, isWatched: null, vote: 0 },
+      { isWatched: true, vote: -1 },
+    ]);
+  });
+
+  it("sends thread and comment actions once, accepting empty responses", async () => {
+    const fetch = vi.fn<FetchLike>().mockImplementation(async () => new Response(null, { status: 204 }));
+    const client = new EdClient({ fetch, token: "secret" });
+    await client.threadAction(42, "star");
+    await client.threadAction(42, "watch");
+    await client.threadAction(42, "unwatch");
+    await client.threadAction(42, "upvote", { commentId: 99 });
+    await client.markAllThreadsRead(100);
+    expect(fetch.mock.calls.map(([url, init]) => [new URL(String(url)).pathname, init?.body])).toEqual([
+      ["/api/threads/42/star", undefined],
+      ["/api/threads/42/watch", '{"state":true}'],
+      ["/api/threads/42/watch", '{"state":false}'],
+      ["/api/comments/99/upvote", undefined],
+      ["/api/courses/100/threads/read_all", undefined],
+    ]);
+    fetch.mockImplementation(async () => jsonResponse({}, 429));
+    await expect(client.threadAction(42, "unvote")).rejects.toThrow("429");
+    expect(fetch).toHaveBeenCalledTimes(6);
+  });
+
   it("parses slide content from nested passage data", async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(
       jsonResponse({

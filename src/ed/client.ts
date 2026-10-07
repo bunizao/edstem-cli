@@ -46,6 +46,9 @@ export interface SlideSubmitResult {
   submitted: boolean;
 }
 
+export type ThreadAction = "star" | "unstar" | "watch" | "unwatch" |
+  "upvote" | "unvote" | "mark-read" | "mark-unread";
+
 export interface ThreadCreateInput {
   anonymous?: boolean;
   category?: string;
@@ -218,6 +221,31 @@ export class EdClient {
   async fetchSlideQuestions(slideId: number): Promise<LessonQuestion[]> {
     const data = await this.get(`lessons/slides/${slideId}/questions`);
     return asArray(data.questions).map((entry) => parseLessonQuestion(asRecord(entry)));
+  }
+
+  async threadAction(
+    threadId: number,
+    action: ThreadAction,
+    options: { commentId?: number } = {}
+  ): Promise<void> {
+    if (options.commentId !== undefined && action !== "upvote" && action !== "unvote") {
+      throw new Error("Only vote actions accept a comment target.");
+    }
+    const target = options.commentId === undefined
+      ? `threads/${threadId}`
+      : `comments/${options.commentId}`;
+    const endpoint = action === "unwatch" ? "watch"
+      : action === "mark-read" ? "read"
+      : action === "mark-unread" ? "unread" : action;
+    await this.post(`${target}/${endpoint}`, {
+      allowEmpty: true,
+      ...(action === "watch" || action === "unwatch"
+        ? { jsonBody: { state: action === "watch" } } : {}),
+    });
+  }
+
+  async markAllThreadsRead(courseId: number): Promise<void> {
+    await this.post(`courses/${courseId}/threads/read_all`, { allowEmpty: true });
   }
 
   async fetchThread(threadId: number): Promise<Thread> {
@@ -649,6 +677,9 @@ function parseThread(
     isPrivate: Boolean(data.is_private),
     // Ed omits read state on some payloads; only an explicit false means unseen.
     isSeen: data.is_seen !== false,
+    isStarred: Boolean(data.is_starred),
+    isWatched: typeof data.is_watched === "boolean" ? data.is_watched : null,
+    vote: asInt(data.vote),
     number: asInt(data.number),
     metrics: parseThreadMetrics(data),
     subcategory: asString(data.subcategory),
@@ -690,7 +721,8 @@ function parseComment(
     isResolved: Boolean(data.is_resolved),
     type: asString(data.type),
     userId,
-    voteCount: asInt(data.vote_count)
+    voteCount: asInt(data.vote_count),
+    vote: asInt(data.vote)
   };
 }
 

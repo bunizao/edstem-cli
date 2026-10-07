@@ -118,6 +118,7 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
     type: "comment",
     userId: 12345,
     voteCount: 0,
+    vote: 0,
     ...overrides,
   };
 }
@@ -140,6 +141,9 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     isPinned: false,
     isPrivate: false,
     isSeen: true,
+    isStarred: false,
+    isWatched: null,
+    vote: 0,
     metrics: {
       flagCount: 0,
       newReplyCount: 0,
