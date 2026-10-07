@@ -194,6 +194,68 @@ describe("CLI", () => {
     expect(test.fetch).toHaveBeenCalledTimes(2);
   });
 
+  it("uses a seven-day first cursor and advances to the request start after output succeeds", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "edstem-cursor-"));
+    const test = makeRuntime();
+    test.runtime.stateFile = join(directory, "state.json");
+    test.fetch.mockImplementation(async () => new Response(JSON.stringify({ threads: [
+      { id: 1, created_at: new Date(Date.now() - 86400000).toISOString() },
+      { id: 2, created_at: new Date(Date.now() - 8 * 86400000).toISOString() },
+    ] })));
+    try {
+      const started = Date.now();
+      expect(await run(["node", "edstem", "threads", "100", "--since", "last", "--json"], test.runtime)).toBe(0);
+      expect(JSON.parse(test.stdout.join(""))).toMatchObject([{ id: 1 }]);
+      const saved = JSON.parse(await readFile(test.runtime.stateFile, "utf8"));
+      expect(Date.parse(saved["100"])).toBeGreaterThanOrEqual(started);
+      expect(Date.parse(saved["100"])).toBeLessThanOrEqual(Date.now());
+      expect(test.fetch.mock.calls.every(([, init]) => init?.method === "GET")).toBe(true);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ["--category", "General"], ["--subcategory", "Help"], ["--type", "question"],
+    ["--unread"], ["--answered"], ["--unanswered"], ["--offset", "1"], ["--sort", "old"],
+  ])("reads the saved cursor without advancing a narrowed view %s", async (...flags) => {
+    const directory = await mkdtemp(join(tmpdir(), "edstem-cursor-filter-"));
+    const test = makeRuntime();
+    test.runtime.stateFile = join(directory, "state.json");
+    const original = '{"100":"2026-01-16T00:00:00.000Z","101":"2025-12-01T00:00:00.000Z"}';
+    await writeFile(test.runtime.stateFile, original);
+    try {
+      expect(await run(["node", "edstem", "threads", "100", "--since", "last", ...flags, "--json"], test.runtime)).toBe(0);
+      expect(await readFile(test.runtime.stateFile, "utf8")).toBe(original);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each(["search", "limit", "page-cap", "upstream", "output"])("never advances the cursor on %s", async (mode) => {
+    const directory = await mkdtemp(join(tmpdir(), "edstem-cursor-guard-"));
+    const test = makeRuntime();
+    test.runtime.stateFile = join(directory, "state.json");
+    const original = '{"100":"2026-01-16T00:00:00.000Z"}';
+    await writeFile(test.runtime.stateFile, original);
+    if (mode === "upstream") test.fetch.mockRejectedValue(new Error("Offline"));
+    if (mode === "output") test.runtime.writeOutput = async () => { throw new Error("Disk full"); };
+    if (mode === "page-cap") test.fetch.mockImplementation(async () => new Response(JSON.stringify({
+      threads: Array.from({ length: 100 }, (_, id) => ({ id, created_at: "2026-01-20T00:00:00Z" })),
+    })));
+    try {
+      const args = mode === "search" ? ["search", "100", "Python"] : ["100"];
+      if (mode === "limit") args.push("--limit", "1");
+      if (mode === "page-cap") args.push("--limit", "2000");
+      const code = await run(["node", "edstem", "threads", ...args, "--since", "last", "--json"], test.runtime);
+      expect(code).toBe(mode === "upstream" || mode === "output" ? 1 : 0);
+      expect(await readFile(test.runtime.stateFile, "utf8")).toBe(original);
+      if (mode === "limit" || mode === "page-cap") expect(test.stderr.join("")).toContain("cursor unchanged");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("uses the edstem command name", () => {
     expect(createProgram(makeRuntime().runtime).name()).toBe("edstem");
   });

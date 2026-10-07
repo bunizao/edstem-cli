@@ -18,6 +18,7 @@ export interface ThreadListOptions extends ThreadFilterOptions {
   limit: number;
   offset?: number;
   sort: string;
+  onIncomplete?: () => void;
 }
 
 export class EdInputError extends Error {
@@ -58,12 +59,13 @@ export async function listThreads(client: EdClient, options: ThreadListOptions):
     });
     matches.push(...filterThreads(threads, options));
     if (matches.length >= options.limit || threads.length < pageSize) {
-      break;
+      return matches.slice(0, options.limit);
     }
     if (options.sort === "new" && passedSince(threads, options.since)) {
-      break;
+      return matches.slice(0, options.limit);
     }
   }
+  options.onIncomplete?.();
   return matches.slice(0, options.limit);
 }
 

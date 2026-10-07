@@ -73,6 +73,7 @@ import { lessonToMarkdown, slideToMarkdown, threadToMarkdown } from "./markdown.
 import { isMainModule } from "./main.js";
 import { writeGeneratedSkill } from "./skills.js";
 import { applyUpdate, checkForUpdate } from "./update.js";
+import { defaultStateFile, readThreadCursor, saveThreadCursor } from "./state.js";
 import { VERSION } from "./version.js";
 
 const SORT_OPTIONS = ["new", "old", "top", "hot"] as const;
@@ -161,6 +162,7 @@ export interface CliRuntime {
   isTTY: boolean;
   readStdinLine: () => Promise<string>;
   tokenFile: string;
+  stateFile?: string;
   /** Terminal width tables have to fit into. A pty without a size reports 0. */
   columns?: number;
   writeStderr: (text: string) => void;
@@ -280,10 +282,22 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
     threads.command("list")
       .description("List threads in a unit.")
       .argument("<unit>", "Unit ID or code", unitIdentifier)
-  ).action(outputAction(runtime, async (client, command, unit: string) =>
-    (await listThreads(client, await threadListOptions(runtime, command, unit)))
-      .map(projectThreadSummary)
-  ));
+  ).action(async (unit: string, _options: unknown, command: Command) => {
+    const started = new Date();
+    const client = await runtime.createClient();
+    const options = await threadListOptions(runtime, command, unit, client, started);
+    let incomplete = false;
+    const threads = await listThreads(client, { ...options, onIncomplete: () => { incomplete = true; } });
+    await writeValue(runtime, command, threads.map(projectThreadSummary));
+    if (command.opts().since !== "last") return;
+    if (threads.length >= options.limit || incomplete) {
+      runtime.writeStderr("Thread cursor unchanged: results reached --limit or the page cap; increase --limit to retrieve the remaining threads.\n");
+      return;
+    }
+    if (shouldAdvanceCursor(command)) {
+      await saveThreadCursor(Number(options.courseId), started, runtime.stateFile ?? defaultStateFile());
+    }
+  });
   withThreadFilters(
     threads.command("search")
       .description("Search threads in a unit by words in the title and body.").summary("Search threads in a unit")
@@ -291,7 +305,7 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
       .argument("<query...>", "Words that must all appear in the title or body")
   ).action(outputAction(runtime, async (client, command, unit: string, query: string[]) =>
     (await listThreads(client, {
-      ...await threadListOptions(runtime, command, unit),
+      ...await threadListOptions(runtime, command, unit, client),
       query: query.join(" "),
     })).map(projectThreadSummary)
   ));
@@ -917,31 +931,44 @@ function withThreadFilters(command: Command): Command {
     .option(
       "--since <when>",
       "Only threads created at or after an ISO date or a relative offset such as 7d.",
-      parseSinceValue
+      (value: string) => value.trim().toLowerCase() === "last" ? "last" : parseSinceValue(value)
     );
 }
 
 async function threadListOptions(
   runtime: CliRuntime,
   command: Command,
-  unit: string
+  unit: string,
+  client: EdClient,
+  started = new Date()
 ): Promise<ThreadListOptions> {
   const options = command.opts();
   if (options.answered && options.unanswered) {
     throw new CliError("usage", "Use only one of --answered or --unanswered.");
   }
+  const courseId = await resolveCourseId(client, unit);
+  const since = options.since === "last"
+    ? await readThreadCursor(courseId, started, runtime.stateFile ?? defaultStateFile())
+    : options.since;
   return {
     answered: options.answered ? true : options.unanswered ? false : undefined,
     category: options.category,
     unread: Boolean(options.unread),
-    courseId: unit,
+    courseId,
     limit: options.limit ?? options.max ?? await runtime.defaultFetchCount(),
     offset: options.offset,
-    since: options.since,
+    since,
     sort: options.sort,
     subcategory: options.subcategory,
     threadType: options.type,
   };
+}
+
+function shouldAdvanceCursor(command: Command): boolean {
+  const options = command.opts();
+  return command.name() === "list" && options.since === "last" &&
+    !options.category?.trim() && !options.subcategory?.trim() && !options.type?.trim() &&
+    !options.answered && !options.unanswered && !options.unread && options.offset === 0 && options.sort === "new";
 }
 
 /** --max was renamed to --limit in 0.7.1; kept hidden so existing scripts still run. */
