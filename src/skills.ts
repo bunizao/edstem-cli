@@ -14,9 +14,12 @@ export const SKILL_DESCRIPTION =
 // UNIT is the unit's Ed course ID or its code exactly as Ed shows it.
 const INTENTS: readonly (readonly [string, string, string])[] = [
   ["which units am I in / how are units named here", "`edstem units`", "shows id, code, name; copy the code as shown"],
-  ["what's being discussed / any questions about X / latest in UNIT", "`edstem threads UNIT --limit 20`", "add `--unanswered`, `--category`, `--subcategory`"],
+  ["what's being discussed / any questions about X / latest in UNIT", "`edstem threads UNIT --limit 20`", "add `--unanswered`, `--unread`, `--category`, `--subcategory`"],
   ["any threads about <topic> in UNIT", "`edstem threads search UNIT <words...>`", "every word must match title or body; add `--since 7d`"],
   ["what does thread #N say / read that thread", "`edstem threads read UNIT#N`", "a global thread id also works"],
+  ["what is new since my last catch-up", "`edstem threads UNIT --since last`", "first run: seven days; only complete, unrestricted newest-first listings advance the local cursor"],
+  ["star, watch, vote, or change read state (only when asked)", "`edstem threads star UNIT#N --dry-run`", "paired undo verbs; `upvote` accepts `--comment ID`; `mark-read UNIT --all` covers the unit; repeat with `--yes`"],
+  ["archive a unit's forum and attachments", "`edstem threads export UNIT --dest DIR`", "resumes completed threads; `--force` refreshes them; `--no-files` keeps remote links"],
   ["my posts / did anyone reply to me", "`edstem activity [UNIT]`", ""],
   ["which lessons, weeks or modules exist / what's unfinished", "`edstem lessons UNIT`", "then `--status unattempted` or `--module <text>`"],
   ["what's in a lesson / the slides", "`edstem lessons show <lesson id>`", "lesson id from `edstem lessons UNIT`"],
@@ -72,7 +75,7 @@ the same \`UNIT\` reference, so no \`list_courses\` call is needed first.
 - Use \`--dry-run\` to inspect a mutation plan without changing Ed state.
 - Category, subcategory, module and type filters must be spelled as Ed shows them; an invalid filter lists the values available in that unit.
 - Treat Ed API tokens as passwords. Never print, log, or persist them in project files.
-- \`edstem commands --json\` is the source of truth for this command tree; the published \`@bunizao/cli-kit\` npm package (\`^0.1.0\`) defines the shared CLI contract.
+- \`edstem commands --json\` is the source of truth for this command tree; the shared CLI contract comes from \`@bunizao/cli-kit\`, with Ed-specific action metadata described locally.
 
 ## Setup
 

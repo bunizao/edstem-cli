@@ -64,6 +64,40 @@ edstem lessons 12345 --module "<part of a module name>" --status all
 
 Omitted verbs are inferred when the arguments are unambiguous. `read` always emits Markdown and never changes upstream state; it is available for threads, lessons, and slides.
 
+Thread state actions use paired verbs and the same confirmation gate as posting:
+
+```bash
+edstem threads star UNIT#42 --dry-run
+edstem threads watch UNIT#42 --yes
+edstem threads unwatch UNIT#42 --yes
+edstem threads upvote UNIT#42 --comment 88991 --yes
+edstem threads mark-unread UNIT#42 --yes
+edstem threads mark-read UNIT --all --yes
+```
+
+The full set is `star`, `unstar`, `watch`, `unwatch`, `upvote`, `unvote`, `mark-read`, and `mark-unread`. Each command fetches the thread while preparing its plan and skips the write if the requested state already applies. Votes can target a comment belonging to that thread with `--comment`; other actions target the thread. `watch` explicitly enables notifications and `unwatch` explicitly disables them, overriding the course default. `threads show` includes `isStarred`, `isWatched` (including `null` for the course default), and `vote`. Writes are never retried. These actions are CLI-only; the MCP tool catalog is unchanged.
+
+`--unread` selects threads Ed reports as unseen. `--since last` instead selects threads created since the last successful unrestricted catch-up listing:
+
+```bash
+edstem threads UNIT --unread --limit 20
+edstem threads UNIT --since last --limit 100
+```
+
+The cursor lives in `~/.config/edstem-cli/state.json`, keyed by numeric course ID so enrolments with repeated codes stay separate. On first use it looks back seven days. After a successful, complete listing it advances to the request's start time. Search, content filters (including answered and unread), nonzero offsets, and non-new sort orders never advance it. Results reaching `--limit` or the ten-page cap leave it unchanged and print a warning to stderr. Fetch or output failures leave it unchanged too. This changes local state only; listing and `read` commands never mark threads read in Ed.
+
+Export a forum as a portable Markdown archive:
+
+```bash
+edstem threads export UNIT --dest ./archive
+edstem threads export UNIT --dest ./archive --since 2026-07-01 --no-files
+edstem threads export UNIT --dest ./archive --force
+```
+
+The archive contains `index.md` (number, title, category, author, date, replies), `threads/0042-title.md`, `files/0042/<attachment>`, and `manifest.json` with the numeric unit ID, export time, thread IDs, and index entries. Export accepts the listing filters and has no default limit or ten-page cap. It requests details sequentially, downloads Ed-hosted attachments from the post and nested comments, and rewrites their Markdown links to local paths. An attachment list also preserves files omitted by Ed's plain-text document. `--no-files` retains remote links.
+
+Completed thread files are skipped on subsequent runs, including their detail requests and downloads, so an interrupted export resumes. `--force` rewrites completed threads. This is a resumable snapshot; it does not automatically refresh changed threads or remove old files. Use a separate destination for each unit. Export never advances the catch-up cursor. Progress goes to stderr; stdout contains only `{ dest, threads, skipped, files }`, where `threads` counts files written in this run.
+
 Lesson files include PDF slides stored in Ed's `file_url` field and Ed-hosted files embedded in lesson content. List them without downloading, or download all files to a directory. External links remain visible in lesson content but are not presented as downloadable files. Existing files are protected unless `--force` is supplied.
 
 A target is a lesson ID, or a thread prefixed with `thread:`. Thread targets collect the attachments in the thread body, its answers, and every nested comment; `--slide` applies to lesson targets only.

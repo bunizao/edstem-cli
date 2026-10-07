@@ -4,12 +4,12 @@ Three thread features ship as verified vertical slices: per-thread actions, a pe
 
 ## Milestones
 
-1. [ ] **Thread state**: parse `is_starred`, `is_watched`, and `vote`; add the generic thread action client.
-2. [ ] **Thread actions**: `threads star|unstar|watch|unwatch|upvote|unvote|mark-read|mark-unread`.
-3. [ ] **Unread filter**: `threads --unread`.
-4. [ ] **Since cursor**: `threads --since last`.
-5. [ ] **Export**: `threads export`.
-6. [ ] **Docs**: README, CONTEXT, and a regenerated `SKILL.md`.
+1. [x] **Thread state**: parse `is_starred`, `is_watched`, and `vote`; add the generic thread action client.
+2. [x] **Thread actions**: `threads star|unstar|watch|unwatch|upvote|unvote|mark-read|mark-unread`.
+3. [x] **Unread filter**: `threads --unread`.
+4. [x] **Since cursor**: `threads --since last`.
+5. [x] **Export**: `threads export`.
+6. [x] **Docs**: README, CONTEXT, and a regenerated `SKILL.md`.
 
 ## Ed endpoints
 
@@ -104,3 +104,15 @@ archive/
 - The cursor never advances on search, filtered listings, truncated results, or failures.
 - An interrupted export resumes without re-downloading finished threads.
 - One live call per new endpoint confirms the request shape before release.
+
+## Implementation verification
+
+Implemented on `feat/thread-actions-export`. Mocked CLI/HTTP tests cover paired
+state actions, no-ops, dry runs, vote comment ownership, bulk read guards, and
+non-retried writes. Filesystem tests cover the seven-day cursor fallback,
+non-advancement on narrowed/truncated/failed listings, archive attachment links,
+uncapped export pagination, interrupted export recovery, and forced replacement.
+
+The current Ed web bundle confirms the endpoint paths and `watch` body shape.
+Live mutation probes are still pending a user-selected test thread; release must
+wait for the live endpoint acceptance gate, including watch state validation.

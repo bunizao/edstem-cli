@@ -21,9 +21,12 @@ user for numeric ids when a code or a `UNIT#N` thread number will do.
 | The user says | Run | Notes |
 | --- | --- | --- |
 | which units am I in / how are units named here | `edstem units` | shows id, code, name; copy the code as shown |
-| what's being discussed / any questions about X / latest in UNIT | `edstem threads UNIT --limit 20` | add `--unanswered`, `--category`, `--subcategory` |
+| what's being discussed / any questions about X / latest in UNIT | `edstem threads UNIT --limit 20` | add `--unanswered`, `--unread`, `--category`, `--subcategory` |
 | any threads about <topic> in UNIT | `edstem threads search UNIT <words...>` | every word must match title or body; add `--since 7d` |
 | what does thread #N say / read that thread | `edstem threads read UNIT#N` | a global thread id also works |
+| what is new since my last catch-up | `edstem threads UNIT --since last` | first run: seven days; only complete, unrestricted newest-first listings advance the local cursor |
+| star, watch, vote, or change read state (only when asked) | `edstem threads star UNIT#N --dry-run` | paired undo verbs; `upvote` accepts `--comment ID`; `mark-read UNIT --all` covers the unit; repeat with `--yes` |
+| archive a unit's forum and attachments | `edstem threads export UNIT --dest DIR` | resumes completed threads; `--force` refreshes them; `--no-files` keeps remote links |
 | my posts / did anyone reply to me | `edstem activity [UNIT]` |  |
 | which lessons, weeks or modules exist / what's unfinished | `edstem lessons UNIT` | then `--status unattempted` or `--module <text>` |
 | what's in a lesson / the slides | `edstem lessons show <lesson id>` | lesson id from `edstem lessons UNIT` |
@@ -48,7 +51,7 @@ the same `UNIT` reference, so no `list_courses` call is needed first.
 - Use `--dry-run` to inspect a mutation plan without changing Ed state.
 - Category, subcategory, module and type filters must be spelled as Ed shows them; an invalid filter lists the values available in that unit.
 - Treat Ed API tokens as passwords. Never print, log, or persist them in project files.
-- `edstem commands --json` is the source of truth for this command tree; the published `@bunizao/cli-kit` npm package (`^0.1.0`) defines the shared CLI contract.
+- `edstem commands --json` is the source of truth for this command tree; the shared CLI contract comes from `@bunizao/cli-kit`, with Ed-specific action metadata described locally.
 
 ## Setup
 
@@ -71,10 +74,19 @@ edstem units
 | edstem units list | List enrolled units. |  | --archived | no |
 | edstem units show | Show one enrolled unit. | <unit> |  | no |
 | edstem threads | List, search, show, or read Ed threads. |  |  | no |
-| edstem threads list | List threads in a unit. | <unit> | -n, --limit <count><br>-s, --sort <order><br>-c, --category <category><br>--subcategory <subcategory><br>-t, --type <type><br>--answered<br>--unanswered<br>--offset <count><br>--since <when> | no |
-| edstem threads search | Search threads in a unit by words in the title and body. | <unit> <query...> | -n, --limit <count><br>-s, --sort <order><br>-c, --category <category><br>--subcategory <subcategory><br>-t, --type <type><br>--answered<br>--unanswered<br>--offset <count><br>--since <when> | no |
+| edstem threads list | List threads in a unit. | <unit> | -n, --limit <count><br>-s, --sort <order><br>-c, --category <category><br>--subcategory <subcategory><br>-t, --type <type><br>--answered<br>--unanswered<br>--unread<br>--offset <count><br>--since <when> | no |
+| edstem threads search | Search threads in a unit by words in the title and body. | <unit> <query...> | -n, --limit <count><br>-s, --sort <order><br>-c, --category <category><br>--subcategory <subcategory><br>-t, --type <type><br>--answered<br>--unanswered<br>--unread<br>--offset <count><br>--since <when> | no |
+| edstem threads export | Export a unit's forum and attachments to a local Markdown archive. | <unit> | --dest <directory><br>--no-files<br>--force<br>-n, --limit <count><br>-s, --sort <order><br>-c, --category <category><br>--subcategory <subcategory><br>-t, --type <type><br>--answered<br>--unanswered<br>--unread<br>--offset <count><br>--since <when> | no |
 | edstem threads show | Show a thread by ID or unit ID/code plus #number. | <reference> | --include-html | no |
 | edstem threads read | Read a thread body as Markdown. | <reference> |  | no |
+| edstem threads star | star a thread. | <reference> |  | yes |
+| edstem threads unstar | unstar a thread. | <reference> |  | yes |
+| edstem threads watch | watch a thread. | <reference> |  | yes |
+| edstem threads unwatch | unwatch a thread. | <reference> |  | yes |
+| edstem threads upvote | upvote a thread. | <reference> | --comment <id> | yes |
+| edstem threads unvote | unvote a thread. | <reference> | --comment <id> | yes |
+| edstem threads mark-read | mark-read a thread or every thread in a unit. | <reference> | --all | yes |
+| edstem threads mark-unread | mark-unread a thread. | <reference> |  | yes |
 | edstem threads send | Post a new thread in a unit. | <unit> | --title <title><br>--body <markdown><br>--body-file <path><br>--type <type><br>-c, --category <category><br>--private<br>--anonymous | yes |
 | edstem replies | Post replies to Ed threads. |  |  | no |
 | edstem replies send | Post a reply to a thread or to one of its comments. | <reference> | --body <markdown><br>--body-file <path><br>--as <kind><br>--to <commentId><br>--private<br>--anonymous | yes |

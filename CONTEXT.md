@@ -43,3 +43,17 @@ _Avoid_: Notification, feed item
 **Lesson Progress**:
 The Ed Identity's viewed or completed state for a Lesson and its Slides.
 _Avoid_: Read receipt, completion record
+
+**Thread State**:
+The Ed Identity's starred, watched, voted, and seen state for a Thread. Watch can
+inherit the Course default (`null`) or explicitly enable or disable notifications.
+
+**Thread Cursor**:
+A local per-Course timestamp for unrestricted `threads --since last` listings.
+It measures new Threads since a successful catch-up request, independently of
+Ed's seen state, and does not mutate upstream state.
+
+**Forum Archive**:
+A local Markdown snapshot of Course Threads, nested replies, and downloaded
+attachments. Completed thread files are resume checkpoints; explicit `--force`
+refreshes them. The index and manifest describe the selected Threads.
