@@ -180,6 +180,20 @@ describe("CLI", () => {
     expect(dry.fetch).not.toHaveBeenCalled();
   });
 
+  it("pages past seen threads to fill an unread listing", async () => {
+    const test = makeRuntime();
+    test.fetch.mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      const offset = Number(url.searchParams.get("offset"));
+      return new Response(JSON.stringify({ threads: offset === 0
+        ? Array.from({ length: 30 }, (_, id) => ({ id, is_seen: true }))
+        : [{ id: 42, number: 42, is_seen: false }, { id: 43, is_seen: true }] }));
+    });
+    expect(await run(["node", "edstem", "threads", "100", "--unread", "--limit", "1", "--json"], test.runtime)).toBe(0);
+    expect(JSON.parse(test.stdout.join(""))).toMatchObject([{ id: 42, flags: ["unseen"] }]);
+    expect(test.fetch).toHaveBeenCalledTimes(2);
+  });
+
   it("uses the edstem command name", () => {
     expect(createProgram(makeRuntime().runtime).name()).toBe("edstem");
   });

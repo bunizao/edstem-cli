@@ -9,6 +9,7 @@ const RELATIVE_UNIT_MS: Record<string, number> = {
 
 export interface ThreadFilterOptions {
   answered?: boolean;
+  unread?: boolean;
   category?: string;
   query?: string;
   since?: Date;
@@ -36,6 +37,9 @@ export function filterThreads(
     if (threadType && normalizeFilter(thread.type) !== threadType) {
       return false;
     }
+    if (options.unread && thread.isSeen) {
+      return false;
+    }
     if (answered !== undefined && thread.isAnswered !== answered) {
       return false;
     }
@@ -54,7 +58,7 @@ export function filterThreads(
 
 /** True when the options narrow the list, so one Ed page may not hold enough matches. */
 export function hasThreadFilters(options: ThreadFilterOptions): boolean {
-  return options.answered !== undefined ||
+  return Boolean(options.unread) || options.answered !== undefined ||
     options.since !== undefined ||
     Boolean(normalizeFilter(options.category)) ||
     Boolean(normalizeFilter(options.subcategory)) ||

@@ -912,6 +912,7 @@ function withThreadFilters(command: Command): Command {
     .option("-t, --type <type>", "Filter by thread type.")
     .option("--answered", "Only answered threads.")
     .option("--unanswered", "Only unanswered threads.")
+    .option("--unread", "Only threads Ed reports as unseen.")
     .option("--offset <count>", "Skip this many threads before filtering.", nonNegativeInteger, 0)
     .option(
       "--since <when>",
@@ -932,6 +933,7 @@ async function threadListOptions(
   return {
     answered: options.answered ? true : options.unanswered ? false : undefined,
     category: options.category,
+    unread: Boolean(options.unread),
     courseId: unit,
     limit: options.limit ?? options.max ?? await runtime.defaultFetchCount(),
     offset: options.offset,
