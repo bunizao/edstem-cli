@@ -382,7 +382,8 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
           summary: unchanged ? `${target} is already in the requested state (${action}).` : `${action} ${target}.`,
         };
       },
-      async (_command, plan) => {
+      async (command, plan) => {
+        if (outputOptions(command).yes) runtime.writeStderr(`${plan.summary}\n`);
         if (plan.courseId !== undefined) {
           await plan.client.markAllThreadsRead(plan.courseId);
           return { action, courseId: plan.courseId, changed: true };

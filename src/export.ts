@@ -88,12 +88,16 @@ export async function exportThreads(client: EdClient, options: ThreadExportOptio
           });
           files += downloads.length;
           for (const download of downloads) {
-            links.set(download.url, `../files/${number}/${encodeURIComponent(download.filename)}`);
+            links.set(download.url, `../files/${number}/${encodeURIComponent(download.filename).replace(/[!'()*]/g, (character) =>
+              `%${character.charCodeAt(0).toString(16).toUpperCase()}`)}`);
           }
         }
         let markdown = threadToMarkdown(thread);
         for (const [remote, local] of links) {
-          markdown = markdown.split(`](${remote})`).join(`](${local})`);
+          if (remote === local) continue;
+          markdown = markdown.split(`<${remote}>`).join(`[Attachment](${local})`);
+          const escaped = remote.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          markdown = markdown.replace(new RegExp(`${escaped}(?=$|[\\s)>])`, "g"), () => local);
         }
         if (attachments.length > 0) {
           markdown += `\n## Attachments\n\n${attachments.map((file) =>

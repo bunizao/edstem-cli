@@ -143,6 +143,7 @@ describe("CLI", () => {
     expect(new URL(String(apply.fetch.mock.calls.at(-1)?.[0])).pathname).toBe(`/api/threads/5001/${endpoint}`);
     expect(apply.fetch.mock.calls.at(-1)?.[1]?.method).toBe("POST");
     expect(JSON.parse(apply.stdout.join(""))).toMatchObject({ changed: true, threadId: 5001 });
+    expect(apply.stderr.join("")).toContain(`${action} thread 5001.`);
 
     const noOp = makeRuntime(200, false, fixture("user_info"), {}, overrides(after));
     expect(await run(["node", "edstem", "threads", action, "5001", "--yes", "--json"], noOp.runtime)).toBe(0);
@@ -332,6 +333,33 @@ describe("CLI", () => {
       test.stdout.length = 0;
       expect(await run([...args, "--force", "--limit", "1"], test.runtime)).toBe(0);
       expect(JSON.parse(test.stdout.join(""))).toMatchObject({ threads: 1, skipped: 0, files: 3 });
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("rewrites reference and inline attachment links with safe local filenames", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "edstem-export-links-"));
+    const url = "https://static.edusercontent.com/files/one";
+    const test = makeRuntime(200, false, fixture("user_info"), {}, {
+      "/api/courses/100/threads": { threads: [{ id: 5001, number: 1, title: "Links" }] },
+      "/api/threads/5001": { thread: { id: 5001, number: 1,
+        document: `[Inline](${url})\n\n[Reference][file]\n[file]: ${url} "Title"\n\n<${url}>`,
+        content: `<file filename="report).pdf" url="${url}"/>` } },
+    });
+    const normalFetch = test.fetch.getMockImplementation()!;
+    test.fetch.mockImplementation(async (input, init) => {
+      if (new URL(String(input)).hostname.endsWith("edusercontent.com")) {
+        return new Response("pdf", { headers: { "content-disposition": 'attachment; filename="report).pdf"' } });
+      }
+      return normalFetch(input, init);
+    });
+    try {
+      expect(await run(["node", "edstem", "threads", "export", "100", "--dest", directory, "--json"], test.runtime)).toBe(0);
+      const markdown = await readFile(join(directory, "threads/0001-links.md"), "utf8");
+      expect(markdown).toContain("[Inline](../files/0001/report%29.pdf)");
+      expect(markdown).toContain('[file]: ../files/0001/report%29.pdf "Title"');
+      expect(markdown).toContain("[Attachment](../files/0001/report%29.pdf)");
+      expect(markdown).not.toContain(url);
+      expect(await readFile(join(directory, "files/0001/report).pdf"), "utf8")).toBe("pdf");
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 

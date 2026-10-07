@@ -25,7 +25,7 @@ Read from Ed's web client bundle; none are documented by Ed.
 
 The thread payload carries `is_starred`, `is_watched` (`true`, `false`, or `null` for the course default), and `vote`.
 
-The accepted `state` values for `watch` are unconfirmed. Verify them with one live call before milestone 2 ships. Ed also exposes `downvote`, but students usually cannot use it, so the CLI leaves it out.
+The current Ed web client sends boolean `state` values (`true` to watch, `false` to unwatch). Verify them with one live call before milestone 2 ships. Ed also exposes `downvote`, but students usually cannot use it, so the CLI leaves it out.
 
 ## Thread actions
 
@@ -113,6 +113,8 @@ non-retried writes. Filesystem tests cover the seven-day cursor fallback,
 non-advancement on narrowed/truncated/failed listings, archive attachment links,
 uncapped export pagination, interrupted export recovery, and forced replacement.
 
-The current Ed web bundle confirms the endpoint paths and `watch` body shape.
+The current Ed web bundle confirms the endpoint paths, `watch` body shape, and
+boolean watch values (the interface calls `setWatch(true)` and passes that state
+unchanged to the request).
 Live mutation probes are still pending a user-selected test thread; release must
 wait for the live endpoint acceptance gate, including watch state validation.
