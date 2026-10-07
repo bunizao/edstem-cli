@@ -118,3 +118,10 @@ boolean watch values (the interface calls `setWatch(true)` and passes that state
 unchanged to the request).
 Live mutation probes are still pending a user-selected test thread; release must
 wait for the live endpoint acceptance gate, including watch state validation.
+
+Final local checks: `npm run check`, `npm run build:local`, deterministic skill
+regeneration, and `npm test` passed (220 Node, 22 remote, 10 Worker tests).
+The two-axis code review found no Standards issues. All three reported Spec
+issues around offline Markdown links were fixed and re-reviewed; no findings
+remain. Regression tests cover parentheses in filenames, inline and reference
+links, bracketed destinations, and standalone autolinks.
