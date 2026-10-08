@@ -4,7 +4,9 @@ import { dirname, join } from "node:path";
 
 import { createUi, type Ui } from "@bunizao/cli-kit";
 import { CliError } from "./errors.js";
-import { ED_REGIONS, parseRegion, type EdRegion } from "./regions.js";
+import type { EdClient } from "./ed/client.js";
+import type { UserWithCourses } from "./ed/models.js";
+import { ED_REGIONS, isEdRegion, parseRegion, type EdRegion } from "./regions.js";
 
 export const TOKEN_HELP_URL = "https://edstem.org/settings/api-tokens";
 
@@ -56,7 +58,7 @@ export async function loadTokenWithSource(options: TokenSourceOptions = {}): Pro
         }
         if (!saved || typeof saved !== "object" || !("token" in saved) ||
           typeof saved.token !== "string" || !saved.token.trim() || !("region" in saved) ||
-          (saved.region !== "au" && saved.region !== "us" && saved.region !== "eu")) {
+          !isEdRegion(saved.region)) {
           throw new CliError("config", `Invalid Ed credentials in ${tokenFile}. Run edstem auth login again.`);
         }
         token = saved.token.trim();
@@ -93,6 +95,23 @@ export async function saveToken(token: string, tokenFile = defaultTokenFile(), r
   await mkdir(dirname(tokenFile), { recursive: true, mode: 0o700 });
   await writeFile(tokenFile, `${JSON.stringify({ token, region })}\n`, { encoding: "utf8", mode: 0o600 });
   await chmod(tokenFile, 0o600);
+}
+
+/**
+ * A token is valid in exactly one Ed region, so ask all of them and keep the one that answers.
+ * Zero or several answers are "undetected": the caller falls back to asking the person.
+ */
+export async function detectRegion(
+  token: string,
+  createClient: (token: string, region: EdRegion) => Promise<Pick<EdClient, "fetchUser">>
+): Promise<{ region: EdRegion; user: UserWithCourses } | "undetected"> {
+  const regions = Object.keys(ED_REGIONS) as EdRegion[];
+  const results = await Promise.allSettled(regions.map(async (region) => (await createClient(token, region)).fetchUser()));
+  const accepted = regions.flatMap((region, index) => {
+    const result = results[index]!;
+    return result.status === "fulfilled" ? [{ region, user: result.value }] : [];
+  });
+  return accepted.length === 1 ? accepted[0]! : "undetected";
 }
 
 export async function promptEdRegion(ui: Ui = createUi({ input: process.stdin, output: process.stderr })): Promise<EdRegion> {

@@ -8,8 +8,12 @@ export const ED_REGIONS = {
 
 export type EdRegion = keyof typeof ED_REGIONS;
 
+export function isEdRegion(value: unknown): value is EdRegion {
+  return typeof value === "string" && Object.hasOwn(ED_REGIONS, value);
+}
+
 export function parseRegion(value: string): EdRegion {
   const region = value.trim().toLowerCase();
-  if (region === "au" || region === "us" || region === "eu") return region;
+  if (isEdRegion(region)) return region;
   throw new CliError("usage", "Ed region must be au, us, or eu.");
 }

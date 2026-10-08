@@ -30,6 +30,7 @@ import { readFile } from "node:fs/promises";
 import {
   TOKEN_HELP_URL,
   defaultTokenFile,
+  detectRegion,
   loadTokenWithSource,
   promptEdRegion,
   removeToken,
@@ -39,6 +40,7 @@ import { EDSTEM_TAGLINE, EDSTEM_WORDMARK, showWordmark } from "./wordmark.js";
 import { commandsJson, mutating } from "./commands.js";
 import { loadConfig } from "./config.js";
 import { downloadLessonFiles } from "./download.js";
+import type { UserWithCourses } from "./ed/models.js";
 import { EdClient, type FetchLike, type ThreadAction } from "./ed/client.js";
 import { listLessonFiles, listThreadFiles } from "./ed/files.js";
 import { markdownToEdDocument } from "./ed/document.js";
@@ -76,7 +78,7 @@ import { writeGeneratedSkill } from "./skills.js";
 import { applyUpdate, checkForUpdate } from "./update.js";
 import { defaultStateFile, readThreadCursor, saveThreadCursor } from "./state.js";
 import { VERSION } from "./version.js";
-import { parseRegion, type EdRegion } from "./regions.js";
+import { ED_REGIONS, parseRegion, type EdRegion } from "./regions.js";
 
 const SORT_OPTIONS = ["new", "old", "top", "hot"] as const;
 const SLIDE_SECTIONS = ["slide", "questions", "responses", "quiz"] as const;
@@ -195,8 +197,8 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
   auth.command("login")
     .description("Verify an Ed token and save it for later commands.")
     .option("--token-stdin", "Read the token from the first line of stdin.")
-    .addOption(program.createOption("--region <region>", "Ed region (prompts in a terminal; defaults to au for scripts).")
-      .choices(["au", "us", "eu"]).argParser(parseRegion))
+    .addOption(program.createOption("--region <region>", "Ed region (detected from the token when omitted; skips detection).")
+      .choices(Object.keys(ED_REGIONS)).argParser(parseRegion))
     .action(async (_options: unknown, command: Command) => {
       const shadowed = Boolean(process.env.EDSTEM_TOKEN?.trim());
       // Entering a token is already explicit, so only --dry-run short-circuits the login.
@@ -214,16 +216,17 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
       );
       if (!accepted) return;
 
-      const region: EdRegion = command.opts().region ?? (runtime.interactive && ui.interactive
-        ? await promptEdRegion(ui)
-        : parseRegion(process.env.EDSTEM_REGION?.trim() || "au"));
+      const explicitRegion: EdRegion | undefined = command.opts().region ?? environmentRegion();
       const token = command.opts().tokenStdin
         ? (await runtime.readStdinLine()).trim()
         : await askForToken(ui, runtime.tokenFile);
       if (!token) throw new CliError("auth", "No Ed token provided.");
 
-      const client = await runtime.createClientForToken(token, region);
-      const identity = projectIdentity(await client.fetchUser());
+      const { region, user } = await identifyToken(token, runtime.createClientForToken, {
+        explicit: explicitRegion,
+        prompt: runtime.interactive && ui.interactive ? () => promptEdRegion(ui) : undefined,
+      });
+      const identity = projectIdentity(user);
       await saveToken(token, runtime.tokenFile, region);
       if (shadowed) {
         runtime.writeStderr(
@@ -718,22 +721,63 @@ async function askForToken(ui: Ui, tokenFile: string): Promise<string> {
   return (await ui.password("Ed API token")).trim();
 }
 
+function environmentRegion(): EdRegion | undefined {
+  const value = process.env.EDSTEM_REGION?.trim();
+  return value ? parseRegion(value) : undefined;
+}
+
+// Region precedence: an explicit one (--region, EDSTEM_REGION), then detection, then `prompt`.
+// Without a prompt, an inconclusive detection is an error that names the way out.
+async function identifyToken(
+  token: string,
+  createClient: CliRuntime["createClientForToken"],
+  options: { explicit?: EdRegion; prompt?: () => Promise<EdRegion> }
+): Promise<{ region: EdRegion; user: UserWithCourses }> {
+  let region = options.explicit;
+  if (!region) {
+    const found = await detectRegion(token, createClient);
+    if (found !== "undetected") return found;
+    if (!options.prompt) {
+      throw new CliError(
+        "auth",
+        "Ed did not accept this token in exactly one region (none accepted it, or several did). Check the token and pass --region au, us, or eu."
+      );
+    }
+    region = await options.prompt();
+  }
+  return { region, user: await (await createClient(token, region)).fetchUser() };
+}
+
 // First run on this machine: the wordmark, the token, and a check with Ed before anything is saved.
-async function onboardToken(ui: Ui, tokenFile: string, verify: CliRuntime["createClientForToken"]): Promise<void> {
+// The region is found per attempt, so a wrong manual pick never locks the person out.
+export async function onboardToken(ui: Ui, tokenFile: string, verify: CliRuntime["createClientForToken"]): Promise<void> {
   showWordmark(ui);
-  const region = await promptEdRegion(ui);
+  const explicit = environmentRegion();
   for (;;) {
     const token = await askForToken(ui, tokenFile);
     if (!token) {
       ui.warn("Nothing was pasted.");
       continue;
     }
-    const spin = ui.spinner();
-    spin.start("Checking the token with Ed");
+    let spin = ui.spinner();
+    spin.start(explicit ? "Checking the token with Ed" : "Finding your Ed region");
+    let region: EdRegion;
     try {
-      const identity = await (await verify(token, region)).fetchUser();
-      spin.stop(`Signed in as ${identity.user.name}`);
+      const found = await identifyToken(token, verify, {
+        explicit,
+        prompt: async () => {
+          spin.stop("Could not tell which Ed region that token belongs to");
+          const picked = await promptEdRegion(ui);
+          spin = ui.spinner();
+          spin.start("Checking the token with Ed");
+          return picked;
+        },
+      });
+      region = found.region;
+      spin.stop(`Signed in as ${found.user.user.name}`);
     } catch (error) {
+      // Backing out of the region picker is leaving, not a rejected token.
+      if (error instanceof CliError && error.code === "cancelled") throw error;
       spin.error(`Ed rejected that token: ${error instanceof Error ? error.message : String(error)}`);
       continue;
     }
@@ -746,7 +790,8 @@ function createDefaultRuntime(ui: Ui): CliRuntime {
   const tokenFile = defaultTokenFile();
   let client: Promise<EdClient> | undefined;
   const createClientForToken = async (token: string, region: EdRegion): Promise<EdClient> =>
-    new EdClient({ apiBaseUrl: (await loadConfig(undefined, region)).apiBaseUrl, token });
+    // Probes are one-shot checks: no retry backoff, and a hung region must not stall login.
+    new EdClient({ apiBaseUrl: (await loadConfig(undefined, region)).apiBaseUrl, maxRetries: 0, timeoutMs: 10_000, token });
   return {
     createClient: () => {
       client ??= (async () => {

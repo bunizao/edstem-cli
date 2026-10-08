@@ -4,9 +4,9 @@ import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { loadToken, loadTokenWithSource, saveToken } from "../src/auth.js";
+import { detectRegion, loadToken, loadTokenWithSource, saveToken } from "../src/auth.js";
 import { loadConfig } from "../src/config.js";
-import { ED_REGIONS } from "../src/regions.js";
+import { ED_REGIONS, isEdRegion, type EdRegion } from "../src/regions.js";
 
 describe("auth, config, and output", () => {
   it("prefers the environment token", async () => {
@@ -113,4 +113,41 @@ describe("auth, config, and output", () => {
     }
   });
 
+});
+
+describe("region detection", () => {
+  const user = { user: { id: 1, name: "Alice" }, courses: [] } as never;
+  // A fake Ed that accepts the token only in the given regions.
+  const probe = (accepting: EdRegion[]) => vi.fn(async (_token: string, region: EdRegion) => ({
+    fetchUser: async () => {
+      if (!accepting.includes(region)) throw new Error("rejected");
+      return user;
+    },
+  }));
+
+  it.each(["au", "us", "eu"] as const)("returns %s with its user when only it accepts the token", async (region) => {
+    const createClient = probe([region]);
+    expect(await detectRegion("token", createClient)).toEqual({ region, user });
+    expect(createClient.mock.calls.map(([, name]) => name).sort()).toEqual(["au", "eu", "us"]);
+  });
+
+  it.each([[[]], [["au", "eu"]], [["au", "us", "eu"]]] as [EdRegion[]][])(
+    "is undetected when %j accept the token",
+    async (accepting) => {
+      expect(await detectRegion("token", probe(accepting))).toBe("undetected");
+    }
+  );
+
+  it("treats a client that fails to start as a rejection", async () => {
+    const createClient = vi.fn(async (_token: string, region: EdRegion) => {
+      if (region !== "eu") throw new Error("no config");
+      return { fetchUser: async () => user };
+    });
+    expect(await detectRegion("token", createClient)).toEqual({ region: "eu", user });
+  });
+
+  it("guards region values", () => {
+    expect(["au", "us", "eu"].every(isEdRegion)).toBe(true);
+    expect([undefined, "", "AU", "toString", "constructor"].some(isEdRegion)).toBe(false);
+  });
 });
