@@ -19,7 +19,9 @@ describe("auth, config, and output", () => {
     await writeFile(tokenFile, "file-token\n", { mode: 0o600 });
 
     expect(await loadToken({ env: {}, tokenFile })).toBe("file-token");
-    expect(await loadTokenWithSource({ env: {}, tokenFile })).toMatchObject({ token: "file-token", region: "au" });
+    expect(await loadTokenWithSource({ env: {}, tokenFile })).toMatchObject({
+      token: "file-token", region: "au", regionSource: "default",
+    });
   });
 
   it.each(["au", "us", "eu"] as const)("loads a saved %s token with its API endpoint", async (region) => {
@@ -27,7 +29,7 @@ describe("auth, config, and output", () => {
     const tokenFile = join(directory, "token");
     await saveToken("file-token", tokenFile, region);
     const credentials = await loadTokenWithSource({ env: {}, tokenFile });
-    expect(credentials).toMatchObject({ token: "file-token", region, source: "file" });
+    expect(credentials).toMatchObject({ token: "file-token", region, regionSource: "file", source: "file" });
     expect(await loadConfig(join(directory, "missing.yaml"), credentials.region)).toMatchObject({
       apiBaseUrl: ED_REGIONS[region].apiBaseUrl,
     });
@@ -37,13 +39,13 @@ describe("auth, config, and output", () => {
     const tokenFile = join(await mkdtemp(join(tmpdir(), "edstem-env-region-")), "token");
     await saveToken("saved-eu-token", tokenFile, "eu");
     expect(await loadTokenWithSource({ env: { EDSTEM_TOKEN: "env-token" }, tokenFile })).toMatchObject({
-      token: "env-token", region: "au", source: "environment",
+      token: "env-token", region: "au", regionSource: "default", source: "environment",
     });
     expect(await loadTokenWithSource({ env: { EDSTEM_TOKEN: "env-token", EDSTEM_REGION: " US " }, tokenFile })).toMatchObject({
-      token: "env-token", region: "us", source: "environment",
+      token: "env-token", region: "us", regionSource: "environment", source: "environment",
     });
     expect(await loadTokenWithSource({ env: { EDSTEM_REGION: "us" }, tokenFile })).toMatchObject({
-      token: "saved-eu-token", region: "us", source: "file",
+      token: "saved-eu-token", region: "us", regionSource: "environment", source: "file",
     });
   });
 

@@ -47,7 +47,7 @@ Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/a
 | `us` (United States) | `https://us.edstem.org/api/` |
 | `eu` (Europe) | `https://eu.edstem.org/api/` |
 
-Use `--region` (or `EDSTEM_REGION`) to skip detection and `--token-stdin` to read a token from stdin. Non-interactive login detects the region too, and fails with a request for `--region` when it cannot tell. `edstem auth logout` removes the saved credentials, and `edstem auth status` reports the active region and token source. `EDSTEM_TOKEN` takes precedence over the saved token; when using it, set `EDSTEM_REGION` for US or EU (it defaults to AU independently of the saved file). `EDSTEM_REGION` can also override the saved region, and `EDSTEM_BASE_URL` overrides the API endpoint. The CLI also reads `~/.config/edstem-cli/config.yaml`.
+Use `--region` (or `EDSTEM_REGION`) to skip detection and `--token-stdin` to read a token from stdin. Non-interactive login detects the region too, and fails with a request for `--region` when it cannot tell. `edstem auth logout` removes the saved credentials, and `edstem auth status` reports the active region, where that region came from (`environment`, `file`, or `default`), and the token source. `EDSTEM_TOKEN` takes precedence over the saved token; when using it, set `EDSTEM_REGION` for US or EU (it defaults to AU independently of the saved file). `EDSTEM_REGION` can also override the saved region, and `EDSTEM_BASE_URL` overrides the API endpoint. The CLI also reads `~/.config/edstem-cli/config.yaml`.
 
 ```bash
 printf '%s\n' "your-token" | edstem auth login --region us --token-stdin

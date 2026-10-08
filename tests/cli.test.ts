@@ -1245,6 +1245,8 @@ describe("auth commands", () => {
     expect(JSON.parse(environment.stdout.join(""))).toMatchObject({
       authenticated: true,
       source: "environment",
+      region: "au",
+      regionSource: "default",
       tokenFile,
     });
 
@@ -1258,6 +1260,8 @@ describe("auth commands", () => {
     expect(JSON.parse(file.stdout.join(""))).toMatchObject({
       authenticated: true,
       source: "file",
+      region: "au",
+      regionSource: "default",
       tokenFile,
       user: { id: 12345 },
     });

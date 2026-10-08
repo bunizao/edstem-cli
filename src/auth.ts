@@ -11,9 +11,11 @@ import { ED_REGIONS, isEdRegion, parseRegion, type EdRegion } from "./regions.js
 export const TOKEN_HELP_URL = "https://edstem.org/settings/api-tokens";
 
 export type TokenSource = "environment" | "file";
+export type RegionSource = TokenSource | "default";
 
 export interface LoadedToken {
   region: EdRegion;
+  regionSource: RegionSource;
   source: TokenSource;
   token: string;
   tokenFile: string;
@@ -41,7 +43,9 @@ export async function loadTokenWithSource(options: TokenSourceOptions = {}): Pro
   const fromEnvironment = env.EDSTEM_TOKEN?.trim();
   const environmentRegion = env.EDSTEM_REGION?.trim() ? parseRegion(env.EDSTEM_REGION) : undefined;
   if (fromEnvironment) {
-    return { source: "environment", token: fromEnvironment, tokenFile, region: environmentRegion ?? "au" };
+    const region = environmentRegion ?? "au";
+    const regionSource = environmentRegion ? "environment" : "default";
+    return { source: "environment", token: fromEnvironment, tokenFile, region, regionSource };
   }
 
   try {
@@ -49,6 +53,7 @@ export async function loadTokenWithSource(options: TokenSourceOptions = {}): Pro
     if (fromFile) {
       let token = fromFile;
       let region: EdRegion = "au";
+      let regionSource: RegionSource = "default";
       if (fromFile.startsWith("{")) {
         let saved: unknown;
         try {
@@ -63,8 +68,13 @@ export async function loadTokenWithSource(options: TokenSourceOptions = {}): Pro
         }
         token = saved.token.trim();
         region = saved.region;
+        regionSource = "file";
       }
-      return { source: "file", token, tokenFile, region: environmentRegion ?? region };
+      if (environmentRegion) {
+        region = environmentRegion;
+        regionSource = "environment";
+      }
+      return { source: "file", token, tokenFile, region, regionSource };
     }
   } catch (error) {
     if (error instanceof CliError) throw error;
@@ -82,7 +92,7 @@ export async function loadTokenWithSource(options: TokenSourceOptions = {}): Pro
       throw new CliError("auth", "No Ed token provided");
     }
     await saveToken(token, tokenFile, region);
-    return { source: "file", token, tokenFile, region };
+    return { source: "file", token, tokenFile, region, regionSource: environmentRegion ? "environment" : "file" };
   }
 
   throw new CliError(

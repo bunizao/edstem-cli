@@ -254,11 +254,11 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
     .description("Verify the configured Ed token.")
     .action(outputAction(runtime, async (client) => {
       const identity = projectIdentity(await client.fetchUser());
-      const { source, tokenFile, region } = await loadTokenWithSource({
+      const { source, tokenFile, region, regionSource } = await loadTokenWithSource({
         interactive: false,
         tokenFile: runtime.tokenFile,
       });
-      return { authenticated: true, source, tokenFile, region, user: identity.user };
+      return { authenticated: true, source, tokenFile, region, regionSource, user: identity.user };
     }));
 
   program.command("user")
