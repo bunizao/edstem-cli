@@ -7,7 +7,7 @@ This guide deploys Edstem MCP to Cloudflare Workers and connects it to ChatGPT w
 You need:
 
 - A Cloudflare account.
-- An Ed API token from [Ed settings](https://edstem.org/settings/api-tokens).
+- An Ed API token from [Ed settings](https://edstem.org/settings/api-tokens). The hosted server supports the AU region only; on US or EU Ed, use the local `edstem-mcp` server from the [README](README.md) instead.
 - The hostname Cloudflare assigns after deployment.
 
 Never put the Ed token in a URL. The Worker accepts it through `Authorization` or `X-API-Key`, validates it against Ed, and does not store it.

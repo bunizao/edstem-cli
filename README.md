@@ -13,7 +13,7 @@
 
 ## Quick start
 
-Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens), then:
+Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens) (US: [us.edstem.org](https://us.edstem.org/settings/api-tokens), EU: [eu.edstem.org](https://eu.edstem.org/settings/api-tokens)), then:
 
 ```bash
 npm install -g edstem-cli
