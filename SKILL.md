@@ -60,8 +60,8 @@ edstem units
 ```
 
 Alternatively, run `edstem auth login` in a terminal to select the region and
-open its token page in your regular browser. On macOS, an existing Ed window
-is preferred so its browser profile and session are retained. Use `--no-browser`
+open its token page in your system's default browser. Use the browser profile
+where you already sign in to Ed. Use `--no-browser`
 to open the displayed link yourself. The CLI and local stdio MCP share the saved token and region.
 For scripts, use `edstem auth login --region us --token-stdin`.
 

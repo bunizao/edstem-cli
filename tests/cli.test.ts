@@ -113,7 +113,7 @@ function makeRuntime(
     runtime: {
       createClient: async () => client,
       createClientForToken: async (token, region) => new EdClient({ apiBaseUrl: ED_REGIONS[region].apiBaseUrl, fetch, token }),
-      openTokenPage: vi.fn().mockResolvedValue("Google Chrome"),
+      openTokenPage: vi.fn().mockResolvedValue(undefined),
       defaultFetchCount: async () => 30,
       interactive: false,
       isTTY,

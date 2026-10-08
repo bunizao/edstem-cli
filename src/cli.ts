@@ -153,7 +153,7 @@ const HELP_SECTIONS: Readonly<Record<string, readonly string[]>> = {
 export interface CliRuntime {
   createClient: () => Promise<EdClient>;
   createClientForToken: (token: string, region: EdRegion) => Promise<EdClient>;
-  openTokenPage: (region: EdRegion) => Promise<string | undefined>;
+  openTokenPage: (region: EdRegion) => Promise<void>;
   defaultFetchCount: () => Promise<number>;
   fetch?: FetchLike;
   interactive: boolean;
@@ -635,10 +635,8 @@ async function askForToken(ui: Ui, tokenFile: string, region: EdRegion): Promise
 
 async function showTokenPage(ui: Ui, region: EdRegion, open: CliRuntime["openTokenPage"]): Promise<void> {
   try {
-    const browser = await open(region);
-    ui.info(browser
-      ? `Opened the API token page in your existing ${browser} Ed window.`
-      : "Opened the API token page in your default browser. Use the profile where you already sign in to Ed.");
+    await open(region);
+    ui.info("Requested the API token page in your default browser. Use the profile where you already sign in to Ed.");
   } catch {
     ui.warn(`Could not open a browser. Open ${tokenPageUrl(region)} in the browser profile where you use Ed.`);
   }

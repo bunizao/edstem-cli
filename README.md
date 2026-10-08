@@ -26,7 +26,7 @@ export EDSTEM_REGION="au" # au, us, or eu
 edstem auth status
 ```
 
-`edstem auth login` asks you to select AU, US, or EU, opens `https://edstem.org/<region>/settings/api-tokens`, then prompts for the token without echoing it. On macOS, it first looks for an existing Ed tab in Chrome, Edge, Brave, or Safari and opens a new tab in that same window, retaining its browser profile and login session. If no accessible Ed window is found, or on Windows/Linux, it opens the system's default browser. Use the profile where you already sign in to Ed; an expired session or a region you have not signed into still requires sign-in. The CLI inspects tab URLs only and leaves browser credentials in the browser.
+`edstem auth login` asks you to select AU, US, or EU, requests `https://edstem.org/<region>/settings/api-tokens` in the system's default browser, then prompts for the token without echoing it. It uses the native URL launcher on macOS, Windows, and Linux, so it works with whichever browser you have configured. The link is always displayed for manual opening, including on machines without a desktop browser. Use the browser profile where you already sign in to Ed; the browser naturally retains its existing session there. The CLI does not select profiles or inspect browser sessions. An expired session or a region you have not signed into still requires sign-in.
 
 Use `--no-browser` to open the displayed link yourself. Browser launch failures also leave the link available so you can continue. `--token-stdin`, non-interactive login, and `--dry-run` never open a browser. First-run interactive onboarding follows the same region and browser flow. The CLI opens the token settings page; you create and copy the token yourself.
 
