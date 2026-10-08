@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
+import { createUi } from "@bunizao/cli-kit";
 
+import { ED_REGIONS } from "../src/regions.js";
 import type { CliRuntime } from "../src/cli.js";
 import { createProgram, run } from "../src/cli.js";
 import { EdClient, type FetchLike } from "../src/ed/client.js";
@@ -110,7 +112,7 @@ function makeRuntime(
     fetch,
     runtime: {
       createClient: async () => client,
-      createClientForToken: async (token) => new EdClient({ fetch, token }),
+      createClientForToken: async (token, region) => new EdClient({ apiBaseUrl: ED_REGIONS[region].apiBaseUrl, fetch, token }),
       defaultFetchCount: async () => 30,
       interactive: false,
       isTTY,
@@ -987,7 +989,7 @@ describe("auth commands", () => {
     expect(fetch.mock.calls[0]?.[1]?.headers).toMatchObject({
       Authorization: "Bearer stdin-token",
     });
-    expect(await readFile(tokenFile, "utf8")).toBe("stdin-token\n");
+    expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "stdin-token", region: "au" });
     expect((await stat(tokenFile)).mode & 0o777).toBe(0o600);
     expect(stderr).toEqual([]);
   });
@@ -1007,7 +1009,57 @@ describe("auth commands", () => {
     }
 
     expect(stderr.join("")).toContain("EDSTEM_TOKEN is set and takes precedence");
-    expect(await readFile(tokenFile, "utf8")).toBe("stdin-token\n");
+    expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "stdin-token", region: "au" });
+  });
+
+  it.each(["au", "us", "eu"] as const)("verifies and saves a %s login at the selected endpoint", async (region) => {
+    const tokenFile = await tokenPath("edstem-region-login-");
+    const { fetch, runtime, stdout } = makeRuntime(200, false, fixture("user_info"), {
+      stdinLine: "regional-token", tokenFile,
+    });
+    expect(await run(["node", "edstem", "auth", "login", "--region", region, "--token-stdin", "--json"], runtime)).toBe(0);
+    expect(String(fetch.mock.calls[0]?.[0])).toBe(`${ED_REGIONS[region].apiBaseUrl}user`);
+    expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "regional-token", region });
+    expect(JSON.parse(stdout.join(""))).toMatchObject({ authenticated: true, region });
+    expect(stdout.join("")).not.toContain("regional-token");
+  });
+
+  it("asks for a region before the token in an interactive login", async () => {
+    const tokenFile = await tokenPath("edstem-region-picker-");
+    const { fetch, runtime } = makeRuntime(200, false, fixture("user_info"), { tokenFile });
+    runtime.interactive = true;
+    const select = vi.fn().mockResolvedValue("eu");
+    const password = vi.fn().mockResolvedValue("picked-token");
+    const ui = { ...createUi({ interactive: false }), interactive: true, select, password, note: vi.fn() };
+    await createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--json"]);
+    expect(select).toHaveBeenCalledWith("Which Ed region?", [
+      { value: "au", label: "Australia (AU)", hint: ED_REGIONS.au.apiBaseUrl },
+      { value: "us", label: "United States (US)", hint: ED_REGIONS.us.apiBaseUrl },
+      { value: "eu", label: "Europe (EU)", hint: ED_REGIONS.eu.apiBaseUrl },
+    ]);
+    expect(select.mock.invocationCallOrder[0]).toBeLessThan(password.mock.invocationCallOrder[0]!);
+    expect(String(fetch.mock.calls[0]?.[0])).toBe(`${ED_REGIONS.eu.apiBaseUrl}user`);
+    expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "picked-token", region: "eu" });
+  });
+
+  it("rejects an invalid region before reading or verifying a token", async () => {
+    const { fetch, runtime, stderr } = makeRuntime();
+    const read = vi.spyOn(runtime, "readStdinLine");
+    expect(await run(["node", "edstem", "auth", "login", "--region", "invalid", "--token-stdin", "--json"], runtime)).toBe(2);
+    expect(JSON.parse(stderr.join(""))).toMatchObject({ error: { code: "usage" } });
+    expect(read).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("preserves existing credentials when a login to another region fails", async () => {
+    const tokenFile = await tokenPath("edstem-region-rejected-");
+    await mkdir(dirname(tokenFile), { recursive: true });
+    const saved = JSON.stringify({ token: "previous-token", region: "au" });
+    await writeFile(tokenFile, saved, { mode: 0o600 });
+    const { fetch, runtime } = makeRuntime(401, false, fixture("user_info"), { stdinLine: "bad-token", tokenFile });
+    expect(await run(["node", "edstem", "auth", "login", "--region", "eu", "--token-stdin", "--json"], runtime)).toBe(3);
+    expect(String(fetch.mock.calls[0]?.[0])).toBe(`${ED_REGIONS.eu.apiBaseUrl}user`);
+    expect(await readFile(tokenFile, "utf8")).toBe(saved);
   });
 
   it("prints the login plan without reading or saving a token on a dry run", async () => {

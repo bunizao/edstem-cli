@@ -34,14 +34,23 @@ edstem auth login
 
 # Or, for scripts and CI:
 export EDSTEM_TOKEN="your-token"
+export EDSTEM_REGION="au" # au, us, or eu
 
 edstem auth status
 ```
 
-Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens). `edstem auth login` prompts for the token without echoing it, or reads it from stdin with `--token-stdin`; it verifies the token before writing `~/.config/edstem-cli/token` with `0600` permissions. `edstem auth logout` removes that file, and `edstem auth status` reports whether the active token came from the environment or the file. `EDSTEM_TOKEN` always takes precedence over the saved file. The CLI also reads `~/.config/edstem-cli/config.yaml`.
+Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens) while signed in to the Ed region you use. `edstem auth login` asks you to select AU, US, or EU, then prompts for the token without echoing it. It verifies the token against the selected region before saving `{ "token": "...", "region": "au" }` together in `~/.config/edstem-cli/token` with `0600` permissions. Subsequent CLI commands and the local stdio MCP server use the saved region automatically. Existing plain-text token files remain supported and default to AU.
+
+| Region | API endpoint |
+| --- | --- |
+| `au` (Australia) | `https://edstem.org/api/` |
+| `us` (United States) | `https://us.edstem.org/api/` |
+| `eu` (Europe) | `https://eu.edstem.org/api/` |
+
+Use `--region` to skip the picker and `--token-stdin` to read a token from stdin. Non-interactive login uses `EDSTEM_REGION` or defaults to AU. `edstem auth logout` removes the saved credentials, and `edstem auth status` reports the active region and token source. `EDSTEM_TOKEN` takes precedence over the saved token; when using it, set `EDSTEM_REGION` for US or EU (it defaults to AU independently of the saved file). `EDSTEM_REGION` can also override the saved region, and `EDSTEM_BASE_URL` overrides the API endpoint. The CLI also reads `~/.config/edstem-cli/config.yaml`.
 
 ```bash
-printf '%s\n' "your-token" | edstem auth login --token-stdin
+printf '%s\n' "your-token" | edstem auth login --region us --token-stdin
 edstem auth logout --yes
 ```
 
@@ -197,6 +206,7 @@ Run `edstem commands --json` for the full machine-readable command tree, includi
 | --- | --- |
 | `EDSTEM_BASE_URL` | Override the Ed JSON API base URL. |
 | `EDSTEM_TOKEN` | Provide the Ed API token. |
+| `EDSTEM_REGION` | Select `au`, `us`, or `eu`; overrides the saved region. Environment tokens default to AU. |
 | `EDSTEM_CONFIG` | Override the local config file path. |
 | `EDSTEM_ALLOW_POSTING` | Set to `1` to enable the `edstem-mcp` posting tools. |
 | `EDSTEM_WIDGETS` | Set to `0` to drop the interactive `show_*` tools from `edstem-mcp`. |
@@ -205,7 +215,7 @@ Run `edstem commands --json` for the full machine-readable command tree, includi
 
 ## MCP
 
-The package also installs `edstem-mcp`, a local stdio MCP server using the same `EDSTEM_TOKEN`. A hosted Streamable HTTP server is available at `https://edstem.tuuhub.com/mcp` and uses OAuth.
+The package also installs `edstem-mcp`, a local stdio MCP server using the same saved token and region, or `EDSTEM_TOKEN` and `EDSTEM_REGION`. A hosted Streamable HTTP server is available at `https://edstem.tuuhub.com/mcp` and uses OAuth.
 
 The remote runtime supports MCP `2026-07-28`, including stateless `server/discover`, header-based routing, and results with `resultType`. It also keeps a stateless compatibility lane for 2025 Streamable HTTP clients during migration.
 

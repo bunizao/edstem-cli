@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { reportError } from "@bunizao/cli-kit";
 
-import { loadToken } from "./auth.js";
+import { loadTokenWithSource } from "./auth.js";
 import { loadConfig } from "./config.js";
 import { EdClient } from "./ed/client.js";
 import { normalizeEdError } from "./errors.js";
@@ -20,6 +20,8 @@ Options:
   -V, --version  Show the version.
 
 Authentication reads EDSTEM_TOKEN, then ~/.config/edstem-cli/token.
+Saved credentials include the Ed region. For environment tokens, set
+EDSTEM_REGION=au, us, or eu (defaults to au).
 Set EDSTEM_WIDGETS=0 to drop the interactive show_* tools and answer in text only.
 
 MCP client configuration:
@@ -27,7 +29,7 @@ MCP client configuration:
     "mcpServers": {
       "edstem": {
         "command": "edstem-mcp",
-        "env": { "EDSTEM_TOKEN": "your-token" }
+        "env": { "EDSTEM_TOKEN": "your-token", "EDSTEM_REGION": "au" }
       }
     }
   }
@@ -43,7 +45,8 @@ export function createStdioEdMcpServer(client: EdClient): McpServer {
 }
 
 export async function startStdioServer(): Promise<void> {
-  const [token, config] = await Promise.all([loadToken(), loadConfig()]);
+  const { token, region } = await loadTokenWithSource();
+  const config = await loadConfig(undefined, region);
   const client = new EdClient({
     apiBaseUrl: config.apiBaseUrl,
     maxRetries: config.maxRetries,
