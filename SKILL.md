@@ -67,6 +67,11 @@ your default browser (use `--no-browser` to open the printed link yourself),
 detects the region from the token, asks only if it cannot tell, and saves both.
 The CLI and local stdio MCP share these credentials. For scripts, use `edstem auth login --region us --token-stdin`.
 
+If verification fails in a terminal, login offers to retry, enter a different token,
+choose another region (keeping the token), or cancel; cancelling keeps saved credentials.
+Login warns when `EDSTEM_TOKEN`, `EDSTEM_REGION`, or `EDSTEM_BASE_URL` overrides saved
+credentials or the endpoint, without printing their values.
+
 ## CLI reference
 
 | Command | Description | Arguments | Options | Mutating |

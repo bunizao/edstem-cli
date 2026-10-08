@@ -203,14 +203,9 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
     .addOption(program.createOption("--region <region>", "Ed region (detected from the token when omitted; skips detection).")
       .choices(Object.keys(ED_REGIONS)).argParser(parseRegion))
     .action(async (_options: unknown, command: Command) => {
-      const shadowed = Boolean(process.env.EDSTEM_TOKEN?.trim());
       // Entering a token is already explicit, so only --dry-run short-circuits the login.
       const accepted = await confirm(
-        {
-          summary: `Verify an Ed token and save it to ${runtime.tokenFile}.${
-            shadowed ? " EDSTEM_TOKEN is set and takes precedence." : ""
-          }`,
-        },
+        { summary: `Verify an Ed token and save it to ${runtime.tokenFile}.` },
         {
           dryRun: Boolean(outputOptions(command).dryRun),
           interactive: runtime.interactive,
@@ -219,27 +214,31 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
       );
       if (!accepted) return;
 
+      warnAuthOverrides((message) => runtime.writeStderr(`${message}\n`));
       const explicitRegion: EdRegion | undefined = command.opts().region ?? environmentRegion();
-      if (runtime.interactive && ui.interactive && !command.opts().tokenStdin && command.opts().browser !== false) {
+      const interactive = runtime.interactive && ui.interactive;
+      const tokenStdin = Boolean(command.opts().tokenStdin);
+      if (interactive && !tokenStdin && command.opts().browser !== false) {
         // The region is unknown until the token is pasted, so open the explicit one, else the default.
         await showTokenPage(ui, explicitRegion ?? "au", runtime.openTokenPage);
       }
-      const token = command.opts().tokenStdin
-        ? (await runtime.readStdinLine()).trim()
-        : await askForToken(ui, runtime.tokenFile, explicitRegion);
-      if (!token) throw new CliError("auth", "No Ed token provided.");
-
-      const { region, user } = await identifyToken(token, runtime.createClientForToken, {
-        explicit: explicitRegion,
-        prompt: runtime.interactive && ui.interactive ? () => promptEdRegion(ui) : undefined,
-      });
+      let token: string;
+      let found: { region: EdRegion; user: UserWithCourses };
+      if (interactive && !tokenStdin) {
+        ({ token, ...found } = await promptVerifiedToken(ui, runtime.tokenFile, runtime.createClientForToken, explicitRegion));
+      } else {
+        token = tokenStdin
+          ? (await runtime.readStdinLine()).trim()
+          : await askForToken(ui, runtime.tokenFile, explicitRegion);
+        if (!token) throw new CliError("auth", "No Ed token provided.");
+        found = await identifyToken(token, runtime.createClientForToken, {
+          explicit: explicitRegion,
+          prompt: interactive ? () => promptEdRegion(ui) : undefined,
+        });
+      }
+      const { region, user } = found;
       const identity = projectIdentity(user);
       await saveToken(token, runtime.tokenFile, region);
-      if (shadowed) {
-        runtime.writeStderr(
-          `Saved ${runtime.tokenFile}, but EDSTEM_TOKEN is set and takes precedence.\n`
-        );
-      }
       await writeValue(runtime, command, {
         authenticated: true,
         region,
@@ -761,8 +760,82 @@ async function identifyToken(
   return { region, user: await (await createClient(token, region)).fetchUser() };
 }
 
+function warnAuthOverrides(warn: (message: string) => void): void {
+  if (process.env.EDSTEM_TOKEN?.trim()) {
+    warn("EDSTEM_TOKEN is set and takes precedence over the saved token for later commands. Unset it to use the saved token.");
+  }
+  if (process.env.EDSTEM_REGION?.trim()) {
+    warn("EDSTEM_REGION is set: login uses it instead of detecting, and later commands use it over the saved region.");
+  }
+  if (process.env.EDSTEM_BASE_URL?.trim()) {
+    warn("EDSTEM_BASE_URL is set and overrides the API endpoint for verification and later commands, so region detection cannot tell regions apart.");
+  }
+}
+
+// Asks for a token and checks it with Ed until it works. After a failure the person chooses what to change,
+// so nothing is lost to one typo: only a failed token or a wrong region is ever re-asked.
+async function promptVerifiedToken(
+  ui: Ui,
+  tokenFile: string,
+  verify: CliRuntime["createClientForToken"],
+  explicit?: EdRegion
+): Promise<{ token: string; region: EdRegion; user: UserWithCourses }> {
+  let token = "";
+  let region = explicit;
+  for (;;) {
+    if (!token) {
+      token = await askForToken(ui, tokenFile, explicit);
+      if (!token) {
+        ui.warn("Nothing was pasted.");
+        continue;
+      }
+    }
+    if (!region) {
+      const finding = ui.spinner();
+      finding.start("Finding your Ed region");
+      const found = await detectRegion(token, verify);
+      if (found !== "undetected") {
+        finding.stop(`Signed in as ${found.user.user.name}`);
+        return { token, ...found };
+      }
+      finding.stop("Could not tell which Ed region that token belongs to");
+      region = await promptEdRegion(ui);
+    }
+    const checking = ui.spinner();
+    checking.start(`Checking the token with Ed (${region.toUpperCase()})`);
+    try {
+      const user = await (await verify(token, region)).fetchUser();
+      checking.stop(`Signed in as ${user.user.name}`);
+      return { token, region, user };
+    } catch (error) {
+      const failure = normalizeEdError(error);
+      if (failure.code !== "auth" && failure.code !== "network" && failure.code !== "upstream") {
+        checking.error("Could not verify the token.");
+        throw error;
+      }
+      checking.error(failure.code === "auth"
+        ? `Ed did not accept this token in ${region.toUpperCase()}. Check the token and region.`
+        : failure.code === "network"
+          ? "Could not reach Ed. Check your connection; the token has not been rejected."
+          : "Ed could not complete verification. The token has not been verified.");
+      const action = await ui.select("What would you like to do?", [
+        ...(failure.code === "auth" ? [] : [{ value: "retry", label: "Retry with the same token" }]),
+        { value: "token", label: "Enter a different token" },
+        { value: "region", label: "Choose another region" },
+        { value: "cancel", label: "Cancel login" },
+      ]);
+      if (action === "cancel") throw new CliError("cancelled", "Login cancelled.");
+      if (action === "token") {
+        token = "";
+        region = explicit;
+      }
+      // The token is fine, only the region was wrong, so keep it.
+      if (action === "region") region = await promptEdRegion(ui);
+    }
+  }
+}
+
 // First run on this machine: the wordmark, the token, and a check with Ed before anything is saved.
-// The region is found per attempt, so a wrong manual pick never locks the person out.
 export async function onboardToken(
   ui: Ui,
   tokenFile: string,
@@ -770,39 +843,11 @@ export async function onboardToken(
   open: CliRuntime["openTokenPage"]
 ): Promise<void> {
   showWordmark(ui);
+  warnAuthOverrides((message) => ui.warn(message));
   const explicit = environmentRegion();
   await showTokenPage(ui, explicit ?? "au", open);
-  for (;;) {
-    const token = await askForToken(ui, tokenFile, explicit);
-    if (!token) {
-      ui.warn("Nothing was pasted.");
-      continue;
-    }
-    let spin = ui.spinner();
-    spin.start(explicit ? "Checking the token with Ed" : "Finding your Ed region");
-    let region: EdRegion;
-    try {
-      const found = await identifyToken(token, verify, {
-        explicit,
-        prompt: async () => {
-          spin.stop("Could not tell which Ed region that token belongs to");
-          const picked = await promptEdRegion(ui);
-          spin = ui.spinner();
-          spin.start("Checking the token with Ed");
-          return picked;
-        },
-      });
-      region = found.region;
-      spin.stop(`Signed in as ${found.user.user.name}`);
-    } catch (error) {
-      // Backing out of the region picker is leaving, not a rejected token.
-      if (error instanceof CliError && error.code === "cancelled") throw error;
-      spin.error(`Ed rejected that token: ${error instanceof Error ? error.message : String(error)}`);
-      continue;
-    }
-    await saveToken(token, tokenFile, region);
-    return;
-  }
+  const { token, region } = await promptVerifiedToken(ui, tokenFile, verify, explicit);
+  await saveToken(token, tokenFile, region);
 }
 
 function createDefaultRuntime(ui: Ui): CliRuntime {

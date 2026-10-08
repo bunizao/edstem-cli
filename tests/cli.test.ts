@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createUi } from "@bunizao/cli-kit";
+import { CliError, createUi } from "@bunizao/cli-kit";
 
 import { ED_REGIONS, type EdRegion } from "../src/regions.js";
 import type { CliRuntime } from "../src/cli.js";
@@ -1011,8 +1011,34 @@ describe("auth commands", () => {
       vi.unstubAllEnvs();
     }
 
-    expect(stderr.join("")).toContain("EDSTEM_TOKEN is set and takes precedence");
+    expect(stderr.join("")).toContain("EDSTEM_TOKEN is set and takes precedence over the saved token for later commands");
     expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "stdin-token", region: "au" });
+  });
+
+  it("warns about all environment overrides before verifying without printing their values", async () => {
+    const tokenFile = await tokenPath("edstem-overrides-");
+    const { fetch, runtime, stderr } = makeRuntime(200, false, fixture("user_info"), { tokenFile, stdinLine: "new-token" });
+    vi.stubEnv("EDSTEM_TOKEN", "secret-token-value");
+    vi.stubEnv("EDSTEM_REGION", "au");
+    vi.stubEnv("EDSTEM_BASE_URL", "https://proxy.example/api/?secret=value");
+    const write = vi.spyOn(runtime, "writeStderr");
+    expect(await run(["node", "edstem", "auth", "login", "--region", "eu", "--token-stdin", "--json"], runtime)).toBe(0);
+    expect(write.mock.invocationCallOrder.at(-1)).toBeLessThan(fetch.mock.invocationCallOrder[0]!);
+    expect(stderr.join("")).toContain("EDSTEM_TOKEN is set and takes precedence over the saved token");
+    expect(stderr.join("")).toContain("EDSTEM_REGION is set: login uses it instead of detecting");
+    expect(stderr.join("")).toContain("EDSTEM_BASE_URL is set and overrides the API endpoint for verification and later commands");
+    expect(stderr.join("")).not.toContain("secret-token-value");
+    expect(stderr.join("")).not.toContain("secret=value");
+    expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "new-token", region: "eu" });
+  });
+
+  it("does not warn when no override is set", async () => {
+    for (const name of ["EDSTEM_TOKEN", "EDSTEM_REGION", "EDSTEM_BASE_URL"]) vi.stubEnv(name, "");
+    const { runtime, stderr } = makeRuntime(200, false, fixture("user_info"), {
+      stdinLine: "stdin-token", tokenFile: await tokenPath("edstem-no-overrides-"),
+    });
+    expect(await run(["node", "edstem", "auth", "login", "--region", "au", "--token-stdin", "--json"], runtime)).toBe(0);
+    expect(stderr).toEqual([]);
   });
 
   it.each(["au", "us", "eu"] as const)("verifies and saves a %s login at the selected endpoint", async (region) => {
@@ -1135,6 +1161,173 @@ describe("auth commands", () => {
     await createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--region", "eu", "--json"]);
     expect(note.mock.calls[0]![0]).toContain(`Create one at ${ED_REGIONS.eu.tokenUrl} and paste`);
     expect(note.mock.calls[0]![0]).not.toContain("us.edstem.org");
+  });
+
+  function recoveryUi(selected: string[], tokens: string[]) {
+    const spin = { start: vi.fn(), stop: vi.fn(), error: vi.fn(), message: vi.fn() };
+    const select = vi.fn(async () => {
+      if (!selected.length) throw new Error("Unexpected select prompt");
+      return selected.shift()!;
+    });
+    const password = vi.fn(async () => tokens.shift() ?? "");
+    const warn = vi.fn();
+    return {
+      password, select, spin, warn,
+      ui: { ...createUi({ interactive: false }), interactive: true, password, select: select as never, note: vi.fn(), info: vi.fn(), warn, spinner: () => spin },
+    };
+  }
+
+  const menuValues = (select: ReturnType<typeof recoveryUi>["select"]) =>
+    (select.mock.calls[0] as unknown as [string, Array<{ value: string }>])[1].map((choice) => choice.value);
+
+  it.each([
+    ["auth", ["token", "region", "cancel"], "Ed did not accept this token in EU. Check the token and region."],
+    ["network", ["retry", "token", "region", "cancel"], "Could not reach Ed. Check your connection; the token has not been rejected."],
+    ["upstream", ["retry", "token", "region", "cancel"], "Ed could not complete verification. The token has not been verified."],
+  ])("offers the right recovery menu after a %s failure", async (kind, offered, message) => {
+    vi.stubEnv("EDSTEM_REGION", "");
+    const { fetch, runtime } = makeRuntime(200, false, fixture("user_info"), { tokenFile: await tokenPath("edstem-menu-") });
+    if (kind === "auth") fetch.mockResolvedValueOnce(new Response('{"code":"bad_token"}', { status: 401 }));
+    else if (kind === "network") fetch.mockRejectedValueOnce(new DOMException("Timed out", "TimeoutError"));
+    else fetch.mockResolvedValueOnce(new Response("{}", { status: 500 }));
+    runtime.interactive = true;
+    const { select, spin, ui } = recoveryUi(["cancel"], ["picked-token"]);
+    await expect(createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--region", "eu", "--json"]))
+      .rejects.toMatchObject({ code: "cancelled", message: "Login cancelled." });
+    expect(menuValues(select)).toEqual(offered);
+    expect(spin.error).toHaveBeenCalledExactlyOnceWith(message);
+  });
+
+  it.each(["network", "upstream"])("retries a %s failure without asking for the token again", async (kind) => {
+    vi.stubEnv("EDSTEM_REGION", "");
+    const tokenFile = await tokenPath("edstem-retry-");
+    const { fetch, runtime, stdout } = makeRuntime(200, false, fixture("user_info"), { tokenFile });
+    if (kind === "network") fetch.mockRejectedValueOnce(new DOMException("Timed out", "TimeoutError"));
+    else fetch.mockResolvedValueOnce(new Response("{}", { status: 500 }));
+    runtime.interactive = true;
+    const { password, ui } = recoveryUi(["retry"], ["picked-token"]);
+    await createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--region", "eu", "--json"]);
+    expect(password).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls.map(([, init]) => (init?.headers as Record<string, string>).Authorization))
+      .toEqual(["Bearer picked-token", "Bearer picked-token"]);
+    expect(runtime.openTokenPage).toHaveBeenCalledOnce();
+    expect(JSON.parse(stdout.join(""))).toMatchObject({ authenticated: true, region: "eu" });
+  });
+
+  it("keeps the token and does not reopen the token page when another region is chosen", async () => {
+    vi.stubEnv("EDSTEM_REGION", "");
+    const tokenFile = await tokenPath("edstem-other-region-");
+    const accepting: EdRegion[] = ["us"];
+    const { fetch, runtime } = regionalRuntime(accepting, { tokenFile });
+    runtime.interactive = true;
+    const { password, ui } = recoveryUi(["region", "us"], ["picked-token"]);
+    await createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--region", "au", "--json"]);
+    expect(password).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls.map(([url]) => String(url))).toEqual([`${ED_REGIONS.au.apiBaseUrl}user`, `${ED_REGIONS.us.apiBaseUrl}user`]);
+    expect(fetch.mock.calls.map(([, init]) => (init?.headers as Record<string, string>).Authorization))
+      .toEqual(["Bearer picked-token", "Bearer picked-token"]);
+    expect(runtime.openTokenPage).toHaveBeenCalledExactlyOnceWith("au");
+    expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "picked-token", region: "us" });
+  });
+
+  it("asks for a different token and keeps using an explicit region", async () => {
+    vi.stubEnv("EDSTEM_REGION", "eu");
+    const tokenFile = await tokenPath("edstem-other-token-explicit-");
+    const accepting: EdRegion[] = [];
+    const { fetch, runtime } = regionalRuntime(accepting, { tokenFile });
+    runtime.interactive = true;
+    const { password, select, ui } = recoveryUi(["token"], ["bad-token", "new-token"]);
+    select.mockImplementationOnce(async () => {
+      accepting.push("eu");
+      return "token";
+    });
+    await createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--json"]);
+    expect(password).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls.map(([url]) => String(url))).toEqual([`${ED_REGIONS.eu.apiBaseUrl}user`, `${ED_REGIONS.eu.apiBaseUrl}user`]);
+    expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "new-token", region: "eu" });
+  });
+
+  it("detects the region again for a different token", async () => {
+    vi.stubEnv("EDSTEM_REGION", "");
+    const tokenFile = await tokenPath("edstem-other-token-detect-");
+    const accepting: EdRegion[] = [];
+    const { fetch, runtime } = regionalRuntime(accepting, { tokenFile });
+    runtime.interactive = true;
+    const { password, select, ui } = recoveryUi([], ["bad-token", "new-token"]);
+    // Detection finds nothing, so the person picks eu and is rejected; Ed then learns the new token.
+    const answers = ["eu", "token"];
+    select.mockImplementation(async () => {
+      const answer = answers.shift()!;
+      if (answer === "token") accepting.push("us");
+      return answer;
+    });
+    await createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--json"]);
+    expect(password).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(7);
+    expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "new-token", region: "us" });
+  });
+
+  it("asks again when nothing was pasted", async () => {
+    vi.stubEnv("EDSTEM_REGION", "");
+    const tokenFile = await tokenPath("edstem-empty-paste-");
+    const { runtime } = makeRuntime(200, false, fixture("user_info"), { tokenFile });
+    runtime.interactive = true;
+    const { password, ui, warn } = recoveryUi([], ["", "picked-token"]);
+    await createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--region", "eu", "--json"]);
+    expect(password).toHaveBeenCalledTimes(2);
+    expect(warn).toHaveBeenCalledExactlyOnceWith("Nothing was pasted.");
+    expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "picked-token", region: "eu" });
+  });
+
+  it("preserves saved credentials when recovery is cancelled", async () => {
+    vi.stubEnv("EDSTEM_REGION", "");
+    const tokenFile = await tokenPath("edstem-cancel-recovery-");
+    await writeTokenFile(tokenFile);
+    const { runtime, stdout } = makeRuntime(401, false, fixture("user_info"), { tokenFile });
+    runtime.interactive = true;
+    const { ui } = recoveryUi(["cancel"], ["bad-token"]);
+    await expect(createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--region", "eu", "--json"]))
+      .rejects.toMatchObject({ code: "cancelled" });
+    expect(await readFile(tokenFile, "utf8")).toBe("saved-token\n");
+    expect(stdout).toEqual([]);
+  });
+
+  it.each(["menu", "region"])("never swallows a cancelled %s prompt into the recovery loop", async (prompt) => {
+    vi.stubEnv("EDSTEM_REGION", "");
+    const { runtime } = makeRuntime(401, false, fixture("user_info"), { tokenFile: await tokenPath("edstem-cancelled-prompt-") });
+    runtime.interactive = true;
+    const { password, select, ui } = recoveryUi([], ["bad-token"]);
+    const cancelled = new CliError("cancelled", "Cancelled.");
+    if (prompt === "menu") select.mockRejectedValueOnce(cancelled);
+    else select.mockResolvedValueOnce("region").mockRejectedValueOnce(cancelled);
+    await expect(createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--region", "eu", "--json"]))
+      .rejects.toBe(cancelled);
+    expect(password).toHaveBeenCalledOnce();
+  });
+
+  it("rethrows errors that are not about the token or the connection", async () => {
+    vi.stubEnv("EDSTEM_REGION", "");
+    const { runtime } = makeRuntime();
+    runtime.interactive = true;
+    runtime.createClientForToken = vi.fn().mockRejectedValue(new CliError("config", "Invalid local config"));
+    const { password, select, spin, ui } = recoveryUi([], ["picked-token"]);
+    await expect(createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--region", "eu", "--json"]))
+      .rejects.toMatchObject({ code: "config" });
+    expect(select).not.toHaveBeenCalled();
+    expect(password).toHaveBeenCalledOnce();
+    expect(spin.error).toHaveBeenCalledExactlyOnceWith("Could not verify the token.");
+  });
+
+  it("fails promptly on a network error with stdin input and preserves existing credentials", async () => {
+    vi.stubEnv("EDSTEM_REGION", "");
+    const tokenFile = await tokenPath("edstem-stdin-network-");
+    await writeTokenFile(tokenFile);
+    const { runtime, fetch, stderr } = makeRuntime(200, false, fixture("user_info"), { tokenFile, stdinLine: "new-token" });
+    fetch.mockRejectedValueOnce(new Error("Connection refused"));
+    expect(await run(["node", "edstem", "auth", "login", "--region", "us", "--token-stdin", "--json"], runtime)).toBe(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(stderr.join(""))).toMatchObject({ error: { code: "network" } });
+    expect(await readFile(tokenFile, "utf8")).toBe("saved-token\n");
   });
 
   it("opens the AU token page before the token is pasted when no region is known", async () => {
@@ -1375,14 +1568,13 @@ function duplicateCourseIdentity(): unknown {
 describe("first-run onboarding", () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  // A fake Ed that accepts the token only in the given regions.
+  // A fake Ed that accepts the token only in the given regions, which a test may change mid-flight.
   function verifier(accepting: EdRegion[]) {
-    const hosts = accepting.map((region) => new URL(ED_REGIONS[region].apiBaseUrl).host);
     return vi.fn<CliRuntime["createClientForToken"]>(async (token, region) =>
       new EdClient({
         apiBaseUrl: ED_REGIONS[region].apiBaseUrl,
         fetch: async (input) => {
-          const accepted = hosts.includes(new URL(String(input)).host);
+          const accepted = accepting.some((accept) => new URL(ED_REGIONS[accept].apiBaseUrl).host === new URL(String(input)).host);
           return new Response(JSON.stringify(accepted ? fixture("user_info") : { code: "bad_token" }), { status: accepted ? 200 : 401 });
         },
         maxRetries: 0,
@@ -1390,71 +1582,89 @@ describe("first-run onboarding", () => {
       }));
   }
 
-  function fakeUi(picks: EdRegion[]) {
-    const select = vi.fn(async () => picks.shift()!);
+  // `answers` are the select menu choices in order; an unexpected prompt fails instead of looping.
+  function fakeUi(answers: string[], tokens = ["onboard-token"]) {
+    const select = vi.fn(async () => {
+      if (!answers.length) throw new Error("Unexpected select prompt");
+      return answers.shift()!;
+    });
+    const password = vi.fn(async () => tokens.shift() ?? "");
     const spinner = { start: vi.fn(), stop: vi.fn(), error: vi.fn(), message: vi.fn() };
+    const warn = vi.fn();
     const ui = {
       ...createUi({ interactive: false }),
       interactive: true,
       banner: vi.fn(),
       note: vi.fn(),
-      password: vi.fn().mockResolvedValue("onboard-token"),
+      info: vi.fn(),
+      warn,
+      password,
       select: select as never,
       spinner: () => spinner,
     };
-    return { select, spinner, ui };
+    return { password, select, spinner, ui, warn };
   }
 
   const open = vi.fn<CliRuntime["openTokenPage"]>();
-  beforeEach(() => { open.mockReset().mockResolvedValue(undefined); });
+  beforeEach(() => {
+    open.mockReset().mockResolvedValue(undefined);
+    for (const name of ["EDSTEM_TOKEN", "EDSTEM_REGION", "EDSTEM_BASE_URL"]) vi.stubEnv(name, "");
+  });
 
   async function newTokenFile(): Promise<string> {
     return join(await mkdtemp(join(tmpdir(), "edstem-onboard-")), "config", "token");
   }
 
-  it("lets the person pick the region again after a wrong pick", async () => {
-    vi.stubEnv("EDSTEM_REGION", "");
+  it("keeps the token and lets the person pick the region again after a wrong pick", async () => {
     const tokenFile = await newTokenFile();
     // Au and us both accept the token, so detection cannot choose; eu is the wrong first pick.
-    const { select, spinner, ui } = fakeUi(["eu", "us"]);
+    const { password, select, spinner, ui } = fakeUi(["eu", "region", "us"]);
+    // The prompts are: region (eu), menu (region), region (us).
     await onboardToken(ui, tokenFile, verifier(["au", "us"]), open);
-    expect(select).toHaveBeenCalledTimes(2);
-    expect(spinner.error).toHaveBeenCalledOnce();
-    expect(spinner.error.mock.calls[0]?.[0]).toContain("Ed rejected that token");
+    expect(select).toHaveBeenCalledTimes(3);
+    expect(password).toHaveBeenCalledOnce();
+    expect(spinner.error).toHaveBeenCalledExactlyOnceWith("Ed did not accept this token in EU. Check the token and region.");
+    expect(spinner.start).toHaveBeenLastCalledWith("Checking the token with Ed (US)");
     expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "onboard-token", region: "us" });
+    expect(open).toHaveBeenCalledOnce();
   });
 
   it("detects the region without asking when only one accepts the token", async () => {
-    vi.stubEnv("EDSTEM_REGION", "");
     const tokenFile = await newTokenFile();
-    const { select, ui } = fakeUi([]);
+    const { select, spinner, ui } = fakeUi([]);
     await onboardToken(ui, tokenFile, verifier(["eu"]), open);
     expect(select).not.toHaveBeenCalled();
+    expect(spinner.start).toHaveBeenCalledExactlyOnceWith("Finding your Ed region");
+    expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "onboard-token", region: "eu" });
+  });
+
+  it("asks again when nothing was pasted", async () => {
+    const tokenFile = await newTokenFile();
+    const { password, ui, warn } = fakeUi([], ["", "onboard-token"]);
+    await onboardToken(ui, tokenFile, verifier(["eu"]), open);
+    expect(password).toHaveBeenCalledTimes(2);
+    expect(warn).toHaveBeenCalledExactlyOnceWith("Nothing was pasted.");
     expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "onboard-token", region: "eu" });
   });
 
   it("opens the AU token page first when no region is set", async () => {
-    vi.stubEnv("EDSTEM_REGION", "");
     const { ui } = fakeUi([]);
     await onboardToken(ui, await newTokenFile(), verifier(["eu"]), open);
-    expect(open).toHaveBeenCalledOnce();
-    expect(open).toHaveBeenCalledWith("au");
+    expect(open).toHaveBeenCalledExactlyOnceWith("au");
   });
 
   it("opens the token page of the region from EDSTEM_REGION", async () => {
     vi.stubEnv("EDSTEM_REGION", "eu");
     const { ui } = fakeUi([]);
     await onboardToken(ui, await newTokenFile(), verifier(["eu"]), open);
-    expect(open).toHaveBeenCalledWith("eu");
+    expect(open).toHaveBeenCalledExactlyOnceWith("eu");
   });
 
   it("keeps onboarding when the browser fails to open", async () => {
-    vi.stubEnv("EDSTEM_REGION", "");
     open.mockRejectedValue(new Error("No browser"));
     const tokenFile = await newTokenFile();
-    const warn = vi.fn();
-    const { ui } = fakeUi([]);
-    await onboardToken({ ...ui, warn }, tokenFile, verifier(["eu"]), open);
+    const { ui, warn } = fakeUi([]);
+    await onboardToken(ui, tokenFile, verifier(["eu"]), open);
     expect(warn.mock.calls[0]?.[0]).toContain(ED_REGIONS.au.tokenUrl);
     expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "onboard-token", region: "eu" });
   });
@@ -1468,5 +1678,42 @@ describe("first-run onboarding", () => {
     expect(select).not.toHaveBeenCalled();
     expect(verify).toHaveBeenCalledOnce();
     expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "onboard-token", region: "us" });
+  });
+
+  it("warns about environment overrides through the UI without printing their values", async () => {
+    vi.stubEnv("EDSTEM_TOKEN", "secret-token-value");
+    vi.stubEnv("EDSTEM_REGION", "us");
+    vi.stubEnv("EDSTEM_BASE_URL", "https://proxy.example/api/?secret=value");
+    const { ui, warn } = fakeUi([]);
+    await onboardToken(ui, await newTokenFile(), verifier(["us"]), open);
+    const messages = warn.mock.calls.map(([message]) => String(message));
+    expect(messages).toHaveLength(3);
+    expect(messages.join("\n")).not.toContain("secret");
+  });
+
+  it("recovers by entering a different token and detects the region again", async () => {
+    const tokenFile = await newTokenFile();
+    const accepting: EdRegion[] = [];
+    const verify = verifier(accepting);
+    const { password, ui } = fakeUi([], ["wrong-token", "right-token"]);
+    // Detection finds nothing, so the person picks eu, is rejected, and starts over after Ed learns the token.
+    const answers = ["eu", "token"];
+    ui.select = vi.fn(async () => {
+      const answer = answers.shift()!;
+      if (answer === "token") accepting.push("us");
+      return answer;
+    }) as never;
+    await onboardToken(ui, tokenFile, verify, open);
+    expect(password).toHaveBeenCalledTimes(2);
+    // Three probes and one pick for the first token, three probes for the second.
+    expect(verify.mock.calls.map(([, region]) => region)).toEqual(["au", "us", "eu", "eu", "au", "us", "eu"]);
+    expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "right-token", region: "us" });
+  });
+
+  it("leaves without saving when recovery is cancelled", async () => {
+    const tokenFile = await newTokenFile();
+    const { ui } = fakeUi(["eu", "cancel"]);
+    await expect(onboardToken(ui, tokenFile, verifier([]), open)).rejects.toMatchObject({ code: "cancelled" });
+    await expect(readFile(tokenFile, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
