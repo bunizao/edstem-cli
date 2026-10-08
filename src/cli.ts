@@ -254,10 +254,7 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
     .description("Verify the configured Ed token.")
     .action(outputAction(runtime, async (client) => {
       const identity = projectIdentity(await client.fetchUser());
-      const { source, tokenFile, region, regionSource } = await loadTokenWithSource({
-        interactive: false,
-        tokenFile: runtime.tokenFile,
-      });
+      const { source, tokenFile, region, regionSource } = await loadTokenWithSource({ tokenFile: runtime.tokenFile });
       return { authenticated: true, source, tokenFile, region, regionSource, user: identity.user };
     }));
 
@@ -796,10 +793,10 @@ function createDefaultRuntime(ui: Ui): CliRuntime {
     createClient: () => {
       client ??= (async () => {
         // A person with no token is walked through getting one; a pipe or an agent gets the auth error.
-        const { token, region } = await loadTokenWithSource({ tokenFile, interactive: false }).catch(async (error: unknown) => {
+        const { token, region } = await loadTokenWithSource({ tokenFile }).catch(async (error: unknown) => {
           if (!ui.interactive || !(error instanceof CliError) || error.code !== "auth") throw error;
           await onboardToken(ui, tokenFile, createClientForToken);
-          return loadTokenWithSource({ tokenFile, interactive: false });
+          return loadTokenWithSource({ tokenFile });
         });
         const config = await loadConfig(undefined, region);
         return new EdClient({

@@ -2,7 +2,7 @@ import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { createUi, type Ui } from "@bunizao/cli-kit";
+import type { Ui } from "@bunizao/cli-kit";
 import { CliError } from "./errors.js";
 import type { EdClient } from "./ed/client.js";
 import type { UserWithCourses } from "./ed/models.js";
@@ -26,18 +26,11 @@ export interface LoadedToken {
 
 export interface TokenSourceOptions {
   env?: NodeJS.ProcessEnv;
-  interactive?: boolean;
-  prompt?: () => Promise<string>;
-  promptRegion?: () => Promise<EdRegion>;
   tokenFile?: string;
 }
 
 export function defaultTokenFile(): string {
   return join(homedir(), ".config", "edstem-cli", "token");
-}
-
-export async function loadToken(options: TokenSourceOptions = {}): Promise<string> {
-  return (await loadTokenWithSource(options)).token;
 }
 
 export async function loadTokenWithSource(options: TokenSourceOptions = {}): Promise<LoadedToken> {
@@ -87,17 +80,6 @@ export async function loadTokenWithSource(options: TokenSourceOptions = {}): Pro
     }
   }
 
-  const interactive = options.interactive ?? Boolean(process.stdin.isTTY && process.stderr.isTTY);
-  if (interactive) {
-    const region = environmentRegion ?? await (options.promptRegion ?? promptEdRegion)();
-    const token = (await (options.prompt ?? promptHiddenToken)()).trim();
-    if (!token) {
-      throw new CliError("auth", "No Ed token provided");
-    }
-    await saveToken(token, tokenFile, region);
-    return { source: "file", token, tokenFile, region, regionSource: environmentRegion ? "environment" : "file" };
-  }
-
   throw new CliError(
     "auth",
     `No Ed token found. Run edstem auth login, set EDSTEM_TOKEN, or create ${tokenFile}. Get a token at ${tokenPageHint(environmentRegion)}.`
@@ -127,7 +109,7 @@ export async function detectRegion(
   return accepted.length === 1 ? accepted[0]! : "undetected";
 }
 
-export async function promptEdRegion(ui: Ui = createUi({ input: process.stdin, output: process.stderr })): Promise<EdRegion> {
+export async function promptEdRegion(ui: Ui): Promise<EdRegion> {
   return ui.select("Which Ed region?", Object.entries(ED_REGIONS).map(([value, region]) => ({
     value: value as EdRegion, label: region.label, hint: region.apiBaseUrl,
   })));
@@ -142,14 +124,4 @@ export async function removeToken(tokenFile = defaultTokenFile()): Promise<boole
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw new CliError("config", `Could not remove Ed token file: ${tokenFile}`);
   }
-}
-
-export async function promptHiddenToken(): Promise<string> {
-  const ui = createUi({ input: process.stdin, output: process.stderr });
-  if (!ui.interactive) throw new CliError("auth", "Interactive token input requires a terminal");
-  ui.info(`Create a token at ${tokenPageHint()}.`);
-  const token = await ui.password("Paste your Ed token").catch((error: unknown) => {
-    throw error instanceof CliError && error.code === "cancelled" ? new CliError("auth", "Token input cancelled") : error;
-  });
-  return token;
 }

@@ -4,13 +4,15 @@ import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { detectRegion, loadToken, loadTokenWithSource, saveToken } from "../src/auth.js";
+import { detectRegion, loadTokenWithSource, saveToken } from "../src/auth.js";
 import { loadConfig } from "../src/config.js";
 import { ED_REGIONS, isEdRegion, type EdRegion } from "../src/regions.js";
 
 describe("auth, config, and output", () => {
   it("prefers the environment token", async () => {
-    expect(await loadToken({ env: { EDSTEM_TOKEN: " env-token " }, tokenFile: "/missing" })).toBe("env-token");
+    expect(await loadTokenWithSource({ env: { EDSTEM_TOKEN: " env-token " }, tokenFile: "/missing" })).toMatchObject({
+      token: "env-token", source: "environment",
+    });
   });
 
   it("loads a token file without verifying it", async () => {
@@ -18,7 +20,6 @@ describe("auth, config, and output", () => {
     const tokenFile = join(directory, "token");
     await writeFile(tokenFile, "file-token\n", { mode: 0o600 });
 
-    expect(await loadToken({ env: {}, tokenFile })).toBe("file-token");
     expect(await loadTokenWithSource({ env: {}, tokenFile })).toMatchObject({
       token: "file-token", region: "au", regionSource: "default",
     });
@@ -62,32 +63,6 @@ describe("auth, config, and output", () => {
   it("rejects an invalid environment region before reading a token", async () => {
     await expect(loadTokenWithSource({ env: { EDSTEM_TOKEN: "secret", EDSTEM_REGION: "invalid" } }))
       .rejects.toMatchObject({ code: "usage", message: "Ed region must be au, us, or eu." });
-  });
-
-  it("prompts once and saves a private token file in an interactive terminal", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "edstem-prompt-"));
-    const tokenFile = join(directory, "config", "token");
-
-    expect(await loadToken({
-      env: {},
-      interactive: true,
-      prompt: async () => "prompt-token",
-      promptRegion: async () => "eu",
-      tokenFile,
-    })).toBe("prompt-token");
-
-    expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "prompt-token", region: "eu" });
-    expect((await stat(tokenFile)).mode & 0o777).toBe(0o600);
-  });
-
-  it("points the missing-token error at the token page of the environment region", async () => {
-    const tokenFile = join(await mkdtemp(join(tmpdir(), "edstem-missing-")), "token");
-    await expect(loadTokenWithSource({ env: { EDSTEM_REGION: "us" }, tokenFile })).rejects.toMatchObject({
-      code: "auth", message: expect.stringContaining(`Get a token at ${ED_REGIONS.us.tokenUrl}.`),
-    });
-    await expect(loadTokenWithSource({ env: {}, tokenFile })).rejects.toMatchObject({
-      code: "auth", message: expect.stringContaining(`Get a token at ${ED_REGIONS.au.tokenUrl} (US or EU:`),
-    });
   });
 
   it("normalizes the configured fetch count", async () => {

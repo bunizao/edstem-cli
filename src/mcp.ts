@@ -19,7 +19,8 @@ Options:
   -h, --help     Show this message.
   -V, --version  Show the version.
 
-Authentication reads EDSTEM_TOKEN, then ~/.config/edstem-cli/token.
+Authentication reads EDSTEM_TOKEN, then ~/.config/edstem-cli/token
+(run \`edstem auth login\` to save one).
 Saved credentials include the Ed region. For environment tokens, set
 EDSTEM_REGION=au, us, or eu (defaults to au).
 Set EDSTEM_WIDGETS=0 to drop the interactive show_* tools and answer in text only.
