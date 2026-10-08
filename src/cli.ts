@@ -203,6 +203,8 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
     .addOption(program.createOption("--region <region>", "Ed region (detected from the token when omitted; skips detection).")
       .choices(Object.keys(ED_REGIONS)).argParser(parseRegion))
     .action(async (_options: unknown, command: Command) => {
+      // Before the plan, so a --dry-run also shows what will shadow the saved credentials.
+      warnAuthOverrides((message) => runtime.writeStderr(`${message}\n`));
       // Entering a token is already explicit, so only --dry-run short-circuits the login.
       const accepted = await confirm(
         { summary: `Verify an Ed token and save it to ${runtime.tokenFile}.` },
@@ -214,7 +216,6 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
       );
       if (!accepted) return;
 
-      warnAuthOverrides((message) => runtime.writeStderr(`${message}\n`));
       const explicitRegion: EdRegion | undefined = command.opts().region ?? environmentRegion();
       const interactive = runtime.interactive && ui.interactive;
       const tokenStdin = Boolean(command.opts().tokenStdin);
@@ -765,7 +766,7 @@ function warnAuthOverrides(warn: (message: string) => void): void {
     warn("EDSTEM_TOKEN is set and takes precedence over the saved token for later commands. Unset it to use the saved token.");
   }
   if (process.env.EDSTEM_REGION?.trim()) {
-    warn("EDSTEM_REGION is set: login uses it instead of detecting, and later commands use it over the saved region.");
+    warn("EDSTEM_REGION is set and overrides the saved region for later commands. Unset it to use the saved region.");
   }
   if (process.env.EDSTEM_BASE_URL?.trim()) {
     warn("EDSTEM_BASE_URL is set and overrides the API endpoint for verification and later commands, so region detection cannot tell regions apart.");

@@ -1025,7 +1025,7 @@ describe("auth commands", () => {
     expect(await run(["node", "edstem", "auth", "login", "--region", "eu", "--token-stdin", "--json"], runtime)).toBe(0);
     expect(write.mock.invocationCallOrder.at(-1)).toBeLessThan(fetch.mock.invocationCallOrder[0]!);
     expect(stderr.join("")).toContain("EDSTEM_TOKEN is set and takes precedence over the saved token");
-    expect(stderr.join("")).toContain("EDSTEM_REGION is set: login uses it instead of detecting");
+    expect(stderr.join("")).toContain("EDSTEM_REGION is set and overrides the saved region");
     expect(stderr.join("")).toContain("EDSTEM_BASE_URL is set and overrides the API endpoint for verification and later commands");
     expect(stderr.join("")).not.toContain("secret-token-value");
     expect(stderr.join("")).not.toContain("secret=value");
@@ -1454,6 +1454,23 @@ describe("auth commands", () => {
     expect(fetch).not.toHaveBeenCalled();
     expect(stdout).toEqual([]);
     expect(await readFile(tokenFile, "utf8")).toBe("saved-token\n");
+  });
+
+  it("warns about an EDSTEM_TOKEN override on a dry run", async () => {
+    const tokenFile = await tokenPath("edstem-login-dry-override-");
+    const { fetch, runtime, stderr } = makeRuntime(200, false, fixture("user_info"), { tokenFile });
+    const write = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    vi.stubEnv("EDSTEM_TOKEN", "environment-token");
+    try {
+      expect(await run(["node", "edstem", "auth", "login", "--token-stdin", "--dry-run"], runtime)).toBe(0);
+    } finally {
+      write.mockRestore();
+      vi.unstubAllEnvs();
+    }
+
+    expect(stderr.join("")).toContain("EDSTEM_TOKEN is set and takes precedence");
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid token without writing it", async () => {
