@@ -62,16 +62,17 @@ export EDSTEM_REGION="au" # au, us, or eu
 edstem units
 ```
 
-Alternatively, run `edstem auth login` in a terminal. It detects the region from
-the token, asks only if it cannot tell, and saves both. The CLI and local stdio MCP
-share these credentials. For scripts, use `edstem auth login --region us --token-stdin`.
+Alternatively, run `edstem auth login` in a terminal. It opens the token page in
+your default browser (use `--no-browser` to open the printed link yourself),
+detects the region from the token, asks only if it cannot tell, and saves both.
+The CLI and local stdio MCP share these credentials. For scripts, use `edstem auth login --region us --token-stdin`.
 
 ## CLI reference
 
 | Command | Description | Arguments | Options | Mutating |
 | --- | --- | --- | --- | --- |
 | edstem auth | Manage Ed authentication. |  |  | no |
-| edstem auth login | Verify an Ed token and save it for later commands. |  | --token-stdin<br>--region <region> | no |
+| edstem auth login | Verify an Ed token and save it for later commands. |  | --token-stdin<br>--no-browser<br>--region <region> | no |
 | edstem auth logout | Remove the saved Ed token file. |  |  | yes |
 | edstem auth status | Verify the configured Ed token. |  |  | no |
 | edstem user | Show the current Ed identity and enrolled units. |  |  | no |

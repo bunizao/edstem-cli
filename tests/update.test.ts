@@ -21,6 +21,7 @@ function makeRuntime(latestVersion: string): {
         throw new Error("update must not require an Ed client");
       },
       createClientForToken: async () => { throw new Error("update must not authenticate"); },
+      openTokenPage: async () => { throw new Error("update must not open a browser"); },
       readStdinLine: async () => { throw new Error("update must not read tokens"); },
       tokenFile: "/unused/token",
       defaultFetchCount: async () => 30,

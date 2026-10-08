@@ -86,9 +86,10 @@ export EDSTEM_REGION="au" # au, us, or eu
 edstem units
 \`\`\`
 
-Alternatively, run \`edstem auth login\` in a terminal. It detects the region from
-the token, asks only if it cannot tell, and saves both. The CLI and local stdio MCP
-share these credentials. For scripts, use \`edstem auth login --region us --token-stdin\`.
+Alternatively, run \`edstem auth login\` in a terminal. It opens the token page in
+your default browser (use \`--no-browser\` to open the printed link yourself),
+detects the region from the token, asks only if it cannot tell, and saves both.
+The CLI and local stdio MCP share these credentials. For scripts, use \`edstem auth login --region us --token-stdin\`.
 
 ## CLI reference
 

@@ -37,6 +37,7 @@ import {
   tokenPageHint,
 } from "./auth.js";
 import { EDSTEM_TAGLINE, EDSTEM_WORDMARK, showWordmark } from "./wordmark.js";
+import { openTokenPage } from "./browser.js";
 import { commandsJson, mutating } from "./commands.js";
 import { loadConfig } from "./config.js";
 import { downloadLessonFiles } from "./download.js";
@@ -161,6 +162,7 @@ const HELP_SECTIONS: Readonly<Record<string, readonly string[]>> = {
 export interface CliRuntime {
   createClient: () => Promise<EdClient>;
   createClientForToken: (token: string, region: EdRegion) => Promise<EdClient>;
+  openTokenPage: (region: EdRegion) => Promise<void>;
   defaultFetchCount: () => Promise<number>;
   fetch?: FetchLike;
   interactive: boolean;
@@ -197,6 +199,7 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
   auth.command("login")
     .description("Verify an Ed token and save it for later commands.")
     .option("--token-stdin", "Read the token from the first line of stdin.")
+    .option("--no-browser", "Print the token page link without opening a browser.")
     .addOption(program.createOption("--region <region>", "Ed region (detected from the token when omitted; skips detection).")
       .choices(Object.keys(ED_REGIONS)).argParser(parseRegion))
     .action(async (_options: unknown, command: Command) => {
@@ -217,6 +220,10 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
       if (!accepted) return;
 
       const explicitRegion: EdRegion | undefined = command.opts().region ?? environmentRegion();
+      if (runtime.interactive && ui.interactive && !command.opts().tokenStdin && command.opts().browser !== false) {
+        // The region is unknown until the token is pasted, so open the explicit one, else the default.
+        await showTokenPage(ui, explicitRegion ?? "au", runtime.openTokenPage);
+      }
       const token = command.opts().tokenStdin
         ? (await runtime.readStdinLine()).trim()
         : await askForToken(ui, runtime.tokenFile, explicitRegion);
@@ -718,6 +725,15 @@ async function askForToken(ui: Ui, tokenFile: string, region?: EdRegion): Promis
   return (await ui.password("Ed API token")).trim();
 }
 
+async function showTokenPage(ui: Ui, region: EdRegion, open: CliRuntime["openTokenPage"]): Promise<void> {
+  try {
+    await open(region);
+    ui.info("Requested the API token page in your default browser. Use the profile where you already sign in to Ed.");
+  } catch {
+    ui.warn(`Could not open a browser. Open ${ED_REGIONS[region].tokenUrl} in the browser profile where you use Ed.`);
+  }
+}
+
 function environmentRegion(): EdRegion | undefined {
   const value = process.env.EDSTEM_REGION?.trim();
   return value ? parseRegion(value) : undefined;
@@ -747,9 +763,15 @@ async function identifyToken(
 
 // First run on this machine: the wordmark, the token, and a check with Ed before anything is saved.
 // The region is found per attempt, so a wrong manual pick never locks the person out.
-export async function onboardToken(ui: Ui, tokenFile: string, verify: CliRuntime["createClientForToken"]): Promise<void> {
+export async function onboardToken(
+  ui: Ui,
+  tokenFile: string,
+  verify: CliRuntime["createClientForToken"],
+  open: CliRuntime["openTokenPage"]
+): Promise<void> {
   showWordmark(ui);
   const explicit = environmentRegion();
+  await showTokenPage(ui, explicit ?? "au", open);
   for (;;) {
     const token = await askForToken(ui, tokenFile, explicit);
     if (!token) {
@@ -795,7 +817,7 @@ function createDefaultRuntime(ui: Ui): CliRuntime {
         // A person with no token is walked through getting one; a pipe or an agent gets the auth error.
         const { token, region } = await loadTokenWithSource({ tokenFile }).catch(async (error: unknown) => {
           if (!ui.interactive || !(error instanceof CliError) || error.code !== "auth") throw error;
-          await onboardToken(ui, tokenFile, createClientForToken);
+          await onboardToken(ui, tokenFile, createClientForToken, openTokenPage);
           return loadTokenWithSource({ tokenFile });
         });
         const config = await loadConfig(undefined, region);
@@ -814,6 +836,7 @@ function createDefaultRuntime(ui: Ui): CliRuntime {
       return client;
     },
     createClientForToken,
+    openTokenPage,
     defaultFetchCount: async () => (await loadConfig()).fetchCount,
     interactive: Boolean(process.stdin.isTTY),
     isTTY: Boolean(process.stdout.isTTY),
