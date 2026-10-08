@@ -55,15 +55,20 @@ the same `UNIT` reference, so no `list_courses` call is needed first.
 ```bash
 npm install -g edstem-cli
 export EDSTEM_TOKEN="your-token"
+export EDSTEM_REGION="au" # au, us, or eu
 edstem units
 ```
+
+Alternatively, run `edstem auth login` in a terminal to select the region and
+save it with the token. The CLI and local stdio MCP share these credentials.
+For scripts, use `edstem auth login --region us --token-stdin`.
 
 ## CLI reference
 
 | Command | Description | Arguments | Options | Mutating |
 | --- | --- | --- | --- | --- |
 | edstem auth | Manage Ed authentication. |  |  | no |
-| edstem auth login | Verify an Ed token and save it for later commands. |  | --token-stdin | no |
+| edstem auth login | Verify an Ed token and save it for later commands. |  | --token-stdin<br>--region <region> | no |
 | edstem auth logout | Remove the saved Ed token file. |  |  | yes |
 | edstem auth status | Verify the configured Ed token. |  |  | no |
 | edstem user | Show the current Ed identity and enrolled units. |  |  | no |

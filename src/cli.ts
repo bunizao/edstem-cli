@@ -32,8 +32,8 @@ import { readFile } from "node:fs/promises";
 import {
   TOKEN_HELP_URL,
   defaultTokenFile,
-  loadToken,
   loadTokenWithSource,
+  promptEdRegion,
   removeToken,
   saveToken,
 } from "./auth.js";
@@ -75,6 +75,7 @@ import { isMainModule } from "./main.js";
 import { writeGeneratedSkill } from "./skills.js";
 import { applyUpdate, checkForUpdate } from "./update.js";
 import { VERSION } from "./version.js";
+import { parseRegion, type EdRegion } from "./regions.js";
 
 const SORT_OPTIONS = ["new", "old", "top", "hot"] as const;
 const SLIDE_SECTIONS = ["slide", "questions", "responses", "quiz"] as const;
@@ -151,7 +152,7 @@ const HELP_SECTIONS: Readonly<Record<string, readonly string[]>> = {
 
 export interface CliRuntime {
   createClient: () => Promise<EdClient>;
-  createClientForToken: (token: string) => Promise<EdClient>;
+  createClientForToken: (token: string, region: EdRegion) => Promise<EdClient>;
   defaultFetchCount: () => Promise<number>;
   fetch?: FetchLike;
   interactive: boolean;
@@ -187,6 +188,8 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
   auth.command("login")
     .description("Verify an Ed token and save it for later commands.")
     .option("--token-stdin", "Read the token from the first line of stdin.")
+    .addOption(program.createOption("--region <region>", "Ed region (prompts in a terminal; defaults to au for scripts).")
+      .choices(["au", "us", "eu"]).argParser(parseRegion))
     .action(async (_options: unknown, command: Command) => {
       const shadowed = Boolean(process.env.EDSTEM_TOKEN?.trim());
       // Entering a token is already explicit, so only --dry-run short-circuits the login.
@@ -204,14 +207,17 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
       );
       if (!accepted) return;
 
+      const region: EdRegion = command.opts().region ?? (runtime.interactive && ui.interactive
+        ? await promptEdRegion(ui)
+        : parseRegion(process.env.EDSTEM_REGION?.trim() || "au"));
       const token = command.opts().tokenStdin
         ? (await runtime.readStdinLine()).trim()
         : await askForToken(ui, runtime.tokenFile);
       if (!token) throw new CliError("auth", "No Ed token provided.");
 
-      const client = await runtime.createClientForToken(token);
+      const client = await runtime.createClientForToken(token, region);
       const identity = projectIdentity(await client.fetchUser());
-      await saveToken(token, runtime.tokenFile);
+      await saveToken(token, runtime.tokenFile, region);
       if (shadowed) {
         runtime.writeStderr(
           `Saved ${runtime.tokenFile}, but EDSTEM_TOKEN is set and takes precedence.\n`
@@ -219,6 +225,7 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
       }
       await writeValue(runtime, command, {
         authenticated: true,
+        region,
         user: identity.user,
         tokenFile: runtime.tokenFile,
       });
@@ -237,11 +244,11 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
     .description("Verify the configured Ed token.")
     .action(outputAction(runtime, async (client) => {
       const identity = projectIdentity(await client.fetchUser());
-      const { source, tokenFile } = await loadTokenWithSource({
+      const { source, tokenFile, region } = await loadTokenWithSource({
         interactive: false,
         tokenFile: runtime.tokenFile,
       });
-      return { authenticated: true, source, tokenFile, user: identity.user };
+      return { authenticated: true, source, tokenFile, region, user: identity.user };
     }));
 
   program.command("user")
@@ -622,8 +629,9 @@ async function askForToken(ui: Ui, tokenFile: string): Promise<string> {
 }
 
 // First run on this machine: the wordmark, the token, and a check with Ed before anything is saved.
-async function onboardToken(ui: Ui, tokenFile: string, verify: (token: string) => Promise<EdClient>): Promise<string> {
+async function onboardToken(ui: Ui, tokenFile: string, verify: CliRuntime["createClientForToken"]): Promise<void> {
   showWordmark(ui);
+  const region = await promptEdRegion(ui);
   for (;;) {
     const token = await askForToken(ui, tokenFile);
     if (!token) {
@@ -633,31 +641,32 @@ async function onboardToken(ui: Ui, tokenFile: string, verify: (token: string) =
     const spin = ui.spinner();
     spin.start("Checking the token with Ed");
     try {
-      const identity = await (await verify(token)).fetchUser();
+      const identity = await (await verify(token, region)).fetchUser();
       spin.stop(`Signed in as ${identity.user.name}`);
     } catch (error) {
       spin.error(`Ed rejected that token: ${error instanceof Error ? error.message : String(error)}`);
       continue;
     }
-    await saveToken(token, tokenFile);
-    return token;
+    await saveToken(token, tokenFile, region);
+    return;
   }
 }
 
 function createDefaultRuntime(ui: Ui): CliRuntime {
   const tokenFile = defaultTokenFile();
   let client: Promise<EdClient> | undefined;
-  const createClientForToken = async (token: string): Promise<EdClient> =>
-    new EdClient({ apiBaseUrl: (await loadConfig()).apiBaseUrl, token });
+  const createClientForToken = async (token: string, region: EdRegion): Promise<EdClient> =>
+    new EdClient({ apiBaseUrl: (await loadConfig(undefined, region)).apiBaseUrl, token });
   return {
     createClient: () => {
       client ??= (async () => {
-        const config = await loadConfig();
         // A person with no token is walked through getting one; a pipe or an agent gets the auth error.
-        const token = await loadToken({ tokenFile, interactive: false }).catch(async (error: unknown) => {
+        const { token, region } = await loadTokenWithSource({ tokenFile, interactive: false }).catch(async (error: unknown) => {
           if (!ui.interactive || !(error instanceof CliError) || error.code !== "auth") throw error;
-          return onboardToken(ui, tokenFile, createClientForToken);
+          await onboardToken(ui, tokenFile, createClientForToken);
+          return loadTokenWithSource({ tokenFile, interactive: false });
         });
+        const config = await loadConfig(undefined, region);
         return new EdClient({
           apiBaseUrl: config.apiBaseUrl,
           maxRetries: config.maxRetries,

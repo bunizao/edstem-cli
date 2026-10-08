@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { parse } from "yaml";
+import { ED_REGIONS, type EdRegion } from "./regions.js";
 
 export interface EdstemConfig {
   apiBaseUrl: string;
@@ -12,14 +13,15 @@ export interface EdstemConfig {
 }
 
 const DEFAULT_CONFIG: EdstemConfig = {
-  apiBaseUrl: "https://edstem.org/api/",
+  apiBaseUrl: ED_REGIONS.au.apiBaseUrl,
   fetchCount: 30,
   maxRetries: 3,
   retryBaseDelayMs: 1_000,
 };
 
 export async function loadConfig(
-  path = process.env.EDSTEM_CONFIG?.trim() || join(homedir(), ".config", "edstem-cli", "config.yaml")
+  path = process.env.EDSTEM_CONFIG?.trim() || join(homedir(), ".config", "edstem-cli", "config.yaml"),
+  region: EdRegion = "au"
 ): Promise<EdstemConfig> {
   let raw: string;
   try {
@@ -47,7 +49,7 @@ export async function loadConfig(
   const retryBaseDelayMs = Number.isFinite(configuredBaseDelay) && configuredBaseDelay > 0
     ? Math.round(configuredBaseDelay * 1000)
     : DEFAULT_CONFIG.retryBaseDelayMs;
-  const apiBaseUrl = process.env.EDSTEM_BASE_URL?.trim() || DEFAULT_CONFIG.apiBaseUrl;
+  const apiBaseUrl = process.env.EDSTEM_BASE_URL?.trim() || ED_REGIONS[region].apiBaseUrl;
   return { apiBaseUrl, fetchCount, maxRetries, retryBaseDelayMs };
 }
 
