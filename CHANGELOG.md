@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.8.0 - 2026-10-08
+
+### Added
+
+- Added thread actions: `threads star|unstar|watch|unwatch|upvote|unvote|mark-read|mark-unread`. Each is a guarded mutation with a plan, `--yes` and `--dry-run`, and an already-in-state thread sends no write. `upvote`/`unvote` take `--comment`; `mark-read UNIT --all` reads a whole unit.
+- `threads show` reports `isStarred`, `isWatched` and `vote`.
+- Added `threads --unread`, a filter on Ed's own read state.
+- Added `threads UNIT --since last`, a per-unit cursor in `~/.config/edstem-cli/state.json`. It falls back to the last 7 days on first run and does not advance on search, filtered or truncated listings, or failures.
+- Added `threads export UNIT --dest DIR`: a Markdown archive with an index, one file per thread, downloaded attachments with local links, and a manifest. Interrupted exports resume; `--force` rewrites and `--no-files` keeps remote links.
+- Added Ed regions (AU, US, EU). `edstem auth login` detects the region from the token and asks only when it cannot tell; `--region` and `EDSTEM_REGION` skip detection. The region is saved with the token and used by the CLI and the local stdio MCP server.
+- `auth status` reports `region` and `regionSource` (`environment`, `file` or `default`).
+- `edstem auth login` opens the token page in the browser; `--no-browser` skips it.
+- A failed interactive login offers to retry, enter a different token, choose another region, or cancel, and says whether Ed rejected the token or could not be reached.
+
+### Changed
+
+- Token setup links the token page for the selected region.
+- Login warns when `EDSTEM_TOKEN`, `EDSTEM_REGION` or `EDSTEM_BASE_URL` override what it saves.
+- Credentials are written atomically.
+
+### Removed
+
+- `edstem-mcp` no longer prompts for a token in a terminal and saves it unverified; it fails with an error that points at `edstem auth login`.
+
+### Compatibility notes
+
+- The token file is now JSON, `{ "token": "...", "region": "au" }`. Plain-text token files from earlier versions are still read, as AU.
+- An invalid `EDSTEM_REGION` now fails `auth login` with a usage error.
+- The hosted MCP server remains AU-only.
+
 ## 0.7.2 - 2026-09-24
 
 ### Fixed

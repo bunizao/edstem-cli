@@ -43,11 +43,11 @@ describe("update checks", () => {
   });
 
   it("returns a stable npm upgrade command", async () => {
-    const fetch: FetchLike = async () => new Response(JSON.stringify({ version: "0.8.2" }), { status: 200 });
+    const fetch: FetchLike = async () => new Response(JSON.stringify({ version: "0.9.0" }), { status: 200 });
 
     await expect(checkForUpdate(fetch)).resolves.toMatchObject({
-      currentVersion: "0.7.2",
-      latestVersion: "0.8.2",
+      currentVersion: "0.8.0",
+      latestVersion: "0.9.0",
       updateAvailable: true,
       upgradeCommand: "npm install -g edstem-cli@latest",
     });
@@ -61,7 +61,7 @@ describe("edstem update", () => {
     expect(await run(["node", "edstem", "update", "--check", "--json"], runtime)).toBe(0);
 
     expect(JSON.parse(stdout.join(""))).toEqual({
-      currentVersion: "0.7.2",
+      currentVersion: "0.8.0",
       latestVersion: "9.9.9",
       updateAvailable: true,
       upgradeCommand: "npm install -g edstem-cli@latest",
@@ -85,7 +85,7 @@ describe("edstem update", () => {
     try {
       expect(await run(["node", "edstem", "update", "--dry-run"], runtime)).toBe(0);
       expect(write.mock.calls.join("")).toContain(
-        "Upgrade edstem-cli from 0.7.2 to 9.9.9 with `npm install -g edstem-cli@latest`."
+        "Upgrade edstem-cli from 0.8.0 to 9.9.9 with `npm install -g edstem-cli@latest`."
       );
     } finally {
       write.mockRestore();
