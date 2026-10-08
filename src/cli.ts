@@ -30,7 +30,6 @@ import type { Command } from "commander";
 import { readFile } from "node:fs/promises";
 
 import {
-  TOKEN_HELP_URL,
   defaultTokenFile,
   loadTokenWithSource,
   promptEdRegion,
@@ -39,6 +38,7 @@ import {
 } from "./auth.js";
 import { EDSTEM_TAGLINE, EDSTEM_WORDMARK, showWordmark } from "./wordmark.js";
 import { loadConfig } from "./config.js";
+import { openTokenPage } from "./browser.js";
 import { downloadLessonFiles } from "./download.js";
 import { EdClient, type FetchLike } from "./ed/client.js";
 import { listLessonFiles, listThreadFiles } from "./ed/files.js";
@@ -75,7 +75,7 @@ import { isMainModule } from "./main.js";
 import { writeGeneratedSkill } from "./skills.js";
 import { applyUpdate, checkForUpdate } from "./update.js";
 import { VERSION } from "./version.js";
-import { parseRegion, type EdRegion } from "./regions.js";
+import { parseRegion, tokenPageUrl, type EdRegion } from "./regions.js";
 
 const SORT_OPTIONS = ["new", "old", "top", "hot"] as const;
 const SLIDE_SECTIONS = ["slide", "questions", "responses", "quiz"] as const;
@@ -153,6 +153,7 @@ const HELP_SECTIONS: Readonly<Record<string, readonly string[]>> = {
 export interface CliRuntime {
   createClient: () => Promise<EdClient>;
   createClientForToken: (token: string, region: EdRegion) => Promise<EdClient>;
+  openTokenPage: (region: EdRegion) => Promise<string | undefined>;
   defaultFetchCount: () => Promise<number>;
   fetch?: FetchLike;
   interactive: boolean;
@@ -188,6 +189,7 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
   auth.command("login")
     .description("Verify an Ed token and save it for later commands.")
     .option("--token-stdin", "Read the token from the first line of stdin.")
+    .option("--no-browser", "Print the token page link without opening a browser.")
     .addOption(program.createOption("--region <region>", "Ed region (prompts in a terminal; defaults to au for scripts).")
       .choices(["au", "us", "eu"]).argParser(parseRegion))
     .action(async (_options: unknown, command: Command) => {
@@ -210,9 +212,12 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
       const region: EdRegion = command.opts().region ?? (runtime.interactive && ui.interactive
         ? await promptEdRegion(ui)
         : parseRegion(process.env.EDSTEM_REGION?.trim() || "au"));
+      if (ui.interactive && !command.opts().tokenStdin && command.opts().browser !== false) {
+        await showTokenPage(ui, region, runtime.openTokenPage);
+      }
       const token = command.opts().tokenStdin
         ? (await runtime.readStdinLine()).trim()
-        : await askForToken(ui, runtime.tokenFile);
+        : await askForToken(ui, runtime.tokenFile, region);
       if (!token) throw new CliError("auth", "No Ed token provided.");
 
       const client = await runtime.createClientForToken(token, region);
@@ -623,17 +628,29 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
 }
 
 // Where a token comes from and where it goes, then the token itself, echoed as dots.
-async function askForToken(ui: Ui, tokenFile: string): Promise<string> {
-  ui.note(`Ed needs a personal API token.\nCreate one at ${TOKEN_HELP_URL} and paste it below.\nIt is saved to ${tokenFile}.`, "Ed token");
+async function askForToken(ui: Ui, tokenFile: string, region: EdRegion): Promise<string> {
+  ui.note(`Ed needs a personal API token.\nCreate one at ${tokenPageUrl(region)} and paste it below.\nUse the browser profile where you already sign in to Ed.\nIt is saved to ${tokenFile}.`, "Ed token");
   return (await ui.password("Ed API token")).trim();
 }
 
+async function showTokenPage(ui: Ui, region: EdRegion, open: CliRuntime["openTokenPage"]): Promise<void> {
+  try {
+    const browser = await open(region);
+    ui.info(browser
+      ? `Opened the API token page in your existing ${browser} Ed window.`
+      : "Opened the API token page in your default browser. Use the profile where you already sign in to Ed.");
+  } catch {
+    ui.warn(`Could not open a browser. Open ${tokenPageUrl(region)} in the browser profile where you use Ed.`);
+  }
+}
+
 // First run on this machine: the wordmark, the token, and a check with Ed before anything is saved.
-async function onboardToken(ui: Ui, tokenFile: string, verify: CliRuntime["createClientForToken"]): Promise<void> {
+async function onboardToken(ui: Ui, tokenFile: string, verify: CliRuntime["createClientForToken"], open: CliRuntime["openTokenPage"]): Promise<void> {
   showWordmark(ui);
   const region = await promptEdRegion(ui);
+  await showTokenPage(ui, region, open);
   for (;;) {
-    const token = await askForToken(ui, tokenFile);
+    const token = await askForToken(ui, tokenFile, region);
     if (!token) {
       ui.warn("Nothing was pasted.");
       continue;
@@ -663,7 +680,7 @@ function createDefaultRuntime(ui: Ui): CliRuntime {
         // A person with no token is walked through getting one; a pipe or an agent gets the auth error.
         const { token, region } = await loadTokenWithSource({ tokenFile, interactive: false }).catch(async (error: unknown) => {
           if (!ui.interactive || !(error instanceof CliError) || error.code !== "auth") throw error;
-          await onboardToken(ui, tokenFile, createClientForToken);
+          await onboardToken(ui, tokenFile, createClientForToken, openTokenPage);
           return loadTokenWithSource({ tokenFile, interactive: false });
         });
         const config = await loadConfig(undefined, region);
@@ -682,6 +699,7 @@ function createDefaultRuntime(ui: Ui): CliRuntime {
       return client;
     },
     createClientForToken,
+    openTokenPage,
     defaultFetchCount: async () => (await loadConfig()).fetchCount,
     interactive: Boolean(process.stdin.isTTY),
     isTTY: Boolean(process.stdout.isTTY),

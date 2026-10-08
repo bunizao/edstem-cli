@@ -8,6 +8,10 @@ export const ED_REGIONS = {
 
 export type EdRegion = keyof typeof ED_REGIONS;
 
+export function tokenPageUrl(region: EdRegion): string {
+  return `https://edstem.org/${region}/settings/api-tokens`;
+}
+
 export function parseRegion(value: string): EdRegion {
   const region = value.trim().toLowerCase();
   if (region === "au" || region === "us" || region === "eu") return region;

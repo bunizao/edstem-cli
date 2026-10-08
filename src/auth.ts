@@ -4,9 +4,9 @@ import { dirname, join } from "node:path";
 
 import { createUi, type Ui } from "@bunizao/cli-kit";
 import { CliError } from "./errors.js";
-import { ED_REGIONS, parseRegion, type EdRegion } from "./regions.js";
+import { ED_REGIONS, parseRegion, tokenPageUrl, type EdRegion } from "./regions.js";
 
-export const TOKEN_HELP_URL = "https://edstem.org/settings/api-tokens";
+export const TOKEN_HELP_URL = tokenPageUrl("au");
 
 export type TokenSource = "environment" | "file";
 
@@ -75,7 +75,7 @@ export async function loadTokenWithSource(options: TokenSourceOptions = {}): Pro
   const interactive = options.interactive ?? Boolean(process.stdin.isTTY && process.stderr.isTTY);
   if (interactive) {
     const region = environmentRegion ?? await (options.promptRegion ?? promptEdRegion)();
-    const token = (await (options.prompt ?? promptHiddenToken)()).trim();
+    const token = (await (options.prompt ?? (() => promptHiddenToken(region)))()).trim();
     if (!token) {
       throw new CliError("auth", "No Ed token provided");
     }
@@ -85,7 +85,7 @@ export async function loadTokenWithSource(options: TokenSourceOptions = {}): Pro
 
   throw new CliError(
     "auth",
-    `No Ed token found. Run edstem auth login, set EDSTEM_TOKEN, or create ${tokenFile}. Get a token at ${TOKEN_HELP_URL}.`
+    `No Ed token found. Run edstem auth login, set EDSTEM_TOKEN, or create ${tokenFile}. Get a token at ${tokenPageUrl(environmentRegion ?? "au")}.`
   );
 }
 
@@ -112,10 +112,10 @@ export async function removeToken(tokenFile = defaultTokenFile()): Promise<boole
   }
 }
 
-export async function promptHiddenToken(): Promise<string> {
+export async function promptHiddenToken(region: EdRegion = "au"): Promise<string> {
   const ui = createUi({ input: process.stdin, output: process.stderr });
   if (!ui.interactive) throw new CliError("auth", "Interactive token input requires a terminal");
-  ui.info(`Create a token at ${TOKEN_HELP_URL}.`);
+  ui.info(`Create a token at ${tokenPageUrl(region)}.`);
   const token = await ui.password("Paste your Ed token").catch((error: unknown) => {
     throw error instanceof CliError && error.code === "cancelled" ? new CliError("auth", "Token input cancelled") : error;
   });

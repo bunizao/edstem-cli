@@ -26,7 +26,11 @@ export EDSTEM_REGION="au" # au, us, or eu
 edstem auth status
 ```
 
-Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens) while signed in to the Ed region you use. `edstem auth login` asks you to select AU, US, or EU, then prompts for the token without echoing it. It verifies the token against the selected region before saving `{ "token": "...", "region": "au" }` together in `~/.config/edstem-cli/token` with `0600` permissions. Subsequent CLI commands and the local stdio MCP server use the saved region automatically. Existing plain-text token files remain supported and default to AU.
+`edstem auth login` asks you to select AU, US, or EU, opens `https://edstem.org/<region>/settings/api-tokens`, then prompts for the token without echoing it. On macOS, it first looks for an existing Ed tab in Chrome, Edge, Brave, or Safari and opens a new tab in that same window, retaining its browser profile and login session. If no accessible Ed window is found, or on Windows/Linux, it opens the system's default browser. Use the profile where you already sign in to Ed; an expired session or a region you have not signed into still requires sign-in. The CLI inspects tab URLs only and leaves browser credentials in the browser.
+
+Use `--no-browser` to open the displayed link yourself. Browser launch failures also leave the link available so you can continue. `--token-stdin`, non-interactive login, and `--dry-run` never open a browser. First-run interactive onboarding follows the same region and browser flow. The CLI opens the token settings page; you create and copy the token yourself.
+
+It verifies the token against the selected region before saving `{ "token": "...", "region": "au" }` together in `~/.config/edstem-cli/token` with `0600` permissions. Subsequent CLI commands and the local stdio MCP server use the saved region automatically. Existing plain-text token files remain supported and default to AU.
 
 | Region | API endpoint |
 | --- | --- |

@@ -60,7 +60,9 @@ edstem units
 ```
 
 Alternatively, run `edstem auth login` in a terminal to select the region and
-save it with the token. The CLI and local stdio MCP share these credentials.
+open its token page in your regular browser. On macOS, an existing Ed window
+is preferred so its browser profile and session are retained. Use `--no-browser`
+to open the displayed link yourself. The CLI and local stdio MCP share the saved token and region.
 For scripts, use `edstem auth login --region us --token-stdin`.
 
 ## CLI reference
@@ -68,7 +70,7 @@ For scripts, use `edstem auth login --region us --token-stdin`.
 | Command | Description | Arguments | Options | Mutating |
 | --- | --- | --- | --- | --- |
 | edstem auth | Manage Ed authentication. |  |  | no |
-| edstem auth login | Verify an Ed token and save it for later commands. |  | --token-stdin<br>--region <region> | no |
+| edstem auth login | Verify an Ed token and save it for later commands. |  | --token-stdin<br>--no-browser<br>--region <region> | no |
 | edstem auth logout | Remove the saved Ed token file. |  |  | yes |
 | edstem auth status | Verify the configured Ed token. |  |  | no |
 | edstem user | Show the current Ed identity and enrolled units. |  |  | no |

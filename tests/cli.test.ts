@@ -113,6 +113,7 @@ function makeRuntime(
     runtime: {
       createClient: async () => client,
       createClientForToken: async (token, region) => new EdClient({ apiBaseUrl: ED_REGIONS[region].apiBaseUrl, fetch, token }),
+      openTokenPage: vi.fn().mockResolvedValue("Google Chrome"),
       defaultFetchCount: async () => 30,
       interactive: false,
       isTTY,
@@ -798,7 +799,34 @@ describe("auth commands", () => {
       { value: "eu", label: "Europe (EU)", hint: ED_REGIONS.eu.apiBaseUrl },
     ]);
     expect(select.mock.invocationCallOrder[0]).toBeLessThan(password.mock.invocationCallOrder[0]!);
+    expect(runtime.openTokenPage).toHaveBeenCalledWith("eu");
+    const open = vi.mocked(runtime.openTokenPage);
+    expect(select.mock.invocationCallOrder[0]).toBeLessThan(open.mock.invocationCallOrder[0]!);
+    expect(open.mock.invocationCallOrder[0]).toBeLessThan(password.mock.invocationCallOrder[0]!);
     expect(String(fetch.mock.calls[0]?.[0])).toBe(`${ED_REGIONS.eu.apiBaseUrl}user`);
+    expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "picked-token", region: "eu" });
+  });
+
+  it.each(["--no-browser", "--token-stdin"])("skips the browser for %s while showing the correct regional link", async (flag) => {
+    const tokenFile = await tokenPath("edstem-no-browser-");
+    const { runtime } = makeRuntime(200, false, fixture("user_info"), { tokenFile, stdinLine: "picked-token" });
+    runtime.interactive = true;
+    const note = vi.fn();
+    const ui = { ...createUi({ interactive: false }), interactive: true, password: vi.fn().mockResolvedValue("picked-token"), note };
+    await createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--region", "us", flag, "--json"]);
+    expect(runtime.openTokenPage).not.toHaveBeenCalled();
+    if (flag === "--no-browser") expect(note.mock.calls[0]?.[0]).toContain("https://edstem.org/us/settings/api-tokens");
+  });
+
+  it("keeps token entry available when opening the browser fails", async () => {
+    const tokenFile = await tokenPath("edstem-browser-failed-");
+    const { runtime } = makeRuntime(200, false, fixture("user_info"), { tokenFile });
+    runtime.interactive = true;
+    vi.mocked(runtime.openTokenPage).mockRejectedValue(new Error("No browser"));
+    const warn = vi.fn();
+    const ui = { ...createUi({ interactive: false }), interactive: true, password: vi.fn().mockResolvedValue("picked-token"), note: vi.fn(), warn };
+    await createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--region", "eu", "--json"]);
+    expect(warn.mock.calls[0]?.[0]).toContain("https://edstem.org/eu/settings/api-tokens");
     expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "picked-token", region: "eu" });
   });
 
@@ -849,6 +877,7 @@ describe("auth commands", () => {
     expect(fetch).not.toHaveBeenCalled();
     expect(stdout).toEqual([]);
     expect(await readFile(tokenFile, "utf8")).toBe("saved-token\n");
+    expect(runtime.openTokenPage).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid token without writing it", async () => {

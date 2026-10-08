@@ -6,7 +6,9 @@ import type { FetchLike } from "../src/ed/client.js";
 import { checkForUpdate, compareVersions } from "../src/update.js";
 
 const spawnSync = vi.hoisted(() => vi.fn());
-vi.mock("node:child_process", () => ({ spawnSync }));
+vi.mock("node:child_process", async (original) => ({
+  ...await original<typeof import("node:child_process")>(), spawnSync,
+}));
 
 function makeRuntime(latestVersion: string): {
   runtime: CliRuntime;
@@ -21,6 +23,7 @@ function makeRuntime(latestVersion: string): {
         throw new Error("update must not require an Ed client");
       },
       createClientForToken: async () => { throw new Error("update must not authenticate"); },
+      openTokenPage: async () => { throw new Error("update must not open a browser"); },
       readStdinLine: async () => { throw new Error("update must not read tokens"); },
       tokenFile: "/unused/token",
       defaultFetchCount: async () => 30,
