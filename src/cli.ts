@@ -30,17 +30,18 @@ import type { Command } from "commander";
 import { readFile } from "node:fs/promises";
 
 import {
-  TOKEN_HELP_URL,
   defaultTokenFile,
-  loadToken,
   loadTokenWithSource,
+  promptEdRegion,
   removeToken,
   saveToken,
 } from "./auth.js";
 import { EDSTEM_TAGLINE, EDSTEM_WORDMARK, showWordmark } from "./wordmark.js";
 import { loadConfig } from "./config.js";
+import { openTokenPage } from "./browser.js";
 import { downloadLessonFiles } from "./download.js";
 import { EdClient, type FetchLike } from "./ed/client.js";
+import type { UserWithCourses } from "./ed/models.js";
 import { listLessonFiles, listThreadFiles } from "./ed/files.js";
 import { markdownToEdDocument } from "./ed/document.js";
 import {
@@ -75,6 +76,7 @@ import { isMainModule } from "./main.js";
 import { writeGeneratedSkill } from "./skills.js";
 import { applyUpdate, checkForUpdate } from "./update.js";
 import { VERSION } from "./version.js";
+import { parseRegion, tokenPageUrl, type EdRegion } from "./regions.js";
 
 const SORT_OPTIONS = ["new", "old", "top", "hot"] as const;
 const SLIDE_SECTIONS = ["slide", "questions", "responses", "quiz"] as const;
@@ -151,7 +153,8 @@ const HELP_SECTIONS: Readonly<Record<string, readonly string[]>> = {
 
 export interface CliRuntime {
   createClient: () => Promise<EdClient>;
-  createClientForToken: (token: string) => Promise<EdClient>;
+  createClientForToken: (token: string, region: EdRegion) => Promise<EdClient>;
+  openTokenPage: (region: EdRegion) => Promise<void>;
   defaultFetchCount: () => Promise<number>;
   fetch?: FetchLike;
   interactive: boolean;
@@ -187,6 +190,9 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
   auth.command("login")
     .description("Verify an Ed token and save it for later commands.")
     .option("--token-stdin", "Read the token from the first line of stdin.")
+    .option("--no-browser", "Print the token page link without opening a browser.")
+    .addOption(program.createOption("--region <region>", "Ed region (prompts in a terminal; defaults to au for scripts).")
+      .choices(["au", "us", "eu"]).argParser(parseRegion))
     .action(async (_options: unknown, command: Command) => {
       const shadowed = Boolean(process.env.EDSTEM_TOKEN?.trim());
       // Entering a token is already explicit, so only --dry-run short-circuits the login.
@@ -204,21 +210,26 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
       );
       if (!accepted) return;
 
-      const token = command.opts().tokenStdin
-        ? (await runtime.readStdinLine()).trim()
-        : await askForToken(ui, runtime.tokenFile);
-      if (!token) throw new CliError("auth", "No Ed token provided.");
-
-      const client = await runtime.createClientForToken(token);
-      const identity = projectIdentity(await client.fetchUser());
-      await saveToken(token, runtime.tokenFile);
-      if (shadowed) {
-        runtime.writeStderr(
-          `Saved ${runtime.tokenFile}, but EDSTEM_TOKEN is set and takes precedence.\n`
-        );
+      warnAuthOverrides((message) => runtime.writeStderr(`${message}\n`));
+      let region: EdRegion = command.opts().region ?? (runtime.interactive && ui.interactive
+        ? await promptEdRegion(ui)
+        : parseRegion(process.env.EDSTEM_REGION?.trim() || "au"));
+      let token: string;
+      let verified: UserWithCourses;
+      if (ui.interactive && !command.opts().tokenStdin) {
+        ({ token, region, identity: verified } = await promptVerifiedToken(ui, runtime, region, command.opts().browser !== false));
+      } else {
+        token = command.opts().tokenStdin
+          ? (await runtime.readStdinLine()).trim()
+          : await askForToken(ui, runtime.tokenFile, region);
+        if (!token) throw new CliError("auth", "No Ed token provided.");
+        verified = await (await runtime.createClientForToken(token, region)).fetchUser();
       }
+      const identity = projectIdentity(verified);
+      await saveToken(token, runtime.tokenFile, region);
       await writeValue(runtime, command, {
         authenticated: true,
+        region,
         user: identity.user,
         tokenFile: runtime.tokenFile,
       });
@@ -237,11 +248,11 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
     .description("Verify the configured Ed token.")
     .action(outputAction(runtime, async (client) => {
       const identity = projectIdentity(await client.fetchUser());
-      const { source, tokenFile } = await loadTokenWithSource({
+      const { source, tokenFile, region } = await loadTokenWithSource({
         interactive: false,
         tokenFile: runtime.tokenFile,
       });
-      return { authenticated: true, source, tokenFile, user: identity.user };
+      return { authenticated: true, source, tokenFile, region, user: identity.user };
     }));
 
   program.command("user")
@@ -616,48 +627,106 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
 }
 
 // Where a token comes from and where it goes, then the token itself, echoed as dots.
-async function askForToken(ui: Ui, tokenFile: string): Promise<string> {
-  ui.note(`Ed needs a personal API token.\nCreate one at ${TOKEN_HELP_URL} and paste it below.\nIt is saved to ${tokenFile}.`, "Ed token");
+async function askForToken(ui: Ui, tokenFile: string, region: EdRegion): Promise<string> {
+  ui.note(`Ed needs a personal API token.\nCreate one at ${tokenPageUrl(region)} and paste it below.\nUse the browser profile where you already sign in to Ed.\nIt is saved to ${tokenFile}.`, "Ed token");
   return (await ui.password("Ed API token")).trim();
 }
 
-// First run on this machine: the wordmark, the token, and a check with Ed before anything is saved.
-async function onboardToken(ui: Ui, tokenFile: string, verify: (token: string) => Promise<EdClient>): Promise<string> {
-  showWordmark(ui);
+async function showTokenPage(ui: Ui, region: EdRegion, open: CliRuntime["openTokenPage"]): Promise<void> {
+  try {
+    await open(region);
+    ui.info("Requested the API token page in your default browser. Use the profile where you already sign in to Ed.");
+  } catch {
+    ui.warn(`Could not open a browser. Open ${tokenPageUrl(region)} in the browser profile where you use Ed.`);
+  }
+}
+
+function warnAuthOverrides(warn: (message: string) => void): void {
+  if (process.env.EDSTEM_TOKEN?.trim()) {
+    warn("EDSTEM_TOKEN is set and takes precedence over the saved token for later commands. Unset it to use the saved token.");
+  }
+  if (process.env.EDSTEM_REGION?.trim()) {
+    warn("EDSTEM_REGION is set and overrides the saved region for later commands. Unset it to use the saved region.");
+  }
+  if (process.env.EDSTEM_BASE_URL?.trim()) {
+    warn("EDSTEM_BASE_URL is set and overrides the API endpoint for verification and later commands. Unset it to use the selected region's endpoint.");
+  }
+}
+
+async function promptVerifiedToken(
+  ui: Ui,
+  runtime: Pick<CliRuntime, "tokenFile" | "createClientForToken" | "openTokenPage">,
+  initialRegion: EdRegion,
+  browser = true
+): Promise<{ token: string; region: EdRegion; identity: UserWithCourses }> {
+  let region = initialRegion;
+  let token = "";
+  if (browser) await showTokenPage(ui, region, runtime.openTokenPage);
   for (;;) {
-    const token = await askForToken(ui, tokenFile);
+    if (!token) token = await askForToken(ui, runtime.tokenFile, region);
     if (!token) {
       ui.warn("Nothing was pasted.");
       continue;
     }
     const spin = ui.spinner();
-    spin.start("Checking the token with Ed");
+    spin.start(`Checking the token with Ed (${region.toUpperCase()})`);
     try {
-      const identity = await (await verify(token)).fetchUser();
+      const identity = await (await runtime.createClientForToken(token, region)).fetchUser();
       spin.stop(`Signed in as ${identity.user.name}`);
+      return { token, region, identity };
     } catch (error) {
-      spin.error(`Ed rejected that token: ${error instanceof Error ? error.message : String(error)}`);
-      continue;
+      const normalized = normalizeEdError(error);
+      if (normalized.code !== "auth" && normalized.code !== "network" && normalized.code !== "upstream") {
+        spin.error("Could not verify the token.");
+        throw error;
+      }
+      const rejected = normalized.code === "auth";
+      spin.error(rejected
+        ? `Ed did not accept this token in ${region.toUpperCase()}. Check the token and region.`
+        : normalized.code === "network"
+          ? "Could not reach Ed. Check your connection; the token has not been rejected."
+          : "Ed could not complete verification. The token has not been verified.");
+      const action = await ui.select("What would you like to do?", [
+        ...(!rejected ? [{ value: "retry", label: "Retry with the same token" }] : []),
+        { value: "token", label: "Enter a different token" },
+        { value: "region", label: "Choose another region" },
+        { value: "cancel", label: "Cancel login" },
+      ]);
+      if (action === "cancel") throw new CliError("cancelled", "Login cancelled.");
+      if (action === "token") token = "";
+      if (action === "region") {
+        region = await promptEdRegion(ui);
+        token = "";
+        if (browser) await showTokenPage(ui, region, runtime.openTokenPage);
+      }
     }
-    await saveToken(token, tokenFile);
-    return token;
   }
+}
+
+// First run on this machine: the wordmark, the token, and a check with Ed before anything is saved.
+async function onboardToken(ui: Ui, tokenFile: string, verify: CliRuntime["createClientForToken"], open: CliRuntime["openTokenPage"]): Promise<void> {
+  showWordmark(ui);
+  warnAuthOverrides((message) => ui.warn(message));
+  const region = await promptEdRegion(ui);
+  const credentials = await promptVerifiedToken(ui, { tokenFile, createClientForToken: verify, openTokenPage: open }, region);
+  await saveToken(credentials.token, tokenFile, credentials.region);
 }
 
 function createDefaultRuntime(ui: Ui): CliRuntime {
   const tokenFile = defaultTokenFile();
   let client: Promise<EdClient> | undefined;
-  const createClientForToken = async (token: string): Promise<EdClient> =>
-    new EdClient({ apiBaseUrl: (await loadConfig()).apiBaseUrl, token });
+  const createClientForToken = async (token: string, region: EdRegion): Promise<EdClient> =>
+    new EdClient({ apiBaseUrl: (await loadConfig(undefined, region)).apiBaseUrl, token });
   return {
     createClient: () => {
       client ??= (async () => {
-        const config = await loadConfig();
         // A person with no token is walked through getting one; a pipe or an agent gets the auth error.
-        const token = await loadToken({ tokenFile, interactive: false }).catch(async (error: unknown) => {
+        const { token, region } = await loadTokenWithSource({ tokenFile, interactive: false }).catch(async (error: unknown) => {
           if (!ui.interactive || !(error instanceof CliError) || error.code !== "auth") throw error;
-          return onboardToken(ui, tokenFile, createClientForToken);
+          await onboardToken(ui, tokenFile, createClientForToken, openTokenPage);
+          return loadTokenWithSource({ tokenFile, interactive: false });
         });
+        const config = await loadConfig(undefined, region);
         return new EdClient({
           apiBaseUrl: config.apiBaseUrl,
           maxRetries: config.maxRetries,
@@ -673,6 +742,7 @@ function createDefaultRuntime(ui: Ui): CliRuntime {
       return client;
     },
     createClientForToken,
+    openTokenPage,
     defaultFetchCount: async () => (await loadConfig()).fetchCount,
     interactive: Boolean(process.stdin.isTTY),
     isTTY: Boolean(process.stdout.isTTY),

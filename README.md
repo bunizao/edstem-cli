@@ -21,14 +21,31 @@ edstem auth login
 
 # Or, for scripts and CI:
 export EDSTEM_TOKEN="your-token"
+export EDSTEM_REGION="au" # au, us, or eu
 
 edstem auth status
 ```
 
-Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens). `edstem auth login` prompts for the token without echoing it, or reads it from stdin with `--token-stdin`; it verifies the token before writing `~/.config/edstem-cli/token` with `0600` permissions. `edstem auth logout` removes that file, and `edstem auth status` reports whether the active token came from the environment or the file. `EDSTEM_TOKEN` always takes precedence over the saved file. The CLI also reads `~/.config/edstem-cli/config.yaml`.
+`edstem auth login` asks you to select AU, US, or EU, requests `https://edstem.org/<region>/settings/api-tokens` in the system's default browser, then prompts for the token without echoing it. It uses the native URL launcher on macOS, Windows, and Linux, so it works with whichever browser you have configured. The link is always displayed for manual opening, including on machines without a desktop browser. Use the browser profile where you already sign in to Ed; the browser naturally retains its existing session there. The CLI does not select profiles or inspect browser sessions. An expired session or a region you have not signed into still requires sign-in.
+
+Use `--no-browser` to open the displayed link yourself. Browser launch failures also leave the link available so you can continue. `--token-stdin`, non-interactive login, and `--dry-run` never open a browser. First-run interactive onboarding follows the same region and browser flow. The CLI opens the token settings page; you create and copy the token yourself.
+
+Both interactive login and first-run onboarding offer recovery when verification fails. If Ed rejects the token, you can enter another token, select a different region, or cancel. Connection failures and upstream errors are reported separately and also allow retrying with the same token without pasting it again. Choosing another region clears the previous input and opens that region's token page unless `--no-browser` was supplied. Cancellation preserves the saved credentials. Scripted stdin login exits with an error instead of prompting for recovery.
+
+Before verification, login warns when `EDSTEM_TOKEN`, `EDSTEM_REGION`, or `EDSTEM_BASE_URL` is set, explaining how each overrides saved credentials or the selected endpoint. Their values are not printed.
+
+It verifies the token against the selected region before saving `{ "token": "...", "region": "au" }` together in `~/.config/edstem-cli/token` with `0600` permissions. Credentials are written and synced to a private temporary file on the same filesystem, then atomically replace the old file. Failures before replacement preserve the old credentials. Subsequent CLI commands and the local stdio MCP server use the saved region automatically. Existing plain-text token files remain supported and default to AU.
+
+| Region | API endpoint |
+| --- | --- |
+| `au` (Australia) | `https://edstem.org/api/` |
+| `us` (United States) | `https://us.edstem.org/api/` |
+| `eu` (Europe) | `https://eu.edstem.org/api/` |
+
+Use `--region` to skip the picker and `--token-stdin` to read a token from stdin. Non-interactive login uses `EDSTEM_REGION` or defaults to AU. `edstem auth logout` removes the saved credentials, and `edstem auth status` reports the active region and token source. `EDSTEM_TOKEN` takes precedence over the saved token; when using it, set `EDSTEM_REGION` for US or EU (it defaults to AU independently of the saved file). `EDSTEM_REGION` can also override the saved region, and `EDSTEM_BASE_URL` overrides the API endpoint. The CLI also reads `~/.config/edstem-cli/config.yaml`.
 
 ```bash
-printf '%s\n' "your-token" | edstem auth login --token-stdin
+printf '%s\n' "your-token" | edstem auth login --region us --token-stdin
 edstem auth logout --yes
 ```
 
@@ -138,6 +155,7 @@ Run `edstem commands --json` for the full machine-readable command tree, includi
 | --- | --- |
 | `EDSTEM_BASE_URL` | Override the Ed JSON API base URL. |
 | `EDSTEM_TOKEN` | Provide the Ed API token. |
+| `EDSTEM_REGION` | Select `au`, `us`, or `eu`; overrides the saved region. Environment tokens default to AU. |
 | `EDSTEM_CONFIG` | Override the local config file path. |
 | `EDSTEM_ALLOW_POSTING` | Set to `1` to enable the `edstem-mcp` posting tools. |
 | `EDSTEM_WIDGETS` | Set to `0` to drop the interactive `show_*` tools from `edstem-mcp`. |
@@ -146,7 +164,7 @@ Run `edstem commands --json` for the full machine-readable command tree, includi
 
 ## MCP
 
-The package also installs `edstem-mcp`, a local stdio MCP server using the same `EDSTEM_TOKEN`. A hosted Streamable HTTP server is available at `https://edstem.tuuhub.com/mcp` and uses OAuth.
+The package also installs `edstem-mcp`, a local stdio MCP server using the same saved token and region, or `EDSTEM_TOKEN` and `EDSTEM_REGION`. A hosted Streamable HTTP server is available at `https://edstem.tuuhub.com/mcp` and uses OAuth.
 
 The remote runtime supports MCP `2026-07-28`, including stateless `server/discover`, header-based routing, and results with `resultType`. It also keeps a stateless compatibility lane for 2025 Streamable HTTP clients during migration.
 

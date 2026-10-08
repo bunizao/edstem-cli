@@ -78,8 +78,20 @@ the same \`UNIT\` reference, so no \`list_courses\` call is needed first.
 \`\`\`bash
 npm install -g edstem-cli
 export EDSTEM_TOKEN="your-token"
+export EDSTEM_REGION="au" # au, us, or eu
 edstem units
 \`\`\`
+
+Alternatively, run \`edstem auth login\` in a terminal to select the region and
+open its token page in your system's default browser. Use the browser profile
+where you already sign in to Ed. Use \`--no-browser\`
+to open the displayed link yourself. The CLI and local stdio MCP share the saved token and region.
+For scripts, use \`edstem auth login --region us --token-stdin\`.
+
+Interactive login lets you change the token or region after authentication fails,
+and retry with the same token after connection or upstream failures. Cancel to
+preserve existing credentials. Login warns about environment overrides without
+printing their values; verified credentials are saved atomically.
 
 ## CLI reference
 
