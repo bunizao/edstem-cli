@@ -30,7 +30,11 @@ edstem auth status
 
 Use `--no-browser` to open the displayed link yourself. Browser launch failures also leave the link available so you can continue. `--token-stdin`, non-interactive login, and `--dry-run` never open a browser. First-run interactive onboarding follows the same region and browser flow. The CLI opens the token settings page; you create and copy the token yourself.
 
-It verifies the token against the selected region before saving `{ "token": "...", "region": "au" }` together in `~/.config/edstem-cli/token` with `0600` permissions. Subsequent CLI commands and the local stdio MCP server use the saved region automatically. Existing plain-text token files remain supported and default to AU.
+Both interactive login and first-run onboarding offer recovery when verification fails. If Ed rejects the token, you can enter another token, select a different region, or cancel. Connection failures and upstream errors are reported separately and also allow retrying with the same token without pasting it again. Choosing another region clears the previous input and opens that region's token page unless `--no-browser` was supplied. Cancellation preserves the saved credentials. Scripted stdin login exits with an error instead of prompting for recovery.
+
+Before verification, login warns when `EDSTEM_TOKEN`, `EDSTEM_REGION`, or `EDSTEM_BASE_URL` is set, explaining how each overrides saved credentials or the selected endpoint. Their values are not printed.
+
+It verifies the token against the selected region before saving `{ "token": "...", "region": "au" }` together in `~/.config/edstem-cli/token` with `0600` permissions. Credentials are written and synced to a private temporary file on the same filesystem, then atomically replace the old file. Failures before replacement preserve the old credentials. Subsequent CLI commands and the local stdio MCP server use the saved region automatically. Existing plain-text token files remain supported and default to AU.
 
 | Region | API endpoint |
 | --- | --- |

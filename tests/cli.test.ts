@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
-import { createUi } from "@bunizao/cli-kit";
+import { CliError, createUi } from "@bunizao/cli-kit";
 
 import { ED_REGIONS } from "../src/regions.js";
 import type { CliRuntime } from "../src/cli.js";
@@ -728,6 +728,124 @@ describe("auth commands", () => {
   async function tokenPath(prefix: string): Promise<string> {
     return join(await mkdtemp(join(tmpdir(), prefix)), "config", "token");
   }
+
+  function loginUi() {
+    const spin = { start: vi.fn(), stop: vi.fn(), error: vi.fn(), message: vi.fn() };
+    return {
+      ...createUi({ interactive: false }), interactive: true,
+      password: vi.fn().mockResolvedValue("picked-token"), select: vi.fn(),
+      note: vi.fn(), warn: vi.fn(), info: vi.fn(), spinner: () => spin, spin,
+    };
+  }
+
+  it.each([true, false])("lets users reselect the region after rejection (browser=%s)", async (browser) => {
+    const tokenFile = await tokenPath("edstem-reselect-");
+    const { fetch, runtime } = makeRuntime(200, false, fixture("user_info"), { tokenFile });
+    fetch.mockResolvedValueOnce(new Response('{"code":"bad_token"}', { status: 401 }));
+    runtime.interactive = true;
+    const ui = loginUi();
+    ui.select.mockResolvedValueOnce("region").mockResolvedValueOnce("us");
+    ui.password.mockResolvedValueOnce("wrong-token").mockResolvedValueOnce("us-token");
+    await createProgram(runtime, ui).parseAsync([
+      "node", "edstem", "auth", "login", "--region", "au", "--json", ...browser ? [] : ["--no-browser"],
+    ]);
+    expect(fetch.mock.calls.map(([url]) => String(url))).toEqual([
+      "https://edstem.org/api/user", "https://us.edstem.org/api/user",
+    ]);
+    expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "us-token", region: "us" });
+    expect(ui.spin.error).toHaveBeenCalledWith("Ed did not accept this token in AU. Check the token and region.");
+    const offered = ui.select.mock.calls[0]?.[1] as Array<{ value: string }>;
+    expect(offered.map((choice) => choice.value)).toEqual(["token", "region", "cancel"]);
+    expect(runtime.openTokenPage).toHaveBeenCalledTimes(browser ? 2 : 0);
+    if (browser) expect(vi.mocked(runtime.openTokenPage).mock.calls).toEqual([["au"], ["us"]]);
+  });
+
+  it.each(["network", "upstream"])("retries a %s failure without asking for the token again", async (kind) => {
+    const tokenFile = await tokenPath("edstem-retry-");
+    const { fetch, runtime, stdout } = makeRuntime(200, false, fixture("user_info"), { tokenFile });
+    if (kind === "network") fetch.mockRejectedValueOnce(new DOMException("Timed out", "TimeoutError"));
+    else fetch.mockResolvedValueOnce(new Response("{}", { status: 500 }));
+    runtime.interactive = true;
+    const ui = loginUi();
+    ui.select.mockResolvedValueOnce("retry");
+    await createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--region", "eu", "--json"]);
+    expect(ui.password).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls.map(([, init]) => (init?.headers as Record<string, string>).Authorization))
+      .toEqual(["Bearer picked-token", "Bearer picked-token"]);
+    expect(ui.spin.error).toHaveBeenCalledWith(kind === "network"
+      ? "Could not reach Ed. Check your connection; the token has not been rejected."
+      : "Ed could not complete verification. The token has not been verified.");
+    expect(runtime.openTokenPage).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(stdout.join(""))).toMatchObject({ authenticated: true, region: "eu" });
+  });
+
+  it("lets users replace a rejected token without leaving login", async () => {
+    const tokenFile = await tokenPath("edstem-replace-token-");
+    const { fetch, runtime } = makeRuntime(200, false, fixture("user_info"), { tokenFile });
+    fetch.mockResolvedValueOnce(new Response('{"code":"bad_token"}', { status: 401 }));
+    const ui = loginUi();
+    ui.select.mockResolvedValueOnce("token");
+    ui.password.mockResolvedValueOnce("bad-token").mockResolvedValueOnce("new-token");
+    await createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--region", "eu", "--json"]);
+    expect(ui.password).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "new-token", region: "eu" });
+  });
+
+  it("preserves saved credentials when recovery is cancelled", async () => {
+    const tokenFile = await tokenPath("edstem-cancel-recovery-");
+    await writeTokenFile(tokenFile);
+    const { runtime, stdout } = makeRuntime(401, false, fixture("user_info"), { tokenFile });
+    const ui = loginUi();
+    ui.select.mockResolvedValueOnce("cancel");
+    await expect(createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--region", "eu", "--json"]))
+      .rejects.toMatchObject({ code: "cancelled" });
+    expect(await readFile(tokenFile, "utf8")).toBe("saved-token\n");
+    expect(stdout).toEqual([]);
+  });
+
+  it("propagates configuration errors instead of repeatedly asking for tokens", async () => {
+    const { runtime } = makeRuntime();
+    runtime.createClientForToken = vi.fn().mockRejectedValue(new CliError("config", "Invalid local config"));
+    const ui = loginUi();
+    await expect(createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--region", "eu", "--json"]))
+      .rejects.toMatchObject({ code: "config" });
+    expect(ui.select).not.toHaveBeenCalled();
+    expect(ui.password).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails promptly on a network error with stdin input and preserves existing credentials", async () => {
+    const tokenFile = await tokenPath("edstem-stdin-network-");
+    await writeTokenFile(tokenFile);
+    const { runtime, fetch, stderr } = makeRuntime(200, false, fixture("user_info"), { tokenFile, stdinLine: "new-token" });
+    fetch.mockRejectedValueOnce(new Error("Connection refused"));
+    expect(await run(["node", "edstem", "auth", "login", "--region", "us", "--token-stdin", "--json"], runtime)).toBe(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(runtime.openTokenPage).not.toHaveBeenCalled();
+    expect(JSON.parse(stderr.join(""))).toMatchObject({ error: { code: "network" } });
+    expect(await readFile(tokenFile, "utf8")).toBe("saved-token\n");
+  });
+
+  it("warns about all environment overrides before verifying without printing their values", async () => {
+    const tokenFile = await tokenPath("edstem-overrides-");
+    const { fetch, runtime, stderr } = makeRuntime(200, false, fixture("user_info"), { tokenFile, stdinLine: "new-token" });
+    vi.stubEnv("EDSTEM_TOKEN", "secret-token-value");
+    vi.stubEnv("EDSTEM_REGION", "au");
+    vi.stubEnv("EDSTEM_BASE_URL", "https://proxy.example/api/?secret=value");
+    const write = vi.spyOn(runtime, "writeStderr");
+    try {
+      expect(await run(["node", "edstem", "auth", "login", "--region", "eu", "--token-stdin", "--json"], runtime)).toBe(0);
+      expect(write.mock.invocationCallOrder.at(-1)).toBeLessThan(fetch.mock.invocationCallOrder[0]!);
+      expect(stderr.join("")).toContain("EDSTEM_TOKEN is set and takes precedence");
+      expect(stderr.join("")).toContain("EDSTEM_REGION is set and overrides the saved region");
+      expect(stderr.join("")).toContain("EDSTEM_BASE_URL is set and overrides the API endpoint for verification");
+      expect(stderr.join("")).not.toContain("secret-token-value");
+      expect(stderr.join("")).not.toContain("secret=value");
+      expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "new-token", region: "eu" });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 
   it("saves and verifies a token read from stdin", async () => {
     vi.stubEnv("EDSTEM_TOKEN", undefined);
