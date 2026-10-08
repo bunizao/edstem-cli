@@ -116,8 +116,12 @@ uncapped export pagination, interrupted export recovery, and forced replacement.
 The current Ed web bundle confirms the endpoint paths, `watch` body shape, and
 boolean watch values (the interface calls `setWatch(true)` and passes that state
 unchanged to the request).
-Live mutation probes are still pending a user-selected test thread; release must
-wait for the live endpoint acceptance gate, including watch state validation.
+Live probes on 2026-10-08 (AU, one existing announcement, restored afterwards)
+confirmed `star`/`unstar`, `watch`/`unwatch` with boolean `state`, and
+`read`/`unread`: each returned 204 and `threads show` or `--unread` reflected the
+change; repeated actions sent no write. Ed also accepts `{ "state": null }` on
+`watch`, which restores the course default. `upvote`/`unvote` and `read_all` were
+not probed live, because a vote is visible to others and `read_all` cannot be undone.
 
 Final local checks: `npm run check`, `npm run build:local`, deterministic skill
 regeneration, and `npm test` passed (220 Node, 22 remote, 10 Worker tests).
