@@ -8,7 +8,10 @@ import type { EdClient } from "./ed/client.js";
 import type { UserWithCourses } from "./ed/models.js";
 import { ED_REGIONS, isEdRegion, parseRegion, type EdRegion } from "./regions.js";
 
-export const TOKEN_HELP_URL = "https://edstem.org/settings/api-tokens";
+// The region is unknown until a token has been tried, so without one point at AU and name the others.
+export function tokenPageHint(region?: EdRegion): string {
+  return region ? ED_REGIONS[region].tokenUrl : `${ED_REGIONS.au.tokenUrl} (US or EU: us.edstem.org or eu.edstem.org)`;
+}
 
 export type TokenSource = "environment" | "file";
 export type RegionSource = TokenSource | "default";
@@ -97,7 +100,7 @@ export async function loadTokenWithSource(options: TokenSourceOptions = {}): Pro
 
   throw new CliError(
     "auth",
-    `No Ed token found. Run edstem auth login, set EDSTEM_TOKEN, or create ${tokenFile}. Get a token at ${TOKEN_HELP_URL}.`
+    `No Ed token found. Run edstem auth login, set EDSTEM_TOKEN, or create ${tokenFile}. Get a token at ${tokenPageHint(environmentRegion)}.`
   );
 }
 
@@ -144,7 +147,7 @@ export async function removeToken(tokenFile = defaultTokenFile()): Promise<boole
 export async function promptHiddenToken(): Promise<string> {
   const ui = createUi({ input: process.stdin, output: process.stderr });
   if (!ui.interactive) throw new CliError("auth", "Interactive token input requires a terminal");
-  ui.info(`Create a token at ${TOKEN_HELP_URL}.`);
+  ui.info(`Create a token at ${tokenPageHint()}.`);
   const token = await ui.password("Paste your Ed token").catch((error: unknown) => {
     throw error instanceof CliError && error.code === "cancelled" ? new CliError("auth", "Token input cancelled") : error;
   });

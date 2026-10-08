@@ -80,6 +80,16 @@ describe("auth, config, and output", () => {
     expect((await stat(tokenFile)).mode & 0o777).toBe(0o600);
   });
 
+  it("points the missing-token error at the token page of the environment region", async () => {
+    const tokenFile = join(await mkdtemp(join(tmpdir(), "edstem-missing-")), "token");
+    await expect(loadTokenWithSource({ env: { EDSTEM_REGION: "us" }, tokenFile })).rejects.toMatchObject({
+      code: "auth", message: expect.stringContaining(`Get a token at ${ED_REGIONS.us.tokenUrl}.`),
+    });
+    await expect(loadTokenWithSource({ env: {}, tokenFile })).rejects.toMatchObject({
+      code: "auth", message: expect.stringContaining(`Get a token at ${ED_REGIONS.au.tokenUrl} (US or EU:`),
+    });
+  });
+
   it("normalizes the configured fetch count", async () => {
     const directory = await mkdtemp(join(tmpdir(), "edstem-config-"));
     const configFile = join(directory, "config.yaml");

@@ -28,13 +28,13 @@ import type { Command } from "commander";
 import { readFile } from "node:fs/promises";
 
 import {
-  TOKEN_HELP_URL,
   defaultTokenFile,
   detectRegion,
   loadTokenWithSource,
   promptEdRegion,
   removeToken,
   saveToken,
+  tokenPageHint,
 } from "./auth.js";
 import { EDSTEM_TAGLINE, EDSTEM_WORDMARK, showWordmark } from "./wordmark.js";
 import { commandsJson, mutating } from "./commands.js";
@@ -219,7 +219,7 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
       const explicitRegion: EdRegion | undefined = command.opts().region ?? environmentRegion();
       const token = command.opts().tokenStdin
         ? (await runtime.readStdinLine()).trim()
-        : await askForToken(ui, runtime.tokenFile);
+        : await askForToken(ui, runtime.tokenFile, explicitRegion);
       if (!token) throw new CliError("auth", "No Ed token provided.");
 
       const { region, user } = await identifyToken(token, runtime.createClientForToken, {
@@ -716,8 +716,8 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
 }
 
 // Where a token comes from and where it goes, then the token itself, echoed as dots.
-async function askForToken(ui: Ui, tokenFile: string): Promise<string> {
-  ui.note(`Ed needs a personal API token.\nCreate one at ${TOKEN_HELP_URL} and paste it below.\nIt is saved to ${tokenFile}.`, "Ed token");
+async function askForToken(ui: Ui, tokenFile: string, region?: EdRegion): Promise<string> {
+  ui.note(`Ed needs a personal API token.\nCreate one at ${tokenPageHint(region)} and paste it below.\nIt is saved to ${tokenFile}.`, "Ed token");
   return (await ui.password("Ed API token")).trim();
 }
 
@@ -754,7 +754,7 @@ export async function onboardToken(ui: Ui, tokenFile: string, verify: CliRuntime
   showWordmark(ui);
   const explicit = environmentRegion();
   for (;;) {
-    const token = await askForToken(ui, tokenFile);
+    const token = await askForToken(ui, tokenFile, explicit);
     if (!token) {
       ui.warn("Nothing was pasted.");
       continue;

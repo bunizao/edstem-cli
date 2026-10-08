@@ -1046,7 +1046,8 @@ describe("auth commands", () => {
       return region;
     });
     const password = vi.fn().mockResolvedValue(token);
-    return { select, password, ui: { ...createUi({ interactive: false }), interactive: true, select: select as never, password, note: vi.fn() } };
+    const note = vi.fn();
+    return { select, password, note, ui: { ...createUi({ interactive: false }), interactive: true, select: select as never, password, note } };
   }
 
   it.each(["au", "us", "eu"] as const)("detects the %s region from the token and saves it", async (region) => {
@@ -1112,6 +1113,27 @@ describe("auth commands", () => {
     expect(select).toHaveBeenCalledOnce();
     expect(fetch).toHaveBeenCalledTimes(4);
     expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({ token: "picked-token", region: "eu" });
+  });
+
+  it("links the AU token page and names the other hosts until the region is known", async () => {
+    vi.stubEnv("EDSTEM_REGION", "");
+    const accepting: EdRegion[] = ["us"];
+    const { runtime } = regionalRuntime(accepting, { tokenFile: await tokenPath("edstem-note-generic-") });
+    runtime.interactive = true;
+    const { note, ui } = pickerUi("us", accepting);
+    await createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--json"]);
+    expect(note.mock.calls[0]![0]).toContain(`${ED_REGIONS.au.tokenUrl} (US or EU: us.edstem.org or eu.edstem.org)`);
+  });
+
+  it("links only the token page of an explicit region", async () => {
+    vi.stubEnv("EDSTEM_REGION", "");
+    const accepting: EdRegion[] = ["eu"];
+    const { runtime } = regionalRuntime(accepting, { tokenFile: await tokenPath("edstem-note-region-") });
+    runtime.interactive = true;
+    const { note, ui } = pickerUi("eu", accepting);
+    await createProgram(runtime, ui).parseAsync(["node", "edstem", "auth", "login", "--region", "eu", "--json"]);
+    expect(note.mock.calls[0]![0]).toContain(`Create one at ${ED_REGIONS.eu.tokenUrl} and paste`);
+    expect(note.mock.calls[0]![0]).not.toContain("us.edstem.org");
   });
 
   it("skips detection when EDSTEM_REGION names the region", async () => {

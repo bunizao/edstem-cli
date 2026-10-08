@@ -39,7 +39,7 @@ export EDSTEM_REGION="au" # au, us, or eu
 edstem auth status
 ```
 
-Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens) while signed in to the Ed region you use. `edstem auth login` prompts for the token without echoing it, then detects the region by trying the token against AU, US, and EU, and asks you to pick one only if it cannot tell (the token is accepted nowhere or in more than one). It verifies the token against that region before saving `{ "token": "...", "region": "au" }` together in `~/.config/edstem-cli/token` with `0600` permissions. Subsequent CLI commands and the local stdio MCP server use the saved region automatically. Existing plain-text token files remain supported and default to AU.
+Create a token at [edstem.org/settings/api-tokens](https://edstem.org/settings/api-tokens) while signed in to the Ed region you use (`us.edstem.org` or `eu.edstem.org` for US and EU). `edstem auth login` prompts for the token without echoing it, then detects the region by trying the token against AU, US, and EU, and asks you to pick one only if it cannot tell (the token is accepted nowhere or in more than one). It verifies the token against that region before saving `{ "token": "...", "region": "au" }` together in `~/.config/edstem-cli/token` with `0600` permissions. Subsequent CLI commands and the local stdio MCP server use the saved region automatically. Existing plain-text token files remain supported and default to AU.
 
 | Region | API endpoint |
 | --- | --- |
