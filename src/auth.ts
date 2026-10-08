@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readFile, rename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -88,8 +88,21 @@ export async function loadTokenWithSource(options: TokenSourceOptions = {}): Pro
 
 export async function saveToken(token: string, tokenFile = defaultTokenFile(), region: EdRegion = "au"): Promise<void> {
   await mkdir(dirname(tokenFile), { recursive: true, mode: 0o700 });
-  await writeFile(tokenFile, `${JSON.stringify({ token, region })}\n`, { encoding: "utf8", mode: 0o600 });
-  await chmod(tokenFile, 0o600);
+  const temporaryDirectory = await mkdtemp(join(dirname(tokenFile), ".token-"));
+  const temporaryFile = join(temporaryDirectory, "token");
+  try {
+    const file = await open(temporaryFile, "wx", 0o600);
+    try {
+      await file.writeFile(`${JSON.stringify({ token, region })}\n`, "utf8");
+      await file.sync();
+    } finally {
+      await file.close();
+    }
+    // The temporary file is on the same filesystem, so readers see a complete old or new file.
+    await rename(temporaryFile, tokenFile);
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
 }
 
 /**
