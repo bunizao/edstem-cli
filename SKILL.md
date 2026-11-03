@@ -39,7 +39,7 @@ user for numeric ids when a code or a `UNIT#N` thread number will do.
 | is my token working | `edstem auth status` |  |
 
 MCP clients use the tool with the same noun: `list_threads`, `get_course_thread`,
-`list_lessons`, `list_lesson_files`, `list_slide_questions`. Every `courseId` accepts
+`list_lessons`, `list_grades`, `list_lesson_files`, `list_slide_questions`. Every `courseId` accepts
 the same `UNIT` reference, so no `list_courses` call is needed first.
 
 ## Agent rules
@@ -133,6 +133,7 @@ Run `edstem commands --json` for machine-readable metadata, including aliases, e
 | get_user | Who is signed in and the courses they can see. Use when a request is vague or you need to learn how this Ed site names its courses. Not for course details beyond id, code, name and status (same list as list_courses). Then pass a course id or code to any courseId argument. Cost: small. |
 | list_courses | Enrolled courses with id, code, name and status; archived courses omitted unless includeArchived. Use when the user asks what they are enrolled in, or names a course you cannot resolve. Then use the id or the code exactly as returned as courseId. Cost: small. |
 | list_lessons | Compact lesson summaries for one course: id, title, module, type, state, progress. Use when the user asks which lessons, modules or weeks exist, or what is unfinished. Call without filters first; an empty list means the course has no Ed Lessons. Filters are case-insensitive; pass all or omit a filter to include every value. courseId accepts a numeric ID, a unit code, or part of the unit name. Then get_lesson for slides, list_lesson_files for downloads, mark_lessons_read to update progress. Cost: about 100 bytes per lesson. |
+| list_grades | The user's own grades on the lessons of one course that take submissions, judged on the final submission: status (graded, ungraded, unreleased, not_submitted or unavailable), grade, max and submittedAt. Use when the user asks what they got, whether work is marked yet, or which assessed lessons they have not submitted. Not for lesson progress (list_lessons). queries are words that must all appear in the lesson or module name; omit them for every such lesson. max is the sum of Ed's slide totals; unreleased means staff have not released results. courseId accepts a numeric ID, a unit code, or part of the unit name. Cost: two Ed requests, plus two per submitted lesson. |
 | get_lesson | One lesson with its slides and slide content. Use when the user asks what a lesson says or you need a slide id. Not for downloadable files (list_lesson_files) or quiz questions (list_slide_questions). lessonId comes from list_lessons. Cost: large for long lessons. |
 | list_lesson_files | Ed-hosted downloadable files and direct resource links for one lesson, returned as resource links. Use when the user wants slides, PDFs or attachments. Not for external links inside lesson text (get_lesson). lessonId comes from list_lessons. Cost: small. |
 | list_slide_questions | Quiz questions for one lesson slide with one-based choice numbers. Use when the user wants to see or answer a quiz. slideId comes from get_lesson. Then submit_slide_answer per question, then submit_slide. Cost: small. |

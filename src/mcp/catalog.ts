@@ -15,6 +15,10 @@ export const MCP_TOOL_CATALOG = [
     "Compact lesson summaries for one course: id, title, module, type, state, progress. Use when the user asks which lessons, modules or weeks exist, or what is unfinished. Call without filters first; an empty list means the course has no Ed Lessons. Filters are case-insensitive; pass all or omit a filter to include every value. courseId accepts a numeric ID, a unit code, or part of the unit name. Then get_lesson for slides, list_lesson_files for downloads, mark_lessons_read to update progress. Cost: about 100 bytes per lesson.",
   ],
   [
+    "list_grades",
+    "The user's own grades on the lessons of one course that take submissions, judged on the final submission: status (graded, ungraded, unreleased, not_submitted or unavailable), grade, max and submittedAt. Use when the user asks what they got, whether work is marked yet, or which assessed lessons they have not submitted. Not for lesson progress (list_lessons). queries are words that must all appear in the lesson or module name; omit them for every such lesson. max is the sum of Ed's slide totals; unreleased means staff have not released results. courseId accepts a numeric ID, a unit code, or part of the unit name. Cost: two Ed requests, plus two per submitted lesson.",
+  ],
+  [
     "get_lesson",
     "One lesson with its slides and slide content. Use when the user asks what a lesson says or you need a slide id. Not for downloadable files (list_lesson_files) or quiz questions (list_slide_questions). lessonId comes from list_lessons. Cost: large for long lessons.",
   ],
