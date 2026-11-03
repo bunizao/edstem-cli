@@ -75,4 +75,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          body_path: .github/release-notes/0.8.2.md
+          body_path: .github/release-notes/0.8.3.md
