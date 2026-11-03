@@ -30,6 +30,7 @@ user for numeric ids when a code or a `UNIT#N` thread number will do.
 | my posts / did anyone reply to me | `edstem activity [UNIT]` |  |
 | which lessons, weeks or modules exist / what's unfinished | `edstem lessons UNIT` | then `--status unattempted` or `--module <text>` |
 | what's in a lesson / the slides | `edstem lessons show <lesson id>` | lesson id from `edstem lessons UNIT` |
+| my grades / what did I get for an assignment | `edstem grades UNIT [words...]` | own final submissions only; `max` is the sum of Ed's slide totals; `unreleased` until staff release results |
 | download the slides / files | `edstem files get <lesson id> --dest DIR` | `files list` first to see what exists |
 | quiz questions / what did I answer | `edstem slides show <slide id> --section questions` | `--section responses` for saved answers |
 | mark lessons as read or complete (only when asked) | `edstem lessons mark-read UNIT [words...] --dry-run` | then repeat with `--yes` |
@@ -106,6 +107,8 @@ credentials or the endpoint, without printing their values.
 | edstem lessons show | Show one lesson and its slides. | <lesson> |  | no |
 | edstem lessons read | Read a lesson and its slides as Markdown. | <lesson> |  | no |
 | edstem lessons mark-read | Mark matching lessons and slides as read. | <unit> [queries...] | --all<br>--delay <seconds> | yes |
+| edstem grades | List your own grades. |  |  | no |
+| edstem grades list | List your own final-submission grades in a unit; max is the sum of Ed's slide totals. Read-only. | <unit> [queries...] |  | no |
 | edstem slides | Show, read, or submit lesson slides. |  |  | no |
 | edstem slides show | Show slide content, questions, responses, or quiz context. | <slide> | --section <section> | no |
 | edstem slides read | Read one slide as Markdown. | <slide> |  | no |

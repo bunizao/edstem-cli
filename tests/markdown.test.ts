@@ -163,6 +163,7 @@ function lesson(overrides: Partial<Lesson> = {}): Lesson {
     solutionsAt: "",
     state: "",
     status: "open",
+    submittedAt: "",
     title: "Week 1",
     type: "lesson",
     updatedAt: "",

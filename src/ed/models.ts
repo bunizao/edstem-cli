@@ -75,6 +75,8 @@ export interface Lesson {
   dueAt: string;
   lockedAt: string;
   solutionsAt: string;
+  /** When the signed-in user last submitted, from the lesson list; empty if they never did. */
+  submittedAt: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -100,6 +102,44 @@ export interface LessonQuestionResponse {
   createdAt: string;
   correct: boolean | null;
   data: unknown;
+}
+
+export interface LessonAttempt {
+  id: number;
+  lessonId: number;
+  userId: number;
+  submittedAt: string;
+  /** A staff-set final mark that replaces the calculated one; may be zero. */
+  markOverride: number | null;
+}
+
+export interface LessonAttempts {
+  attempts: LessonAttempt[];
+  /** The attempt Ed marks, or null when nothing was submitted. */
+  finalId: number | null;
+}
+
+export interface LessonMarkingStatus {
+  userId: number;
+  mark: number | null;
+  /** Maximum points per markable slide; empty when Ed's totals are missing or unreadable. */
+  slideTotals: number[];
+  /** Everyone still unmarked; only used to check the requesting user. */
+  unmarkedUserIds: number[];
+}
+
+export type GradeStatus = "graded" | "ungraded" | "unreleased" | "not_submitted" | "unavailable";
+
+export interface Grade {
+  lessonId: number;
+  title: string;
+  status: GradeStatus;
+  grade: number | null;
+  /** Derived: the sum of Ed's slide totals for the lesson. */
+  max: number | null;
+  submittedAt: string;
+  /** Why Ed could not report this lesson, when status is unavailable. */
+  error?: string;
 }
 
 export interface ThreadMetrics {

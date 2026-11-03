@@ -52,6 +52,7 @@ Ask in plain language, or run the command yourself:
 | “Find threads about the deadline.” | `edstem threads search UNIT deadline` |
 | “Read thread 42 for me.” | `edstem threads read UNIT#42` |
 | “What lessons are left in week 2?” | `edstem lessons UNIT --module "Week 2"` |
+| “What did I get for assignment 1?” | `edstem grades UNIT assignment 1` |
 | “Download this lesson's slides.” | `edstem files get LESSON --dest ./slides` |
 | “Archive the whole forum.” | `edstem threads export UNIT --dest ./archive` |
 

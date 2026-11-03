@@ -22,6 +22,7 @@ import {
   type NounSpec,
   type OutputFormat,
   type Theme,
+  type Tone,
   type Ui,
 } from "@bunizao/cli-kit";
 import type { Command } from "commander";
@@ -49,6 +50,7 @@ import {
   assertCommentInThread,
   defaultReplyType,
   listCurrentActivity,
+  listGrades,
   listLessons,
   listThreads,
   parseSinceValue,
@@ -63,6 +65,7 @@ import {
   projectComment,
   projectCourse,
   projectIdentity,
+  projectGrade,
   projectLessonDetail,
   projectLessonSummary,
   projectQuestion,
@@ -139,6 +142,12 @@ const NOUNS: readonly NounSpec[] = [
     valueFlags: ["--module", "--type", "--state", "--status", "--delay"],
   },
   {
+    name: "grades",
+    verbs: ["list"],
+    // A unit followed by query words; a longer query needs `list` typed explicitly.
+    defaultByArity: Object.fromEntries(Array.from({ length: 33 }, (_, arity) => [arity, "list"])),
+  },
+  {
     name: "slides",
     verbs: ["show", "read", "submit"],
     defaultByArity: { 1: "show" },
@@ -154,7 +163,7 @@ const NOUNS: readonly NounSpec[] = [
 
 // Grouped the way `gh` does: what a person reaches for daily, then the rest, then what only an agent runs.
 const HELP_SECTIONS: Readonly<Record<string, readonly string[]>> = {
-  "Core commands": ["threads", "replies", "lessons", "slides", "files", "units"],
+  "Core commands": ["threads", "replies", "lessons", "grades", "slides", "files", "units"],
   "Additional commands": ["user", "activity", "auth", "update"],
   "Agent commands": ["commands", "skills"],
 };
@@ -552,6 +561,15 @@ export function createProgram(runtime?: CliRuntime, ui: Ui = createUi({ interact
           delaySeconds: command.opts().delay,
         })
     )));
+
+  const grades = program.command("grades").description("List your own grades.");
+  grades.command("list")
+    .description("List your own final-submission grades in a unit; max is the sum of Ed's slide totals. Read-only.")
+    .argument("<unit>", "Unit ID or code", unitIdentifier)
+    .argument("[queries...]", "Words required in lesson or module names")
+    .action(outputAction(runtime, async (client, _command, unit: string, queries: string[]) =>
+      (await listGrades(client, unit, queries)).map(projectGrade)
+    ));
 
   const slides = program.command("slides").description("Show, read, or submit lesson slides.");
   slides.command("show")
@@ -1006,6 +1024,9 @@ const TABLE_COLUMNS: Readonly<Record<string, readonly [string, string][]>> = {
   activity: [["kind", "kind"], ["courseCode", "unit"], ["title", "title"], ["createdAt", "created"]],
 };
 
+// Grade statuses the shared vocabulary does not know; its own words already cover the rest.
+const STATUS_TONES: Readonly<Record<string, Tone>> = { unavailable: "danger", unreleased: "warning" };
+
 function commandPath(command: Command): string {
   const names: string[] = [];
   for (let current: Command | null = command; current?.parent; current = current.parent) {
@@ -1029,6 +1050,7 @@ async function writeValue(runtime: CliRuntime, command: Command, value: unknown)
       columns: fields?.length ? undefined : TABLE_COLUMNS[commandPath(command)],
       width: runtime.columns,
       pretty: runtime.isTTY,
+      tones: STATUS_TONES,
       ...(theme ? { theme } : {}),
     }),
     options.output,

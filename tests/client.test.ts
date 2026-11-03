@@ -350,3 +350,75 @@ describe("EdClient", () => {
     expect(fetch.mock.calls[0]?.[1]?.method).toBe("PUT");
   });
 });
+
+describe("EdClient lesson results", () => {
+  it("reads a user's lesson attempts and final submission", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(jsonResponse({
+      attempts: [
+        { id: 31, lesson_id: 7001, user_id: 12345, submitted_at: "2026-03-01T10:00:00.123456+11:00" },
+        { id: 32, lesson_id: 7001, mark_override: 6, user_id: 12345, submitted_at: "2026-03-02T10:00:00+11:00" },
+      ],
+      final_id: 32,
+    }));
+    const client = new EdClient({ apiBaseUrl: "https://ed.example/api", fetch, token: "secret" });
+
+    const result = await client.fetchLessonAttempts(7001, 12345);
+
+    expect(String(fetch.mock.calls[0]?.[0])).toBe("https://ed.example/api/lessons/7001/attempts/12345");
+    expect(result).toEqual({
+      attempts: [
+        { id: 31, lessonId: 7001, markOverride: null, submittedAt: "2026-03-01T10:00:00.123456+11:00", userId: 12345 },
+        { id: 32, lessonId: 7001, markOverride: 6, submittedAt: "2026-03-02T10:00:00+11:00", userId: 12345 },
+      ],
+      finalId: 32,
+    });
+  });
+
+  it("reports no final submission as null", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(jsonResponse({ attempts: [], final_id: null }));
+    const client = new EdClient({ fetch, token: "secret" });
+
+    await expect(client.fetchLessonAttempts(7001, 12345)).resolves.toEqual({ attempts: [], finalId: null });
+  });
+
+  it("reads the marking status of one attempt", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(jsonResponse({
+      attempt_result: { email: "alice@university.edu", mark: 7.5, name: "Alice", user_id: 12345 },
+      lesson_markable_marking_status: [
+        { lesson_markable_id: 1, unmarked_user_ids: [999] },
+        { lesson_markable_id: 2, unmarked_user_ids: [] },
+      ],
+      slide_totals: { 10: 4, 11: 6 },
+    }));
+    const client = new EdClient({ apiBaseUrl: "https://ed.example/api", fetch, token: "secret" });
+
+    const result = await client.fetchLessonMarkingStatus(7001, 32);
+
+    expect(String(fetch.mock.calls[0]?.[0])).toBe("https://ed.example/api/lessons/7001/marking_status?attempt=32");
+    expect(result).toEqual({ mark: 7.5, slideTotals: [4, 6], unmarkedUserIds: [999], userId: 12345 });
+  });
+
+  it("reports no slide totals when any total is unreadable", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(jsonResponse({
+      attempt_result: { mark: 7.5, user_id: 12345 },
+      slide_totals: { 10: 4, 11: "six" },
+    }));
+    const client = new EdClient({ fetch, token: "secret" });
+
+    await expect(client.fetchLessonMarkingStatus(7001, 32)).resolves.toMatchObject({ slideTotals: [] });
+  });
+
+  it("keeps Ed's error code on API errors", async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(
+      jsonResponse({ code: "results_unreleased", message: "Results are not released" }, 403)
+    );
+    const client = new EdClient({ fetch, token: "secret" });
+
+    await expect(client.fetchLessonMarkingStatus(7001, 32)).rejects.toMatchObject({
+      code: "results_unreleased",
+      kind: "api",
+      message: "Ed API error (HTTP 403): Results are not released",
+      statusCode: 403,
+    });
+  });
+});

@@ -2,6 +2,9 @@ import type {
   Comment,
   Course,
   Lesson,
+  LessonAttempt,
+  LessonAttempts,
+  LessonMarkingStatus,
   LessonModule,
   LessonQuestion,
   LessonQuestionResponse,
@@ -13,15 +16,19 @@ import type {
 } from "./models.js";
 
 export class EdApiError extends Error {
+  /** Ed's own error code, such as results_unreleased; empty when Ed sent none. */
+  readonly code: string;
   readonly kind: "api" | "auth_expired" | "base_url" | "network" | "upstream";
   readonly statusCode: number;
 
   constructor(
     kind: "api" | "auth_expired" | "base_url" | "network" | "upstream",
     statusCode: number,
-    message: string
+    message: string,
+    code = ""
   ) {
     super(message);
+    this.code = code;
     this.kind = kind;
     this.name = "EdApiError";
     this.statusCode = statusCode;
@@ -209,6 +216,29 @@ export class EdClient {
       parseLesson(asRecord(entry), moduleNames)
     );
     return { lessons, modules };
+  }
+
+  async fetchLessonAttempts(lessonId: number, userId: number): Promise<LessonAttempts> {
+    const data = await this.get(`lessons/${lessonId}/attempts/${userId}`);
+    const finalId = asInt(data.final_id);
+    return {
+      attempts: asArray(data.attempts).map((entry) => parseLessonAttempt(asRecord(entry))),
+      finalId: finalId > 0 ? finalId : null
+    };
+  }
+
+  async fetchLessonMarkingStatus(lessonId: number, attemptId: number): Promise<LessonMarkingStatus> {
+    const data = await this.get(`lessons/${lessonId}/marking_status`, { attempt: String(attemptId) });
+    const result = asRecord(data.attempt_result);
+    const totals = Object.values(asRecord(data.slide_totals)).map(asFiniteNumber);
+    return {
+      mark: asFiniteNumber(result.mark),
+      // One unreadable total makes the maximum unknown, so report none rather than a short sum.
+      slideTotals: totals.every((total): total is number => total !== null && total >= 0) ? totals : [],
+      unmarkedUserIds: asArray(data.lesson_markable_marking_status)
+        .flatMap((entry) => asArray(asRecord(entry).unmarked_user_ids).map(asInt)),
+      userId: asInt(result.user_id)
+    };
   }
 
   async fetchSlideQuestionResponses(slideId: number): Promise<LessonQuestionResponse[]> {
@@ -427,15 +457,15 @@ export class EdClient {
           `Authentication failed (HTTP ${response.status}). Check your Ed API token.`
         );
       }
-      throw new EdApiError("api", response.status, formatApiError(response.status, message));
+      throw new EdApiError("api", response.status, formatApiError(response.status, message), code);
     }
 
     if (response.status === 404) {
-      throw new EdApiError("api", response.status, message || `Not found: ${path}`);
+      throw new EdApiError("api", response.status, message || `Not found: ${path}`, code);
     }
 
     if (!response.ok) {
-      throw new EdApiError("upstream", response.status, formatApiError(response.status, message));
+      throw new EdApiError("upstream", response.status, formatApiError(response.status, message), code);
     }
 
     if (!rawBody.trim()) {
@@ -609,6 +639,16 @@ function parseLessonQuestion(data: Record<string, unknown>): LessonQuestion {
   };
 }
 
+function parseLessonAttempt(data: Record<string, unknown>): LessonAttempt {
+  return {
+    id: asInt(data.id),
+    lessonId: asInt(data.lesson_id),
+    markOverride: asFiniteNumber(data.mark_override),
+    submittedAt: asString(data.submitted_at),
+    userId: asInt(data.user_id)
+  };
+}
+
 function parseLessonQuestionResponse(data: Record<string, unknown>): LessonQuestionResponse {
   const correct = data.correct;
   return {
@@ -648,6 +688,7 @@ function parseLesson(
       asString(data.effective_solutions_at) || asString(data.solutions_at),
     state: asString(data.state),
     status: asString(data.status),
+    submittedAt: asString(data.submitted_at),
     title: asString(data.title),
     type: asString(data.type),
     updatedAt: asString(data.updated_at)
@@ -728,6 +769,10 @@ function parseComment(
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+function asFiniteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function asInt(value: unknown): number {

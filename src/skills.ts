@@ -23,6 +23,7 @@ const INTENTS: readonly (readonly [string, string, string])[] = [
   ["my posts / did anyone reply to me", "`edstem activity [UNIT]`", ""],
   ["which lessons, weeks or modules exist / what's unfinished", "`edstem lessons UNIT`", "then `--status unattempted` or `--module <text>`"],
   ["what's in a lesson / the slides", "`edstem lessons show <lesson id>`", "lesson id from `edstem lessons UNIT`"],
+  ["my grades / what did I get for an assignment", "`edstem grades UNIT [words...]`", "own final submissions only; `max` is the sum of Ed's slide totals; `unreleased` until staff release results"],
   ["download the slides / files", "`edstem files get <lesson id> --dest DIR`", "`files list` first to see what exists"],
   ["quiz questions / what did I answer", "`edstem slides show <slide id> --section questions`", "`--section responses` for saved answers"],
   ["mark lessons as read or complete (only when asked)", "`edstem lessons mark-read UNIT [words...] --dry-run`", "then repeat with `--yes`"],

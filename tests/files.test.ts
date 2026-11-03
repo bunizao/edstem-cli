@@ -204,6 +204,7 @@ function makeLesson(overrides: Partial<Lesson> = {}): Lesson {
     solutionsAt: "",
     state: "",
     status: "open",
+    submittedAt: "",
     title: "Lesson",
     type: "lesson",
     updatedAt: "",

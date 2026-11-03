@@ -1,6 +1,7 @@
 import type {
   Comment,
   Course,
+  Grade,
   Lesson,
   LessonModule,
   LessonQuestion,
@@ -85,6 +86,16 @@ export function projectLessonDetail(lesson: Lesson): JsonObject {
   if (lesson.slides.length > 0) {
     result.slides = lesson.slides.map((slide) => projectSlide(slide, { omitParents: true }));
   }
+  return result;
+}
+
+// An allowlist: Ed's result also names the student and lists other unmarked users.
+export function projectGrade(grade: Grade): JsonObject {
+  const result: JsonObject = { lessonId: grade.lessonId, title: grade.title, status: grade.status };
+  setNonEmpty(result, "grade", grade.grade);
+  setNonEmpty(result, "max", grade.max);
+  setNonEmpty(result, "submittedAt", normalizeTimestamp(grade.submittedAt));
+  setNonEmpty(result, "error", grade.error);
   return result;
 }
 

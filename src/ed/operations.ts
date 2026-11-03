@@ -1,4 +1,4 @@
-import type { EdClient } from "./client.js";
+import { EdApiError, EdAuthExpiredError, type EdClient } from "./client.js";
 import {
   filterThreads,
   hasThreadFilters,
@@ -6,7 +6,7 @@ import {
   parseSince,
   type ThreadFilterOptions,
 } from "./filter.js";
-import type { Comment, Course, Lesson, Thread } from "./models.js";
+import type { Comment, Course, Grade, Lesson, Thread } from "./models.js";
 
 /** Hard cap on Ed requests per filtered thread listing. */
 const THREAD_PAGE_CAP = 10;
@@ -373,10 +373,8 @@ export async function readLessons(
       "Give at least one query, or ask for all lessons, to mark lessons as read."
     );
   }
-  const lessons = (await listLessons(client, courseId)).filter((lesson) => {
-    const haystack = `${lesson.title} ${lesson.moduleName}`.toLowerCase();
-    return normalizedQueries.every((query) => haystack.includes(query));
-  });
+  const lessons = (await listLessons(client, courseId))
+    .filter((lesson) => matchesLessonQueries(lesson, normalizedQueries));
 
   const results: LessonReadResult[] = [];
   for (const lesson of lessons) {
@@ -446,4 +444,105 @@ function assertNonNegative(value: number, label: string): void {
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function matchesLessonQueries(lesson: Lesson, normalizedQueries: string[]): boolean {
+  const haystack = `${lesson.title} ${lesson.moduleName}`.toLowerCase();
+  return normalizedQueries.every((query) => haystack.includes(query));
+}
+
+/**
+ * List the signed-in user's own grades for a unit's submission lessons that match every
+ * query. Read-only: it never starts, saves, or submits an attempt.
+ */
+export async function listGrades(
+  client: EdClient,
+  courseId: CourseReference,
+  queries: string[]
+): Promise<Grade[]> {
+  const normalizedQueries = queries.map((query) => query.trim().toLowerCase()).filter(Boolean);
+  // Only "attempt" lessons take submissions; content lessons would cost two empty requests each.
+  const lessons = (await listLessons(client, courseId))
+    .filter((lesson) => lesson.kind === "attempt" && matchesLessonQueries(lesson, normalizedQueries));
+  if (lessons.length === 0) return [];
+
+  const { user } = await client.fetchUser();
+  return mapInOrder(lessons, GRADE_CONCURRENCY, async (lesson): Promise<Grade> => {
+    const empty = { grade: null, lessonId: lesson.id, max: null, submittedAt: "", title: lesson.title };
+    // The lesson list already carries the user's own submission time, so a lesson they never
+    // submitted needs no request. Submitted ones still do: only the attempts carry mark_override,
+    // and the list's latest attempt may not be the final submission after a lesson is reopened.
+    if (!lesson.submittedAt) return { ...empty, status: "not_submitted" };
+    try {
+      return { ...empty, ...await getGrade(client, lesson.id, user.id) };
+    } catch (error) {
+      // A rejected token or a lost connection fails every lesson, so stop instead.
+      if (error instanceof EdAuthExpiredError || (error instanceof EdApiError && error.kind === "network")) {
+        throw error;
+      }
+      return { ...empty, error: error instanceof Error ? error.message : String(error), status: "unavailable" };
+    }
+  });
+}
+
+/** How many lessons `listGrades` asks Ed about at once. */
+export const GRADE_CONCURRENCY = 3;
+
+/**
+ * Map `items` with at most `limit` calls in flight, keeping the input order. The first rejection
+ * rejects the whole map and no further items are started.
+ */
+async function mapInOrder<T, R>(items: T[], limit: number, map: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  let failed = false;
+  const worker = async (): Promise<void> => {
+    while (!failed && next < items.length) {
+      const index = next++;
+      try {
+        results[index] = await map(items[index] as T);
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+async function getGrade(
+  client: EdClient,
+  lessonId: number,
+  userId: number
+): Promise<Pick<Grade, "status"> & Partial<Grade>> {
+  const { attempts, finalId } = await client.fetchLessonAttempts(lessonId, userId);
+  if (finalId === null) return { status: "not_submitted" };
+
+  const final = attempts.find((attempt) => attempt.id === finalId);
+  if (!final || final.userId !== userId) {
+    throw new Error(`Ed returned a final submission for lesson ${lessonId} that does not belong to you.`);
+  }
+  const submittedAt = final.submittedAt;
+
+  let marking;
+  try {
+    marking = await client.fetchLessonMarkingStatus(lessonId, finalId);
+  } catch (error) {
+    // Ed answers 403 results_unreleased until staff release marks for the lesson.
+    if (error instanceof EdApiError && error.code === "results_unreleased") {
+      return { status: "unreleased", submittedAt };
+    }
+    throw error;
+  }
+  if (marking.userId !== userId) {
+    throw new Error(`Ed returned a result for lesson ${lessonId} that does not belong to you.`);
+  }
+  // Ed's web client shows the attempt's override in place of the calculated mark.
+  const grade = final.markOverride ?? marking.mark;
+  if (grade === null || (final.markOverride === null && marking.unmarkedUserIds.includes(userId))) {
+    return { status: "ungraded", submittedAt };
+  }
+  const max = marking.slideTotals.reduce((sum, total) => sum + total, 0);
+  return { grade, max: max > 0 ? max : null, status: "graded", submittedAt };
 }
