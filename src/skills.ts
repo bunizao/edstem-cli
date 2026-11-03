@@ -63,7 +63,7 @@ user for numeric ids when a code or a \`UNIT#N\` thread number will do.
 ${markdownTable(["The user says", "Run", "Notes"], INTENTS.map((row) => [...row]))}
 
 MCP clients use the tool with the same noun: \`list_threads\`, \`get_course_thread\`,
-\`list_lessons\`, \`list_lesson_files\`, \`list_slide_questions\`. Every \`courseId\` accepts
+\`list_lessons\`, \`list_grades\`, \`list_lesson_files\`, \`list_slide_questions\`. Every \`courseId\` accepts
 the same \`UNIT\` reference, so no \`list_courses\` call is needed first.
 
 ## Agent rules

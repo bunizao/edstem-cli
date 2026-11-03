@@ -410,7 +410,7 @@ export function renderAuthorizePage(
                 <div class="scope-row">
                   <input type="checkbox" checked disabled aria-label="Read access is required">
                   <div class="scope-copy">
-                    <strong>Read courses, lessons, threads, and activity</strong>
+                    <strong>Read courses, lessons, threads, activity, and your grades</strong>
                     <span>Required for every MCP request.</span>
                   </div>
                 </div>

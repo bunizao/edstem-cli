@@ -226,6 +226,54 @@ describe("stdio MCP adapter", () => {
     ]);
   });
 
+  it("lists the user's own grades without Ed's identifying fields", async () => {
+    const responses: Record<string, unknown> = {
+      "/api/courses/100/lessons": {
+        lessons: [
+          { id: 7001, kind: "attempt", module_id: 7, submitted_at: "2026-03-02T10:00:00+11:00", title: "Assignment 1" },
+          { id: 7002, kind: "attempt", module_id: 7, submitted_at: null, title: "Assignment 2" },
+          { id: 7003, kind: "content", module_id: 7, title: "Assignment notes" },
+        ],
+        modules: [{ id: 7, name: "Week 1" }],
+      },
+      "/api/lessons/7001/attempts/12345": {
+        attempts: [{ id: 32, lesson_id: 7001, submitted_at: "2026-03-02T10:00:00+11:00", user_id: 12345 }],
+        final_id: 32,
+      },
+      "/api/lessons/7001/marking_status": {
+        attempt_result: { email: "alice@university.edu", mark: 7.5, name: "Alice", user_id: 12345 },
+        lesson_markable_marking_status: [{ lesson_markable_id: 1, unmarked_user_ids: [999] }],
+        slide_totals: { 10: 4, 11: 6 },
+      },
+      "/api/user": fixture("user_info"),
+    };
+    const fetch = vi.fn<FetchLike>(async (input) => {
+      const body = responses[new URL(String(input)).pathname];
+      return body ? new Response(JSON.stringify(body), { status: 200 }) : new Response(null, { status: 404 });
+    });
+    const client = await connect(new EdClient({ fetch, token: "test-token" }));
+
+    const all = await client.callTool({ arguments: { courseId: 100 }, name: "list_grades" });
+
+    expect(all.isError).not.toBe(true);
+    expect(parseToolResult(all)).toEqual([
+      expect.objectContaining({ grade: 7.5, lessonId: 7001, max: 10, status: "graded", title: "Assignment 1" }),
+      { lessonId: 7002, status: "not_submitted", title: "Assignment 2" },
+    ]);
+    expect(JSON.stringify(all)).not.toMatch(/alice|999/i);
+    // Content lessons and lessons never submitted cost no grade requests.
+    expect(fetch.mock.calls.map(([input]) => new URL(String(input)).pathname)).not.toContain(
+      "/api/lessons/7002/attempts/12345"
+    );
+
+    fetch.mockClear();
+    const one = await client.callTool({ arguments: { courseId: 100, queries: ["assignment", "2"] }, name: "list_grades" });
+
+    expect(parseToolResult(one)).toEqual([{ lessonId: 7002, status: "not_submitted", title: "Assignment 2" }]);
+    // The user is cached from the first call, and the only match was never submitted.
+    expect(fetch.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual(["/api/courses/100/lessons"]);
+  });
+
   it("rejects ambiguous course codes before requesting course data", async () => {
     const identity = fixture("user_info") as {
       courses: Array<{ course: Record<string, unknown>; role: Record<string, unknown> }>;

@@ -15,6 +15,7 @@ import {
   defaultReplyType,
   EdInputError,
   listCurrentActivity,
+  listGrades,
   listLessons,
   listThreads,
   parseSinceValue,
@@ -25,6 +26,7 @@ import {
   projectActivity,
   projectComment,
   projectCourse,
+  projectGrade,
   projectIdentity,
   projectLessonDetail,
   projectLessonSummary,
@@ -131,7 +133,7 @@ const WIDGET_URI = "ui://edstem/widget.html";
  */
 export const WIDGET_VIEW_KEY = "edstem/view";
 const SERVER_INSTRUCTIONS = [
-  "Ed Discussion for one signed-in student: courses, forum threads and lessons.",
+  "Ed Discussion for one signed-in student: courses, forum threads, lessons and their own grades.",
   "Prefer the show_* tools when the answer would otherwise be a long list or table:",
   "show_forum_catchup for what the user missed, show_thread_activity for what the forum is about over time,",
   "show_lesson_progress for what is left in the lessons, show_lesson_guide to teach a lesson.",
@@ -203,6 +205,24 @@ export function createEdMcpServer(runtime: EdMcpRuntime): McpServer {
         (await listLessons(client, courseId, { lessonType, module, state, status }))
           .map(projectLessonSummary)
       )
+  );
+
+  server.registerTool(
+    "list_grades",
+    {
+      annotations: READ_ONLY,
+      description: toolDescription("list_grades"),
+      inputSchema: z.object({
+        courseId: COURSE_REFERENCE,
+        queries: z.array(z.string().trim().min(1)).max(10).optional().default([]).describe(
+          "Case-insensitive words that must all appear in the lesson title or module name; at most 10. Omit for every lesson that takes submissions."
+        ),
+      }),
+      title: "List grades",
+    },
+    async ({ courseId, queries }, extra) => runTool(runtime, extra, "read", async (client) =>
+      (await listGrades(client, courseId, queries)).map(projectGrade)
+    )
   );
 
   server.registerTool(
