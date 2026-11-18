@@ -294,7 +294,8 @@ export class EdClient {
       sort: options.sort ?? "new"
     });
     const threads = Array.isArray(data.threads) ? data.threads : Array.isArray(data) ? data : [];
-    return threads.map((entry) => parseThread(asRecord(entry)));
+    const users = buildUsersMap(asArray(data.users));
+    return threads.map((entry) => parseThread(asRecord(entry), users));
   }
 
   async fetchUser(): Promise<UserWithCourses> {
@@ -557,6 +558,11 @@ function buildUsersMap(entries: unknown[]): Map<number, User> {
   );
 }
 
+function embeddedUser(value: unknown): User | null {
+  const user = parseUser(asRecord(value));
+  return user.id > 0 ? user : null;
+}
+
 function parseUser(data: Record<string, unknown>): User {
   return {
     avatar: asString(data.avatar),
@@ -703,7 +709,8 @@ function parseThread(
   return {
     answers: asArray(data.answers).map((entry) => parseComment(asRecord(entry), usersMap)),
     category: asString(data.category),
-    author: usersMap.get(userId) ?? null,
+    // A thread list embeds its poster as `user`; a single thread lists them in `users`.
+    author: usersMap.get(userId) ?? embeddedUser(data.user),
     comments: asArray(data.comments).map((entry) => parseComment(asRecord(entry), usersMap)),
     content: asString(data.content),
     courseId: asInt(data.course_id),

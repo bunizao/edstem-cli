@@ -63,6 +63,19 @@ describe("EdClient", () => {
     expect(thread.answers[0]?.comments[0]?.document).toBe("Thanks, that worked!");
   });
 
+  it("resolves thread list authors from the embedded user or the users list", async () => {
+    const fetch = vi.fn<FetchLike>().mockImplementation(async () => jsonResponse({
+      threads: [
+        { id: 1, user_id: 7, user: { id: 7, name: "Tina Tutor", course_role: "tutor" } },
+        { id: 2, user_id: 8 },
+        { id: 3, user_id: 9 },
+      ],
+      users: [{ id: 8, name: "Sam Student", course_role: "student" }],
+    }));
+    const threads = await new EdClient({ fetch, token: "secret" }).fetchThreads(100);
+    expect(threads.map((thread) => thread.author?.courseRole ?? null)).toEqual(["tutor", "student", null]);
+  });
+
   it("preserves personal thread state, including the course watch default", async () => {
     const fetch = vi.fn<FetchLike>().mockImplementation(async () => jsonResponse({
       threads: [
