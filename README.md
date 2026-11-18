@@ -40,6 +40,7 @@ edstem units
 | Claude, ChatGPT or any web AI | Add `https://edstem.tuuhub.com/mcp` as a custom connector (edstem.org accounts; US and EU [deploy their own](https://unicorn.tuuhub.com/docs/developers/edstem)). [Remote MCP](https://unicorn.tuuhub.com/docs/edstem/mcp-server) |
 | Claude Code, Codex, Cursor | Run `edstem-mcp`, or install the [agent skill](https://unicorn.tuuhub.com/docs/edstem/reference/skills). |
 | Your terminal and scripts | `edstem` prints tables in a terminal and JSON in a pipe. [Scripting](https://unicorn.tuuhub.com/docs/developers/edstem) |
+| Your own Worker or Node code | `import { EdClient } from "edstem-cli/core"`, pass your API token, then `fetchUser()`, `fetchThreads(courseId)`, `fetchThread(id)` and the rest. |
 
 ## Study Boooooooooost
 
