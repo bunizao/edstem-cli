@@ -1,0 +1,74 @@
+name: Preview comment
+
+# Runs from the default branch with a write token, so it never checks out or executes
+# pull request code. It reads only the finished run's artifact list and the PR itself.
+
+on:
+  workflow_run:
+    workflows: ["Preview build"]
+    types: [completed]
+
+permissions:
+  actions: read
+  pull-requests: write
+
+jobs:
+  comment:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Post install instructions
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const { owner, repo } = context.repo;
+
+            // Fork runs carry no pull_requests, so find the PR by its head branch and
+            // only comment when that PR still points at the commit this run built.
+            const { data: pulls } = await github.rest.pulls.list({
+              owner, repo, state: "open", head: `${run.head_repository.owner.login}:${run.head_branch}`,
+            });
+            const pull = pulls.find(candidate => candidate.head.sha === run.head_sha);
+            if (!pull) {
+              core.info(`No open pull request is at ${run.head_sha}; nothing to comment on.`);
+              return;
+            }
+
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, { owner, repo, run_id: run.id });
+            const pattern = /^edstem-cli-(\d+\.\d+\.\d+-pr\.\d+\.g[0-9a-f]{7})-npm$/u;
+            const artifact = artifacts.find(candidate => pattern.test(candidate.name) && !candidate.expired);
+            if (!artifact) {
+              core.setFailed("The preview run uploaded no npm package.");
+              return;
+            }
+            const version = pattern.exec(artifact.name)[1];
+
+            const marker = "<!-- edstem-cli-preview -->";
+            const body = [
+              marker,
+              `### Preview build \`${version}\``,
+              "",
+              `Built from ${run.head_sha.slice(0, 7)}. The download expires after 14 days and needs a GitHub sign-in.`,
+              "",
+              "**npm package** (needs Node 20 or later)",
+              "",
+              "```sh",
+              `gh run download ${run.id} -R ${owner}/${repo} -n edstem-cli-${version}-npm`,
+              `npm install -g ./edstem-cli-${version}.tgz`,
+              "edstem --version",
+              "```",
+              "",
+              `To leave the installed release alone, run the preview once with \`npx --package ./edstem-cli-${version}.tgz edstem <command>\`. Go back to the release with \`npm install -g edstem-cli@latest\`.`,
+              "",
+              `[npm package download](https://github.com/${owner}/${repo}/actions/runs/${run.id}/artifacts/${artifact.id}) · [run](${run.html_url})`,
+            ].join("\n");
+
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: pull.number });
+            const existing = comments.find(comment => comment.user?.login === "github-actions[bot]" && comment.body?.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number: pull.number, body });
+            }
