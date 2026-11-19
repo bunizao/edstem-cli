@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { messagePage } from "@bunizao/cli-kit/consent";
 
 import {
   createOAuthMetadata,
@@ -734,7 +735,7 @@ function handleSettings(runtime: Runtime, request: Request): Response {
   if (!session) {
     appendSessionCleanupCookies(headers, runtime.config.oauth, sessionState.reason);
     return createHtmlResponse(
-      renderSessionRequiredPage("settings", sessionState.reason),
+      renderSessionRequiredPage(sessionState.reason),
       401,
       headers
     );
@@ -772,7 +773,7 @@ async function handleSettingsRotate(
   if (!session) {
     appendSessionCleanupCookies(headers, runtime.config.oauth, sessionState.reason);
     return createHtmlResponse(
-      renderSessionRequiredPage("settings", sessionState.reason),
+      renderSessionRequiredPage(sessionState.reason),
       401,
       headers
     );
@@ -894,7 +895,7 @@ async function handleSettingsDelete(runtime: Runtime, request: Request): Promise
   if (!session) {
     appendSessionCleanupCookies(headers, runtime.config.oauth, sessionState.reason);
     return createHtmlResponse(
-      renderSessionRequiredPage("settings", sessionState.reason),
+      renderSessionRequiredPage(sessionState.reason),
       401,
       headers
     );
@@ -938,7 +939,7 @@ function handleReconnect(runtime: Runtime, request: Request): Response {
   if (!session) {
     appendSessionCleanupCookies(headers, runtime.config.oauth, sessionState.reason);
     return createHtmlResponse(
-      renderSessionRequiredPage("reconnect", sessionState.reason),
+      renderSessionRequiredPage(sessionState.reason),
       401,
       headers
     );
@@ -976,7 +977,7 @@ async function handleReconnectSubmit(
   if (!session) {
     appendSessionCleanupCookies(headers, runtime.config.oauth, sessionState.reason);
     return createHtmlResponse(
-      renderSessionRequiredPage("reconnect", sessionState.reason),
+      renderSessionRequiredPage(sessionState.reason),
       401,
       headers
     );
@@ -1540,49 +1541,19 @@ function appendSessionCleanupCookies(
   headers.append("Set-Cookie", buildExpiredCsrfCookie(config));
 }
 
-function renderSessionRequiredPage(
-  kind: "settings" | "reconnect",
-  reason: "missing" | "expired" | "invalid"
-): string {
-  const detail =
+function renderSessionRequiredPage(reason: "missing" | "expired" | "invalid"): string {
+  return messagePage(
+    "Sign in again",
     reason === "expired"
-      ? "Your browser session expired. Start a fresh OAuth sign-in, then come back."
+      ? "Your browser session expired. Connect Ed again from your AI app, then come back."
       : reason === "invalid"
-        ? "Your browser session is no longer valid. Start a fresh OAuth sign-in, then come back."
-        : "Open this page from a browser session that already authorized EdStem MCP.";
-  return renderStandalonePage({
-    body: `
-      <section class="card">
-        <div class="card-header">
-          <div class="eyebrow" translate="no">EdStem MCP</div>
-          <h1>Sign In Again</h1>
-          <p class="description">${escapeHtml(detail)}</p>
-        </div>
-        <div class="card-content">
-          <div class="meta-row">
-            <span class="meta-label">Return To</span>
-            <span class="meta-value mono" translate="no">${escapeHtml(kind)}</span>
-          </div>
-        </div>
-      </section>
-    `,
-    title: "Sign in first"
-  });
+        ? "Your browser session is no longer valid. Connect Ed again from your AI app, then come back."
+        : "Open this page in the browser you used to connect Ed to your AI app."
+  );
 }
 
 function renderDeletedPage(): string {
-  return renderStandalonePage({
-    body: `
-      <section class="card">
-        <div class="card-header">
-          <div class="eyebrow">Connection Removed</div>
-          <h1>Identity Deleted</h1>
-          <p class="description">Your encrypted Ed token and local session were removed from this service.</p>
-        </div>
-      </section>
-    `,
-    title: "Identity deleted"
-  });
+  return messagePage("Ed disconnected", "Your encrypted Ed token and this browser's session were removed from this server.");
 }
 
 function renderSettingsPage(options: {

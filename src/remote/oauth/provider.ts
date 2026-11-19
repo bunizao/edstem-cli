@@ -48,6 +48,7 @@ import {
   type AuthorizationCodeRecord,
   type RefreshTokenRecord
 } from "./sql-store.js";
+import { siteIcon } from "@bunizao/cli-kit/site-icon";
 
 const AUTHORIZATION_CODE_TTL_MS = 10 * 60 * 1000;
 
@@ -84,6 +85,7 @@ export class EdstemOAuthProvider {
   private readonly config: OAuthConfig;
   private readonly apiBaseUrl: string;
   private readonly credentials: CredentialsService;
+  private readonly icon: () => Promise<string | undefined>;
   private readonly logger: Logger;
   private readonly resourceUrl: URL;
   private readonly store: SqlOAuthStore;
@@ -92,6 +94,8 @@ export class EdstemOAuthProvider {
   constructor(dependencies: {
     config: AppConfig;
     credentials: CredentialsService;
+    /** Ed's icon for the authorize page; defaults to the one the Ed site serves. */
+    icon?: () => Promise<string | undefined>;
     logger: Logger;
     store: SqlOAuthStore;
     users: UsersService;
@@ -99,6 +103,7 @@ export class EdstemOAuthProvider {
     this.config = dependencies.config.oauth;
     this.apiBaseUrl = dependencies.config.apiBaseUrl;
     this.credentials = dependencies.credentials;
+    this.icon = dependencies.icon ?? (() => siteIcon(this.apiBaseUrl));
     this.logger = dependencies.logger;
     this.resourceUrl = resourceUrlFromServerUrl(this.config.mcpServerUrl);
     this.store = dependencies.store;
@@ -117,6 +122,7 @@ export class EdstemOAuthProvider {
     const requestedScopes = normalizeRequestedScopes(params.scopes, this.config);
     const canReuseSession = session ? canContinueWithSession(this.credentials, session.userId) : false;
     const csrf = ensureCsrfToken(request.headers.cookie);
+    const icon = await this.icon();
 
     if (csrf.cookie) {
       res.setHeader("Set-Cookie", buildCsrfCookie(this.config, csrf.cookie));
@@ -135,6 +141,7 @@ export class EdstemOAuthProvider {
             session,
             {
               edTokenHint: "",
+              icon,
               showEdToken: !canReuseSession
             }
           )
@@ -153,10 +160,20 @@ export class EdstemOAuthProvider {
           {
             edTokenHint: "",
             errorMessage: "Your session expired. Reload the page and try again.",
+            icon,
             showEdToken: !canReuseSession
           }
         )
       );
+      return;
+    }
+
+    if (getFormField(request.body?.decision) === "deny") {
+      this.logger.info({ clientId: client.client_id, event: "oauth.authorize.refused" }, "oauth authorize refused by user");
+      const target = new URL(params.redirectUri);
+      target.searchParams.set("error", "access_denied");
+      if (params.state) target.searchParams.set("state", params.state);
+      res.redirect(302, target.href);
       return;
     }
 
@@ -201,6 +218,7 @@ export class EdstemOAuthProvider {
             {
               edTokenHint: mapEdTokenHint(error, session),
               errorMessage: message,
+              icon,
               showEdToken: shouldShowEdToken(error, session, canReuseSession)
             }
           )
@@ -523,6 +541,7 @@ function renderAuthorizePage(
   options: {
     edTokenHint: string;
     errorMessage?: string;
+    icon: string | undefined;
     showEdToken: boolean;
   }
 ): string {
@@ -530,6 +549,7 @@ function renderAuthorizePage(
     csrfToken,
     edTokenHint: options.edTokenHint,
     errorMessage: options.errorMessage,
+    icon: options.icon,
     params,
     requestedScopes,
     session: session

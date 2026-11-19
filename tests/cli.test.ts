@@ -1261,7 +1261,7 @@ describe("auth commands", () => {
   });
 
   function recoveryUi(selected: string[], tokens: string[]) {
-    const spin = { start: vi.fn(), stop: vi.fn(), error: vi.fn(), message: vi.fn() };
+    const spin = { start: vi.fn(), stop: vi.fn(), error: vi.fn(), message: vi.fn(), clear: vi.fn() };
     const select = vi.fn(async () => {
       if (!selected.length) throw new Error("Unexpected select prompt");
       return selected.shift()!;
@@ -1703,7 +1703,7 @@ describe("first-run onboarding", () => {
       return answers.shift()!;
     });
     const password = vi.fn(async () => tokens.shift() ?? "");
-    const spinner = { start: vi.fn(), stop: vi.fn(), error: vi.fn(), message: vi.fn() };
+    const spinner = { start: vi.fn(), stop: vi.fn(), error: vi.fn(), message: vi.fn(), clear: vi.fn() };
     const warn = vi.fn();
     const ui = {
       ...createUi({ interactive: false }),

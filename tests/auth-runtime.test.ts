@@ -101,7 +101,7 @@ describe("saved region in the default runtimes", () => {
       ...actualCliKit.createUi({ interactive: false }), interactive: true,
       select: vi.fn(async () => selected.shift()!) as never, password: vi.fn(async () => tokens.shift()!),
       note: vi.fn(), info: vi.fn(), warn: vi.fn(), banner: vi.fn(),
-      spinner: () => ({ start: vi.fn(), stop: vi.fn(), error, message: vi.fn() }),
+      spinner: () => ({ start: vi.fn(), stop: vi.fn(), error, message: vi.fn(), clear: vi.fn() }),
     };
     vi.mocked(cliKit.createUi).mockReturnValue(ui);
     return { error, ui };
