@@ -48,7 +48,7 @@ import {
   type AuthorizationCodeRecord,
   type RefreshTokenRecord
 } from "./sql-store.js";
-import { siteIcon } from "./site-icon.js";
+import { siteIcon } from "@bunizao/cli-kit/site-icon";
 
 const AUTHORIZATION_CODE_TTL_MS = 10 * 60 * 1000;
 
@@ -165,6 +165,15 @@ export class EdstemOAuthProvider {
           }
         )
       );
+      return;
+    }
+
+    if (getFormField(request.body?.decision) === "deny") {
+      this.logger.info({ clientId: client.client_id, event: "oauth.authorize.refused" }, "oauth authorize refused by user");
+      const target = new URL(params.redirectUri);
+      target.searchParams.set("error", "access_denied");
+      if (params.state) target.searchParams.set("state", params.state);
+      res.redirect(302, target.href);
       return;
     }
 

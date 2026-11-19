@@ -1,3 +1,5 @@
+import { SCRIPT_HASH } from "@bunizao/cli-kit/consent";
+
 export interface AuthorizeRequest {
   body?: Record<string, unknown>;
   headers: {
@@ -95,5 +97,5 @@ function buildAuthorizeCsp(redirectUri: string): string {
   const redirectOrigin = new URL(redirectUri).origin;
   const formAction = redirectOrigin === "null" ? "'self'" : `'self' ${redirectOrigin}`;
 
-  return `default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; form-action ${formAction}; base-uri 'none'; frame-ancestors 'none'`;
+  return `default-src 'none'; style-src 'unsafe-inline'; script-src '${SCRIPT_HASH}'; img-src data:; form-action ${formAction}; base-uri 'none'; frame-ancestors 'none'`;
 }

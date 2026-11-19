@@ -122,6 +122,38 @@ describe("oauth authorize flow", () => {
     expect(tokens.scope).toBe("mcp:tools.read mcp:tools.write");
   });
 
+  it("sends the client back with access_denied when the user denies", async () => {
+    const fakeEd = await startFakeEdServer([]);
+    cleanups.push(fakeEd.close);
+    const { runtime, cleanup } = await createTestRuntime({ apiBaseUrl: fakeEd.baseUrl });
+    cleanups.push(cleanup);
+    runtime.store.saveClient(TEST_CLIENT);
+    const app = await startAppServer(runtime);
+    cleanups.push(async () => app.close());
+
+    const fields = {
+      client_id: TEST_CLIENT.client_id,
+      code_challenge: "challenge",
+      code_challenge_method: "S256",
+      redirect_uri: TEST_CLIENT.redirect_uris[0]!,
+      response_type: "code",
+      state: "st"
+    };
+    const page = await fetch(`${app.baseUrl}/authorize?${new URLSearchParams(fields)}`);
+    const response = await fetch(`${app.baseUrl}/authorize`, {
+      body: new URLSearchParams({ ...fields, csrf_token: extractCsrfToken(await page.text()), decision: "deny" }),
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Cookie: page.headers.get("set-cookie") ?? "" },
+      method: "POST",
+      redirect: "manual"
+    });
+
+    expect(response.status).toBe(302);
+    const location = new URL(response.headers.get("location")!);
+    expect(`${location.origin}${location.pathname}`).toBe(TEST_CLIENT.redirect_uris[0]!);
+    expect(location.searchParams.get("error")).toBe("access_denied");
+    expect(location.searchParams.get("state")).toBe("st");
+  });
+
   it("rejects invalid Ed tokens without persisting the identity", async () => {
     const fakeEd = await startFakeEdServer([]);
     cleanups.push(fakeEd.close);
