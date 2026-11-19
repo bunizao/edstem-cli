@@ -75,6 +75,7 @@ describe("oauth authorize flow", () => {
     expect(page.headers.get("content-security-policy")).toContain(
       `form-action 'self' ${new URL(TEST_CLIENT.redirect_uris[0]!).origin}`
     );
+    expect(page.headers.get("content-security-policy")).toContain("img-src data:;");
 
     const pageHtml = await page.text();
     expect(pageHtml).toContain("https://github.com/bunizao/edstem-cli");

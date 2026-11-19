@@ -9,6 +9,8 @@ export interface RenderAuthorizePageOptions {
   csrfToken: string;
   edTokenHint: string;
   errorMessage?: string;
+  /** A data:image/ URI of Ed's own icon. */
+  icon?: string;
   params: AuthorizationParams;
   requestedScopes: string[];
   session?: {
@@ -117,6 +119,14 @@ export function renderAuthorizePage(
       .card-footer {
         padding-top: 0;
         padding-bottom: 1.5rem;
+      }
+      .site-icon {
+        display: block;
+        width: 2.5rem;
+        height: 2.5rem;
+        object-fit: contain;
+        border-radius: 0.625rem;
+        margin-bottom: 0.875rem;
       }
       .eyebrow {
         display: inline-flex;
@@ -362,6 +372,7 @@ export function renderAuthorizePage(
     <main id="main-content">
       <section class="card" aria-labelledby="auth-title">
         <div class="card-header">
+          ${options.icon?.startsWith("data:image/") ? `<img class="site-icon" alt="" src="${escapeHtml(options.icon)}">` : ""}
           <div class="eyebrow" translate="no">EdStem MCP</div>
           <h1 id="auth-title">Connect Your Ed Identity</h1>
           <p class="description">Paste your Ed API token to continue.</p>
